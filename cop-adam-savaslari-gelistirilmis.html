@@ -270,6 +270,7 @@
         const AI_VISION_RANGE = 620;
         const MAX_MINERS_PER_TEAM = 99; // limit yok
         const MAX_CLUBMEN_PER_TEAM = 28;
+        const MAX_ARCHERS_PER_TEAM = 14;
         const SPEED_MULT = 1.8; // %80 hız artışı
 
         let worldWidth = MIN_WORLD_WIDTH;
@@ -301,6 +302,7 @@
                 attackThreshold: 7,
                 maxMiners: 2,
                 maxClubmen: 4,
+                maxArchers: 0,
                 retreatHpThreshold: 0.35,
                 passiveGoldMult: 0.45
             },
@@ -310,7 +312,8 @@
                 badReaction: false,
                 attackThreshold: 3,
                 maxMiners: 6,
-                maxClubmen: 10,
+                maxClubmen: 0,   // 2. sefer: düşman sadece okçu + madenci kullanır
+                maxArchers: 8,
                 retreatHpThreshold: 0.35,
                 passiveGoldMult: 0.85
             },
@@ -321,6 +324,7 @@
                 attackThreshold: 2,
                 maxMiners: 999,
                 maxClubmen: 999,
+                maxArchers: 0,
                 retreatHpThreshold: 0.4,
                 passiveGoldMult: 1.0
             }
@@ -664,9 +668,9 @@
 
                 if (this.state === 'attacking') {
                     this.damage = 4; // madenci zayıf
-                    if (!this.target || this.target.hp <= 0) {
-                        this.findTarget();
-                    }
+                if (!this.target || this.target.hp <= 0 || this.target.isInvulnerable) {
+                    this.findTarget();
+                }
                     // Tehdit yoksa ve combatMode değilse (sadece savunma) madene dön
                     const nearbyThreat = units.some(u =>
                         u.isPlayer !== this.isPlayer && u.hp > 0 && !u.isInvulnerable &&
@@ -1179,6 +1183,172 @@
             }
         }
 
+        // Gerçek okçu savaş birimi (Miner/Clubman gibi savaşa katılır — BaseArcherUnit sadece geri çekilme görseli için ayrı kalır)
+        class Archer {
+            constructor(isPlayer) {
+                this.isPlayer = isPlayer;
+                this.baseX = isPlayer ? player.base.x : enemy.base.x;
+                this.baseY = isPlayer ? player.base.y : enemy.base.y;
+
+                this.x = this.baseX + (isPlayer ? -70 : 70);
+                this.y = this.baseY + (Math.random() * 40 - 20);
+
+                this.formationIndex = isPlayer
+                    ? (player.archerFormationCounter = (player.archerFormationCounter || 0) + 1)
+                    : (enemy.archerFormationCounter = (enemy.archerFormationCounter || 0) + 1);
+
+                this.hp = 50;
+                this.maxHp = 50;
+                this.range = 460;      // uzun menzil
+                this.safeGap = 90;     // kendi sopalılarının gerisinde durma payı
+                this.tooClose = 150;   // bu mesafeden yakınsa biraz geri kaçar
+                this.attackCooldown = 130;
+                this.attackTimer = 0;
+                this.drawAmount = 0;
+                this.target = null;
+                this.prevX = this.x;
+                this.isInvulnerable = false;
+                this._isActuallyWalking = false;
+                this.stunTimer = 0;
+                this.slowTimer = 0;
+                this.stuckArrows = [];
+            }
+
+            update() {
+                let cmd = this.isPlayer ? player.command : enemy.command;
+                let enemies = units.filter(u => u.isPlayer !== this.isPlayer && u.hp > 0 && !u.isInvulnerable);
+                let enemyBase = this.isPlayer ? enemy.base : player.base;
+                let myBase = this.isPlayer ? player.base : enemy.base;
+                this.prevX = this.x;
+                this.baseX = this.isPlayer ? player.base.x : enemy.base.x;
+                this.baseY = this.isPlayer ? player.base.y : enemy.base.y;
+
+                if (this.stunTimer > 0) {
+                    this.stunTimer--;
+                    this._isActuallyWalking = false;
+                    return;
+                }
+                if (this.slowTimer > 0) this.slowTimer--;
+                const slowMul = this.slowTimer > 0 ? 0.4 : 1;
+
+                let grassTop = canvas.height - GROUND_HEIGHT;
+                let minY = grassTop + 15;
+                let maxY = canvas.height - 20;
+                if (this.y < minY) this.y = minY;
+                if (this.y > maxY) this.y = maxY;
+
+                if (cmd === CMD_RETREAT) {
+                    let targetX = this.isPlayer ? -150 : worldWidth + 150;
+                    if (Math.hypot(this.x - targetX, this.y - this.baseY) > 5) {
+                        let angle = Math.atan2(this.baseY - this.y, targetX - this.x);
+                        this.x += Math.cos(angle) * 1.7 * SPEED_MULT * slowMul;
+                        this.y += Math.sin(angle) * 1.3 * SPEED_MULT * slowMul;
+                        this._isActuallyWalking = true;
+                    } else {
+                        this.x = targetX;
+                        this.y = this.baseY;
+                        this._isActuallyWalking = false;
+                    }
+                    this.attackTimer = 0;
+                    this.drawAmount = 0;
+                    this.target = null;
+                    return;
+                }
+
+                // Hedef: menzildeki en yakın düşman (görüş kısıtı sopalıyla aynı mantık)
+                const visibleEnemies = enemies.filter(e =>
+                    cmd === CMD_ATTACK || (cmd === CMD_DEFEND && Math.abs(e.x - myBase.x) < AI_VISION_RANGE)
+                );
+                let closest = null, minDist = Infinity;
+                for (let e of visibleEnemies) {
+                    let d = Math.hypot(e.x - this.x, e.y - this.y);
+                    if (d < minDist) { minDist = d; closest = e; }
+                }
+                this.target = (closest && minDist <= this.range) ? closest : null;
+
+                // Kendi takımının en ileri sopalısı: okçu sıra düzeninde hep onun gerisinde durur
+                const myClubmen = units.filter(u => u.isPlayer === this.isPlayer && u instanceof Clubman && u.hp > 0);
+                let frontlineX = null;
+                if (myClubmen.length > 0) {
+                    frontlineX = this.isPlayer
+                        ? Math.min(...myClubmen.map(c => c.x))
+                        : Math.max(...myClubmen.map(c => c.x));
+                }
+
+                let desiredX;
+                if (cmd === CMD_ATTACK) {
+                    desiredX = enemyBase.x + (this.isPlayer ? -260 : 260);
+                } else {
+                    desiredX = myBase.x + (this.isPlayer ? 220 : -220);
+                }
+                if (frontlineX !== null) {
+                    desiredX = this.isPlayer
+                        ? Math.max(desiredX, frontlineX + this.safeGap)
+                        : Math.min(desiredX, frontlineX - this.safeGap);
+                }
+                // Düşman çok yakınsa mesafeyi korumak için birazcık geri kayar
+                if (this.target) {
+                    const distToTarget = Math.hypot(this.target.x - this.x, this.target.y - this.y);
+                    if (distToTarget < this.tooClose) {
+                        const back = this.tooClose - distToTarget;
+                        desiredX = this.isPlayer ? this.x - back : this.x + back;
+                    }
+                }
+
+                let actualMoved = false;
+                const distToDesired = Math.hypot(desiredX - this.x, this.baseY - this.y);
+                if (distToDesired > 8) {
+                    let angle = Math.atan2(this.baseY - this.y, desiredX - this.x);
+                    this.x += Math.cos(angle) * 1.6 * SPEED_MULT * slowMul;
+                    this.y += Math.sin(angle) * 1.2 * SPEED_MULT * slowMul;
+                    actualMoved = true;
+                }
+
+                // Ateş etme / kiriş çekme animasyonu
+                if (this.target) {
+                    this.attackTimer++;
+                    const CYCLE = this.attackCooldown;
+                    const DRAW_START = Math.floor(CYCLE * 0.55);
+                    const SHOOT_AT = CYCLE - 6;
+                    if (this.attackTimer < DRAW_START) {
+                        this.drawAmount = 0;
+                    } else if (this.attackTimer < SHOOT_AT) {
+                        this.drawAmount = (this.attackTimer - DRAW_START) / (SHOOT_AT - DRAW_START);
+                    } else {
+                        this.drawAmount = 0;
+                    }
+                    if (this.attackTimer === SHOOT_AT) {
+                        projectiles.push(new Arrow(this.x, this.y - 30, this.target, this.isPlayer));
+                    }
+                    if (this.attackTimer >= CYCLE) this.attackTimer = 0;
+                } else {
+                    this.attackTimer = 0;
+                    this.drawAmount = Math.max(0, this.drawAmount - 0.15);
+                }
+
+                this._isActuallyWalking = actualMoved && !this.target;
+            }
+
+            draw(ctx) {
+                if (this.x < -50 || this.x > worldWidth + 50) return;
+                let isFlipped = !this.isPlayer;
+                const dx = this.x - this.prevX;
+                if (this.target) {
+                    isFlipped = (this.target.x < this.x);
+                } else if (Math.abs(dx) > 0.3) {
+                    isFlipped = dx < 0;
+                }
+                const archerColor = this.isPlayer ? '#1a1a1a' : '#c0392b';
+                drawStickman(ctx, this.x, this.y, archerColor, 'bow', 0, this._isActuallyWalking, isFlipped, this.drawAmount);
+                drawStuckArrows(ctx, this);
+
+                ctx.fillStyle = 'red';
+                ctx.fillRect(this.x - 15, this.y - 65, 30, 4);
+                ctx.fillStyle = '#2ecc71';
+                ctx.fillRect(this.x - 15, this.y - 65, 30 * (this.hp / this.maxHp), 4);
+            }
+        }
+
         class BaseArcherUnit {
             constructor(isPlayer, offsetX, offsetY, climbSpeed) {
                 this.isPlayer = isPlayer;
@@ -1190,6 +1360,7 @@
                 this.climbSpeed = climbSpeed * SPEED_MULT;
                 this.state = 'climbing';
                 this.attackTimer = 0;
+                this.drawAmount = 0;
                 this.active = true;
                 this.isWalking = false;
                 this.climbAnim = 0;
@@ -1219,8 +1390,17 @@
                     }
                 } else if (this.state === 'active') {
                     this.attackTimer++;
-                    if (this.attackTimer >= 120) { // %20 daha yavaş ateş (eski değer: 100)
-                        this.attackTimer = 0;
+                    const CYCLE = 120; // %20 daha yavaş ateş (eski değer: 100)
+                    const DRAW_START = 80;
+                    const SHOOT_AT = 116;
+                    if (this.attackTimer < DRAW_START) {
+                        this.drawAmount = 0;
+                    } else if (this.attackTimer < SHOOT_AT) {
+                        this.drawAmount = (this.attackTimer - DRAW_START) / (SHOOT_AT - DRAW_START);
+                    } else {
+                        this.drawAmount = 0; // fırlattı, kiriş serbest
+                    }
+                    if (this.attackTimer === SHOOT_AT) {
                         let enemies = units.filter(u => u.isPlayer !== this.isPlayer && u.hp > 0 && !u.isInvulnerable);
                         if (enemies.length > 0) {
                             let target = enemies.reduce((prev, curr) => Math.abs(curr.x - this.x) < Math.abs(prev.x - this.x) ? curr : prev);
@@ -1228,6 +1408,9 @@
                                 projectiles.push(new Arrow(this.x, this.y - 30, target, this.isPlayer));
                             }
                         }
+                    }
+                    if (this.attackTimer >= CYCLE) {
+                        this.attackTimer = 0;
                     }
                     this.isWalking = false;
                 }
@@ -1248,7 +1431,7 @@
                         isFlipped = (target.x < this.x);
                     }
                 }
-                drawStickman(ctx, this.x, this.y, this.isPlayer ? 'black' : '#c0392b', currentWeapon, this.climbAnim, this.isWalking, isFlipped, 0);
+                drawStickman(ctx, this.x, this.y, this.isPlayer ? 'black' : '#c0392b', currentWeapon, this.climbAnim, this.isWalking, isFlipped, this.state === 'active' ? this.drawAmount : 0);
             }
         }
 
@@ -1601,8 +1784,9 @@
                         backArmRot = 20 + (isWalking ? Math.sin(frames * 0.22 + Math.PI) * 10 : 0);
                     }
                 } else if (weapon === 'bow') {
-                    armRot = -20;
-                    backArmRot = -5;
+                    // Ön kol yayı sabit tutar, arka kol kirişi geriye çeker (swingAngle = çekiliş oranı 0..1)
+                    armRot = -78;
+                    backArmRot = -15 - swingAngle * 45;
                 } else if (isWalking) {
                     // Silahsız yürümede kol sallanması
                     armRot = Math.sin(frames * 0.22) * 25;
@@ -1627,13 +1811,14 @@
                     const reach = 18 + (1 - armRaise) * 16; // vuruşta madene değecek kadar ileri
                     handX = shoulderX + reach * Math.sin((armRot + 30) * Math.PI / 180) + 6;
                     handY = shoulderY + 2 - reach * 0.45 * Math.cos(armRot * Math.PI / 180) - armRaise * 6;
+                } else if (weapon === 'bow') {
+                    // Ön el: yayı öne doğru sabit tutar
+                    handX = shoulderX + 15;
+                    handY = shoulderY - 3;
+                    // Arka el: kirişi/oku geriye çeker (germe oranına göre)
+                    backHandX = shoulderX - 4 - swingAngle * 11;
+                    backHandY = shoulderY + 5;
                 } else {
-                    backHandX = shoulderX - 10 + backArmRot / 5;
-                    backHandY = shoulderY + 6 + bodyLean * 10;
-                    const reach = 10;
-                    handX = shoulderX + reach * Math.sin((armRot + 20) * Math.PI / 180);
-                    handY = shoulderY + 8 - reach * 0.7 * Math.cos((armRot) * Math.PI / 180) - armRaise * 10;
-                }
                 // Arka kol (kazarken yanda, tutmuyor)
                 ctx.beginPath();
                 ctx.moveTo(shoulderX, shoulderY);
@@ -1718,17 +1903,49 @@
                     ctx.restore();
                 } else if (weapon === 'bow') {
                     ctx.save();
-                    ctx.translate(12, -22 - armRot);
-                    ctx.strokeStyle = '#d35400';
-                    ctx.lineWidth = 2;
+                    ctx.translate(handX, handY);
+                    const bowHalf = 15; // yayın yarım yüksekliği
+                    const drawT = Math.max(0, Math.min(1, swingAngle)); // 0=serbest, 1=tam gerilmiş
+                    const pullX = -5 - drawT * 11; // kiriş + ok germe ile geri gider
+
+                    // Yay gövdesi (dikey kavis, öne bakar)
+                    ctx.strokeStyle = '#8b5a2b';
+                    ctx.lineWidth = 2.6;
                     ctx.beginPath();
-                    ctx.arc(0, 0, 14, -Math.PI / 2, Math.PI / 2);
+                    ctx.arc(0, 0, bowHalf, -Math.PI / 2, Math.PI / 2);
                     ctx.stroke();
-                    ctx.strokeStyle = '#fff';
-                    ctx.lineWidth = 1;
+
+                    // Kiriş: üst uçtan germe noktasına, oradan alt uca
+                    ctx.strokeStyle = '#ecf0f1';
+                    ctx.lineWidth = 1.3;
                     ctx.beginPath();
-                    ctx.moveTo(0, -14);
-                    ctx.lineTo(0, 14);
+                    ctx.moveTo(0, -bowHalf);
+                    ctx.lineTo(pullX, 0);
+                    ctx.lineTo(0, bowHalf);
+                    ctx.stroke();
+
+                    // Ok: elde tam tutuluyor, temreni öne bakar
+                    ctx.strokeStyle = '#6d4c2f';
+                    ctx.lineWidth = 1.8;
+                    ctx.beginPath();
+                    ctx.moveTo(pullX - 4, 0);
+                    ctx.lineTo(pullX + 20, 0);
+                    ctx.stroke();
+                    // Ok temreni (uç)
+                    ctx.fillStyle = '#95a5a6';
+                    ctx.beginPath();
+                    ctx.moveTo(pullX + 20, 0);
+                    ctx.lineTo(pullX + 14, -3);
+                    ctx.lineTo(pullX + 14, 3);
+                    ctx.closePath();
+                    ctx.fill();
+                    // Ok tüyü (arka)
+                    ctx.strokeStyle = '#e74c3c';
+                    ctx.lineWidth = 1.6;
+                    ctx.beginPath();
+                    ctx.moveTo(pullX - 4, -3);
+                    ctx.lineTo(pullX + 1, 0);
+                    ctx.lineTo(pullX - 4, 3);
                     ctx.stroke();
                     ctx.restore();
                 }
@@ -1881,6 +2098,7 @@
             player.minerCooldown = 0;
             player.clubCooldown = 0;
             player.clubFormationCounter = 0;
+            player.archerFormationCounter = 0;
 
             enemy.gold = 300;
             enemy.command = CMD_DEFEND;
@@ -1892,8 +2110,10 @@
             enemy.attackLossCount = 0;
             enemy.lastAttackUnits = 0;
             enemy.clubFormationCounter = 0;
+            enemy.archerFormationCounter = 0;
             enemy.minerCooldown = 0;
             enemy.clubCooldown = 0;
+            enemy.archerCooldown = 0;
             enemy.retreatGoldSaved = 0;
             enemy.recoveryUnitsPurchased = 0;
             enemy.retreatCooldown = 0;
@@ -1926,13 +2146,16 @@
 
             const aiMiners = units.filter(u => !u.isPlayer && u instanceof Miner);
             const aiFighters = units.filter(u => !u.isPlayer && u instanceof Clubman && u.hp > 0);
+            const aiArchers = units.filter(u => !u.isPlayer && u instanceof Archer && u.hp > 0);
+            // Toplam savaş gücü (sopalı + okçu) — 2. seferde düşman sadece okçu kullanır
+            const aiCombatUnits = aiFighters.concat(aiArchers);
             // Görüş: sadece üs yakını VEYA AI birimlerine yakın oyuncu birimleri görünür
             const visiblePlayerFighters = units.filter(u => {
-                if (!(u.isPlayer && u instanceof Clubman && u.hp > 0)) return false;
+                if (!(u.isPlayer && (u instanceof Clubman || u instanceof Archer) && u.hp > 0)) return false;
                 // Üs görüş alanı
                 if (Math.abs(u.x - enemy.base.x) < AI_VISION_RANGE) return true;
                 // AI birimlerine yakınsa görünür
-                for (const af of aiFighters) {
+                for (const af of aiCombatUnits) {
                     if (Math.hypot(u.x - af.x, u.y - af.y) < 350) return true;
                 }
                 return false;
@@ -1942,6 +2165,7 @@
 
             if (enemy.minerCooldown > 0) enemy.minerCooldown--;
             if (enemy.clubCooldown > 0) enemy.clubCooldown--;
+            if (enemy.archerCooldown > 0) enemy.archerCooldown--;
 
             if (enemy.minerCooldown <= 0 && enemy.gold >= 150 && aiMiners.length < Math.min(diff.maxMiners, MAX_MINERS_PER_TEAM)) {
                 if (Math.random() >= diff.mistakeChance) {
@@ -1960,16 +2184,25 @@
                 enemy.clubCooldown = player.clubMaxCooldown * diff.cooldownMult;
             }
 
+            if (enemy.archerCooldown <= 0 && enemy.gold >= 140 && aiArchers.length < Math.min(diff.maxArchers || 0, MAX_ARCHERS_PER_TEAM)) {
+                if (Math.random() >= diff.mistakeChance) {
+                    enemy.gold -= 140;
+                    units.push(new Archer(false));
+                    if (enemy.aiState === 'retreat') enemy.recoveryUnitsPurchased++;
+                }
+                enemy.archerCooldown = 11 * 60 * diff.cooldownMult;
+            }
+
             const playerThreatVisible = knownPlayerCount > 0;
             const defenseTarget = 1;
             // Büyük ordu eşiği (görünen rakibe göre veya sabit)
             const armyGoal = Math.max(diff.attackThreshold + 2, knownPlayerCount + 2, 5);
 
             if (enemy.aiState === 'attack') {
-                if (aiFighters.length < enemy.lastAttackUnits) {
-                    enemy.attackLossCount += enemy.lastAttackUnits - aiFighters.length;
+                if (aiCombatUnits.length < enemy.lastAttackUnits) {
+                    enemy.attackLossCount += enemy.lastAttackUnits - aiCombatUnits.length;
                 }
-                enemy.lastAttackUnits = aiFighters.length;
+                enemy.lastAttackUnits = aiCombatUnits.length;
             }
 
             let newState = 'defend';
@@ -1977,12 +2210,12 @@
 
             if (enemy.aiState === 'retreat') {
                 enemy.retreatTimer = Math.max(0, enemy.retreatTimer - 1);
-                const recovered = aiFighters.length >= defenseTarget && enemy.retreatGoldSaved >= 30;
+                const recovered = aiCombatUnits.length >= defenseTarget && enemy.retreatGoldSaved >= 30;
                 if (enemy.retreatTimer === 0 && recovered) {
                     newState = 'defend';
                     newCommand = CMD_DEFEND;
                     enemy.attackLossCount = 0;
-                    enemy.lastAttackUnits = aiFighters.length;
+                    enemy.lastAttackUnits = aiCombatUnits.length;
                     enemy.retreatCooldown = 300;
                 } else {
                     newState = 'retreat';
@@ -1993,7 +2226,7 @@
                 const weakCastle = enemy.base.hp < enemy.base.maxHp * diff.retreatHpThreshold;
                 const tookHeavyLosses = enemy.attackLossCount >= 4;
                 const shouldRetreat = canRetreat && (
-                    (aiFighters.length === 0 && playerThreatVisible) || weakCastle || tookHeavyLosses
+                    (aiCombatUnits.length === 0 && playerThreatVisible) || weakCastle || tookHeavyLosses
                 );
 
                 if (shouldRetreat) {
@@ -2005,8 +2238,9 @@
                 } else {
                     // Kale %35 altındaysa ve üstün ordu kuramıyorsa savun
                     const castleCritical = enemy.base.hp < enemy.base.maxHp * 0.35;
-                    const hasAdvantage = aiFighters.length >= knownPlayerCount + 1;
-                    const canOutproduce = aiFighters.length < Math.min(diff.maxClubmen, MAX_CLUBMEN_PER_TEAM);
+                    const hasAdvantage = aiCombatUnits.length >= knownPlayerCount + 1;
+                    const combatCap = Math.min(diff.maxClubmen, MAX_CLUBMEN_PER_TEAM) + Math.min(diff.maxArchers || 0, MAX_ARCHERS_PER_TEAM);
+                    const canOutproduce = aiCombatUnits.length < combatCap;
 
                     if (castleCritical && !hasAdvantage) {
                         // Can kritik + üstün değil → savun / biriktir
@@ -2016,14 +2250,14 @@
                         const attackCommitFrames = 600;
                         const inAttackCommit = enemy.aiState === 'attack'
                             && enemy.aiTimer - (enemy.attackStartTimer || 0) < attackCommitFrames
-                            && aiFighters.length >= 1 && !tookHeavyLosses && !castleCritical;
+                            && aiCombatUnits.length >= 1 && !tookHeavyLosses && !castleCritical;
 
                         if (inAttackCommit) {
                             newState = 'attack';
                             newCommand = CMD_ATTACK;
                         } else if (playerThreatVisible && knownPlayerCount > 0) {
                             // 1-2 fazla birim biriktirince sal; yoksa savun
-                            if (aiFighters.length >= knownPlayerCount + 1 || aiFighters.length >= armyGoal) {
+                            if (aiCombatUnits.length >= knownPlayerCount + 1 || aiCombatUnits.length >= armyGoal) {
                                 newState = 'attack';
                                 newCommand = CMD_ATTACK;
                             } else {
@@ -2033,7 +2267,7 @@
                             }
                         } else {
                             // Rakip görünmüyor: ordu biriktir, hedefe ulaşınca sal
-                            if (aiFighters.length >= armyGoal) {
+                            if (aiCombatUnits.length >= armyGoal) {
                                 newState = 'attack';
                                 newCommand = CMD_ATTACK;
                             } else {
@@ -2044,7 +2278,7 @@
 
                         if (newState === 'attack' && enemy.aiState !== 'attack') {
                             enemy.attackLossCount = 0;
-                            enemy.lastAttackUnits = aiFighters.length;
+                            enemy.lastAttackUnits = aiCombatUnits.length;
                             enemy.attackStartTimer = enemy.aiTimer;
                         }
                     }
@@ -2106,6 +2340,28 @@
                         let dy = u1.y - u2.y;
                         let dist = Math.hypot(dx, dy);
                         let minDist = 28;
+                        if (dist < minDist && dist > 0.01) {
+                            let push = (minDist - dist) * 0.08;
+                            let nx = dx / dist;
+                            let ny = dy / dist;
+                            u1.x += nx * push;
+                            u1.y += ny * push;
+                            u2.x -= nx * push;
+                            u2.y -= ny * push;
+                        }
+                    }
+                }
+
+                // Okçular birbirinin üstüne binmesin (yerleşim asıl Archer.update() içinde belirlenir)
+                let archers = units.filter(u => u.isPlayer === isPlayer && u instanceof Archer && u.hp > 0);
+                for (let i = 0; i < archers.length; i++) {
+                    for (let j = i + 1; j < archers.length; j++) {
+                        let u1 = archers[i];
+                        let u2 = archers[j];
+                        let dx = u1.x - u2.x;
+                        let dy = u1.y - u2.y;
+                        let dist = Math.hypot(dx, dy);
+                        let minDist = 24;
                         if (dist < minDist && dist > 0.01) {
                             let push = (minDist - dist) * 0.08;
                             let nx = dx / dist;
