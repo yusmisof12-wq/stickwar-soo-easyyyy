@@ -1219,7 +1219,7 @@
                     }
                 } else if (this.state === 'active') {
                     this.attackTimer++;
-                    if (this.attackTimer >= 100) {
+                    if (this.attackTimer >= 120) { // %20 daha yavaş ateş (eski değer: 100)
                         this.attackTimer = 0;
                         let enemies = units.filter(u => u.isPlayer !== this.isPlayer && u.hp > 0 && !u.isInvulnerable);
                         if (enemies.length > 0) {
@@ -2064,9 +2064,8 @@
                     // Herkes aynı tırmanma süresi (düşmana hızlı kule avantajı yok)
                     const climbSpeed = 1.2;
                     retreatArchers.push(
-                        new BaseArcherUnit(isPlayer, -50, -30, climbSpeed),
-                        new BaseArcherUnit(isPlayer, 0, 0, climbSpeed),
-                        new BaseArcherUnit(isPlayer, 50, 30, climbSpeed)
+                        new BaseArcherUnit(isPlayer, -25, -15, climbSpeed),
+                        new BaseArcherUnit(isPlayer, 25, 15, climbSpeed)
                     );
                 }
                 if (!isRetreating) {
