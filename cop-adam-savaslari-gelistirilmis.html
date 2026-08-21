@@ -1901,21 +1901,19 @@
                         ctx.fill();
                     });
                     ctx.restore();
-                } else if (weapon === 'bow') {
+                                } else if (weapon === 'bow') {
                     ctx.save();
                     ctx.translate(handX, handY);
-                    const bowHalf = 15; // yayın yarım yüksekliği
-                    const drawT = Math.max(0, Math.min(1, swingAngle)); // 0=serbest, 1=tam gerilmiş
-                    const pullX = -5 - drawT * 11; // kiriş + ok germe ile geri gider
+                    const bowHalf = 15;
+                    const drawT = Math.max(0, Math.min(1, swingAngle));
+                    const pullX = -5 - drawT * 11;
 
-                    // Yay gövdesi (dikey kavis, öne bakar)
                     ctx.strokeStyle = '#8b5a2b';
                     ctx.lineWidth = 2.6;
                     ctx.beginPath();
                     ctx.arc(0, 0, bowHalf, -Math.PI / 2, Math.PI / 2);
                     ctx.stroke();
 
-                    // Kiriş: üst uçtan germe noktasına, oradan alt uca
                     ctx.strokeStyle = '#ecf0f1';
                     ctx.lineWidth = 1.3;
                     ctx.beginPath();
@@ -1924,14 +1922,12 @@
                     ctx.lineTo(0, bowHalf);
                     ctx.stroke();
 
-                    // Ok: elde tam tutuluyor, temreni öne bakar
                     ctx.strokeStyle = '#6d4c2f';
                     ctx.lineWidth = 1.8;
                     ctx.beginPath();
                     ctx.moveTo(pullX - 4, 0);
                     ctx.lineTo(pullX + 20, 0);
                     ctx.stroke();
-                    // Ok temreni (uç)
                     ctx.fillStyle = '#95a5a6';
                     ctx.beginPath();
                     ctx.moveTo(pullX + 20, 0);
@@ -1939,7 +1935,6 @@
                     ctx.lineTo(pullX + 14, 3);
                     ctx.closePath();
                     ctx.fill();
-                    // Ok tüyü (arka)
                     ctx.strokeStyle = '#e74c3c';
                     ctx.lineWidth = 1.6;
                     ctx.beginPath();
@@ -1949,10 +1944,10 @@
                     ctx.stroke();
                     ctx.restore();
                 }
+                // ← Buraya ek eksik kapanış
             }
             ctx.restore();
         }
-
         function drawEnvironment(ctx) {
             let skyHeight = canvas.height - GROUND_HEIGHT;
             let grad = ctx.createLinearGradient(0, 0, 0, skyHeight);
