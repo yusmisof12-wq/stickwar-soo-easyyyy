@@ -5,6 +5,12 @@
 // - Arkadaş sistemi: /api/friends, /api/friends/request, /api/friends/accept, /api/friends/decline, /api/friends/remove
 // - WebSocket (/ws): çevrimiçi durumu, arkadaşla co-op daveti/kabulü ve oda (room) içi mesaj aktarımı
 // - Kullanıcılar data/users.json dosyasında saklanır (basit dosya tabanlı "veritabanı")
+//
+// NOT (Render için önemli):
+//   Render'ın ücretsiz/standart web servislerinde disk kalıcı DEĞİLDİR.
+//   Her yeniden başlatma / yeni deploy'da data/ klasörü sıfırlanabilir.
+//   Kalıcı kullanıcı verisi istiyorsan Render'da bir "Persistent Disk" ekleyip
+//   DATA_DIR env değişkenini o disk'in mount path'ine ayarla (örn: /var/data).
 
 const express = require('express');
 const cors = require('cors');
@@ -16,10 +22,16 @@ const { WebSocketServer } = require('ws');
 
 // ==================== AYARLAR ====================
 const PORT = process.env.PORT || 3847;
-// Oyunun ana HTML dosyasının adı. Kendi dosya adınla eşleşmiyorsa burayı güncelle
-// ya da dosyayı bu isimle (ya da index.html olarak) proje köküne koy.
-const HTML_FILE = 'cop-adam-savaslari-gelistirilmis.html';
-const DATA_DIR = path.join(__dirname, 'data');
+
+// Oyunun ana HTML dosyasının adı. Kendi dosya adınla eşleşmiyorsa
+// HTML_FILE env değişkenini Render'da ayarla, ya da dosyayı bu isimle
+// (ya da index.html olarak) proje köküne koy.
+const HTML_FILE = process.env.HTML_FILE || 'index.html';
+
+// Kalıcı disk kullanıyorsan Render'da DATA_DIR env değişkenini
+// disk mount path'ine ayarla (örn: /var/data). Ayarlamazsan proje
+// içindeki data/ klasörü kullanılır (Render'da kalıcı olmayabilir).
+const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
 
 // ==================== BASİT "VERİTABANI" (JSON dosyası) ====================
@@ -79,12 +91,17 @@ app.get('/', (req, res) => {
         res.sendFile(filePath);
     } else {
         res.status(500).send(
-            `Oyun dosyası bulunamadı: ${HTML_FILE}. server.js içindeki HTML_FILE değişkenini kontrol et.`
+            `Oyun dosyası bulunamadı: ${HTML_FILE}. server.js içindeki HTML_FILE değişkenini (veya HTML_FILE env değişkenini) kontrol et.`
         );
     }
 });
 
 app.use(express.static(__dirname, { index: false }));
+
+// Basit sağlık kontrolü (Render health check için faydalı)
+app.get('/healthz', (req, res) => {
+    res.json({ ok: true });
+});
 
 // ==================== AUTH MIDDLEWARE ====================
 function requireAuth(req, res, next) {
@@ -410,5 +427,6 @@ wss.on('connection', (ws) => {
 server.listen(PORT, () => {
     console.log(`Çöp Adam Savaşları sunucusu çalışıyor: http://localhost:${PORT}`);
     console.log(`Oyun dosyası: ${HTML_FILE}`);
+    console.log(`Veri klasörü: ${DATA_DIR}`);
     console.log(`WebSocket: ws://localhost:${PORT}/ws`);
 });
