@@ -120,7 +120,7 @@
         const COLOR_ENEMY = '#c0392b';
 
         function isCoopActive() {
-            return typeof coopSession !== 'undefined' && !!coopSession;
+            return typeof coopSession !== 'undefined' && !!coopSession && !!coopSession.roomId;
         }
         function localOwnerIndex() {
             return (typeof isCoopGuestNow === 'function' && isCoopGuestNow()) ? 1 : 0;
