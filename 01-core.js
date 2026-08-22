@@ -1,40 +1,55 @@
 // ==================== SABİTLER VE DEĞİŞKENLER ====================
-        const canvas = document.getElementById('gameCanvas');
-        const minerFaceImg = new Image();
-        minerFaceImg.src = ''; // yüz fotoğrafı kapalı (geçersiz URL hatasını önler)
-        const minerFaceEnemyImg = new Image();
-        minerFaceEnemyImg.src = '';
-        const ctx = canvas.getContext('2d');
-        const GROUND_HEIGHT = 220;
-        const MIN_WORLD_WIDTH = 2600;
-        const AI_VISION_RANGE = 620;
-        const MAX_MINERS_PER_TEAM = 99; // limit yok
-        const MAX_CLUBMEN_PER_TEAM = 28;
-        const MAX_ARCHERS_PER_TEAM = 14;
-        const SPEED_MULT = 1.8; // %80 hız artışı
+const canvas = document.getElementById('gameCanvas');
+const minerFaceImg = new Image();
+minerFaceImg.src = ''; 
+const minerFaceEnemyImg = new Image();
+minerFaceEnemyImg.src = '';
+const ctx = canvas.getContext('2d');
 
-        let worldWidth = MIN_WORLD_WIDTH;
-        let cameraX = 0;
-        let isPanning = false;
-        let panStartX = 0;
-        let panCameraStartX = 0;
+// Bunları 'const' yerine 'let' yapıyoruz ki mobilde değiştirebilelim
+let GROUND_HEIGHT = 220;
+let MIN_WORLD_WIDTH = 2600; 
 
-        // ---- Mobil / responsive yardımcılar ----
-        function isTouchDevice() {
-            try {
-                return window.matchMedia('(pointer: coarse)').matches || ('ontouchstart' in window) || (navigator.maxTouchPoints || 0) > 0;
-            } catch (e) {
-                return ('ontouchstart' in window);
-            }
-        }
+const AI_VISION_RANGE = 620;
+const MAX_MINERS_PER_TEAM = 99; 
+const MAX_CLUBMEN_PER_TEAM = 28;
+const MAX_ARCHERS_PER_TEAM = 14;
+const SPEED_MULT = 1.8; 
 
-        function resizeCanvas() {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-            worldWidth = Math.max(MIN_WORLD_WIDTH, canvas.width + 800);
-            cameraX = Math.max(0, Math.min(cameraX, worldWidth - canvas.width));
-            updateMineSlots(false);
-        }
+let worldWidth = MIN_WORLD_WIDTH;
+let cameraX = 0;
+let isPanning = false;
+let panStartX = 0;
+let panCameraStartX = 0;
+
+// ---- Mobil / responsive yardımcılar ----
+function isTouchDevice() {
+    try {
+        return window.matchMedia('(pointer: coarse)').matches || ('ontouchstart' in window) || (navigator.maxTouchPoints || 0) > 0;
+    } catch (e) {
+        return ('ontouchstart' in window);
+    }
+}
+
+function resizeCanvas() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    
+    // Mobil ekran kontrolü (Örn: Genişlik 768px'den küçükse)
+    const isMobile = canvas.width < 768;
+    
+    // Mobilde dünya genişliğini ve zemin yüksekliğini küçültüyoruz
+    MIN_WORLD_WIDTH = isMobile ? 1400 : 2600;
+    GROUND_HEIGHT = isMobile ? 150 : 220; 
+    
+    // Dünya genişliği ataması
+    worldWidth = Math.max(MIN_WORLD_WIDTH, canvas.width + (isMobile ? 400 : 800));
+    cameraX = Math.max(0, Math.min(cameraX, worldWidth - canvas.width));
+    
+    updateMineSlots(false);
+}
+
+// (Kodun geri kalanı sizin yazdığınız gibi devam eder...)
 
         function setViewportHeightVar() {
             // Bazi mobil tarayicilarda 100vh, arac/adres cubugu yuzunden gercek
