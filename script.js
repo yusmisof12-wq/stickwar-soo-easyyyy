@@ -437,8 +437,7 @@
         showScreen('menu');
     }
 
-    // ---- HOST: YZ'yi versus modunda devre dışı bırak ----
-    // ---- BUG FİX: showScreen, yeni eklenen ekranlardan (arkadaşlar, bölüm
+        // ---- BUG FİX: showScreen, yeni eklenen ekranlardan (arkadaşlar, bölüm
     // seçimi, davet bekleme, eşleşme) haberi olmadığı için onları kapatmıyordu
     // -> ekranlar üst üste binip oyunu/menüyü kilitliyordu. showScreen'i
     // sarmalayıp her çağrıda önce hepsini kapatıyoruz.
@@ -453,7 +452,6 @@
     };
 
     // ---- HOST: YZ'yi versus modunda devre dışı bırak ----
-    const _originalUpdateAI = window.updateAI;
     const _originalUpdateAI = window.updateAI;
     window.updateAI = function () {
         if (Net.active && Net.isHost && Net.mode === 'versus') {
