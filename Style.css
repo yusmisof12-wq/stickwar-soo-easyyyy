@@ -7,11 +7,13 @@ html, body {
             -webkit-tap-highlight-color: transparent;
             touch-action: manipulation;
         }
-        /* iOS Safari'de adres çubuğu boyunca dinamik viewport için */
+        /* Mobil tarayicilarda arac/adres cubugu yuzunden 100vh gercek gorunur
+           yukseklikten buyuk olabiliyor; JS'in ayarladigi --vh degiskenini kullaniyoruz (01-core.js) */
         html { height: -webkit-fill-available; }
-        body { height: 100vh; height: -webkit-fill-available; }
+        body { height: 100vh; height: calc(var(--vh, 1vh) * 100); height: -webkit-fill-available; }
         #game-container {
             position: relative; width: 100vw; height: 100vh;
+            height: calc(var(--vh, 1vh) * 100);
             overflow: hidden; background: #2c3e50;
         }
         canvas { display: block; width: 100%; height: 100%; cursor: grab; touch-action: none; }
