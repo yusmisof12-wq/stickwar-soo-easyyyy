@@ -36,11 +36,22 @@
             updateMineSlots(false);
         }
 
+        function setViewportHeightVar() {
+            // Bazi mobil tarayicilarda 100vh, arac/adres cubugu yuzunden gercek
+            // gorunur yukseklikten buyuktur; bu da alttaki komut butonlarinin
+            // ekran disina tasmasina yol acar. Gercek yuksekligi CSS
+            // degiskenine yaziyoruz.
+            const vh = window.innerHeight * 0.01;
+            document.documentElement.style.setProperty('--vh', vh + 'px');
+        }
+
         function handleViewportChange() {
+            setViewportHeightVar();
             resizeCanvas();
         }
         window.addEventListener('resize', handleViewportChange);
         window.addEventListener('orientationchange', () => setTimeout(handleViewportChange, 200));
+        setViewportHeightVar();
 
         const CMD_ATTACK = 1;
         const CMD_DEFEND = 2;
