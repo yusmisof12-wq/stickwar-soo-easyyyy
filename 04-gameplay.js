@@ -1,4 +1,4 @@
-        function setPlayerCommand(cmd) {
+function setPlayerCommand(cmd) {
             const oi = localOwnerIndex();
             getOwnerState(oi).command = cmd;
             // Solo veya host: player.command senkron (AI tehdit hesabı için host tarafı)
@@ -154,6 +154,8 @@
         };
 
         function resetLevel() {
+            if (typeof coopVictoryHandled !== 'undefined') coopVictoryHandled = false;
+
             units.forEach(u => { if (u instanceof Miner) u.releaseSlot(); });
             units = [];
             projectiles = [];
@@ -363,7 +365,7 @@
         }
 
         function updateArchers() {
-            // Oyuncu 1 / 2: her biri geri çekilince kendi 1 okçusu
+            // Geri çekilme okçusu SADECE co-op (arkadaşla oyun)
             const ensurePlayerArcher = (ownerIndex, offsetX) => {
                 const st = getOwnerState(ownerIndex);
                 const retreating = st.command === CMD_RETREAT;
@@ -375,8 +377,13 @@
                     retreatArchers = retreatArchers.filter(a => !(a.isPlayer && (a.ownerIndex || 0) === ownerIndex));
                 }
             };
-            ensurePlayerArcher(0, -28);
-            if (isCoopActive()) ensurePlayerArcher(1, 28);
+            if (typeof isCoopActive === 'function' && isCoopActive()) {
+                ensurePlayerArcher(0, -28);
+                ensurePlayerArcher(1, 28);
+            } else {
+                // Solo: geri çekilmede okçu yok
+                retreatArchers = retreatArchers.filter(a => !a.isPlayer);
+            }
 
             // Düşman: 2 okçu
             {
@@ -567,7 +574,11 @@
             units = units.filter(u => u.hp > 0);
             projectiles = projectiles.filter(p => p.active);
 
-            if (enemy.base.hp <= 0 && !coopVictoryHandled) {
+            if (enemy.base.hp < 0) enemy.base.hp = 0;
+            if (player.base.hp < 0) player.base.hp = 0;
+
+            if (enemy.base.hp <= 0 && !isGameOver) {
+                enemy.base.hp = 0;
                 isGameOver = true;
                 coopVictoryHandled = true;
                 const completedLevel = level;
