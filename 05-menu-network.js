@@ -1,4 +1,4 @@
-        // ==================== HESAP + MENÜ + SEFER ====================
+// ==================== HESAP + MENÜ + SEFER ====================
         const TOKEN_KEY = 'copAdamToken_v1';
         const LOCAL_USERS_KEY = 'copAdamUsersHashed_v1';
         const LOCAL_SESSION_KEY = 'copAdamLocalSession_v1';
@@ -418,6 +418,12 @@
             resizeCanvas();
             if (coopSession.role === 'host') {
                 resetLevel();
+            if (typeof player2 !== "undefined") {
+                player2.gold = 300;
+                player2.command = CMD_DEFEND;
+                player2.minerQueue = []; player2.minerTimer = 0; player2.minerTimerMax = 0;
+                player2.combatQueue = []; player2.combatTimer = 0; player2.combatTimerMax = 0;
+            }
                 gameStarted = true;
                 updateActionButtonsUI();
                 draw();
@@ -466,10 +472,11 @@
                 this.isPlayer = d.p; this.type = d.t; this.walking = d.w; this.drawAmt = d.d || 0;
                 this.deliver = !!d.dl; this.bagGold = d.bg || 0;
                 this.bodyLean = d.bl || 0; this.armRaise = d.ar || 0; this.swingAngle = d.sw || 0;
+                this.ownerIndex = d.oi || 0;
             }
             draw(ctx) {
                 const isFlipped = !this.isPlayer;
-                const color = this.isPlayer ? '#1a1a1a' : '#c0392b';
+                const color = !this.isPlayer ? '#c0392b' : (this.ownerIndex === 1 ? '#2980b9' : '#1a1a1a');
 
                 if (this.type === 'miner') {
                     drawMinerBackpack(ctx, this.x, this.y, isFlipped, this.bagGold, this.deliver);
@@ -497,6 +504,7 @@
             else if (u instanceof Archer) t = 'archer';
             const base = {
                 t, p: u.isPlayer,
+                oi: u.ownerIndex || 0,
                 x: Math.round(u.x), y: Math.round(u.y),
                 hp: Math.round(u.hp), mhp: Math.round(u.maxHp || 1),
                 w: !!u._isActuallyWalking,
@@ -521,17 +529,25 @@
                 payload: {
                     kind: 'state',
                     gold: player.gold,
+                    gold2: player2.gold,
                     baseHp: player.base.hp,
                     enemyGold: enemy.gold,
                     enemyBaseHp: enemy.base.hp,
                     command: player.command,
+                    command2: player2.command,
                     level: level,
-                    minerCooldown: player.minerCooldown,
-                    minerMaxCooldown: player.minerMaxCooldown,
-                    clubCooldown: player.clubCooldown,
-                    clubMaxCooldown: player.clubMaxCooldown,
-                    archerCooldown: player.archerCooldown,
-                    archerMaxCooldown: player.archerMaxCooldown,
+                    minerQueue: player.minerQueue,
+                    minerTimer: player.minerTimer,
+                    minerTimerMax: player.minerTimerMax,
+                    combatQueue: player.combatQueue,
+                    combatTimer: player.combatTimer,
+                    combatTimerMax: player.combatTimerMax,
+                    minerQueue2: player2.minerQueue,
+                    minerTimer2: player2.minerTimer,
+                    minerTimerMax2: player2.minerTimerMax,
+                    combatQueue2: player2.combatQueue,
+                    combatTimer2: player2.combatTimer,
+                    combatTimerMax2: player2.combatTimerMax,
                     units: units.map(serializeUnitForNet),
                 }
             });
@@ -540,16 +556,25 @@
         function applyHostSnapshot(payload) {
             latestHostSnapshot = payload;
             player.gold = payload.gold;
+            if (typeof payload.gold2 === 'number') player2.gold = payload.gold2;
             player.base.hp = payload.baseHp;
             enemy.gold = payload.enemyGold;
             enemy.base.hp = payload.enemyBaseHp;
             if (typeof payload.level === 'number') level = payload.level;
-            if (typeof payload.minerCooldown === 'number') player.minerCooldown = payload.minerCooldown;
-            if (typeof payload.minerMaxCooldown === 'number') player.minerMaxCooldown = payload.minerMaxCooldown;
-            if (typeof payload.clubCooldown === 'number') player.clubCooldown = payload.clubCooldown;
-            if (typeof payload.clubMaxCooldown === 'number') player.clubMaxCooldown = payload.clubMaxCooldown;
-            if (typeof payload.archerCooldown === 'number') player.archerCooldown = payload.archerCooldown;
-            if (typeof payload.archerMaxCooldown === 'number') player.archerMaxCooldown = payload.archerMaxCooldown;
+            if (typeof payload.command === 'number') player.command = payload.command;
+            if (typeof payload.command2 === 'number') player2.command = payload.command2;
+            if (payload.minerQueue) player.minerQueue = payload.minerQueue;
+            if (typeof payload.minerTimer === 'number') player.minerTimer = payload.minerTimer;
+            if (typeof payload.minerTimerMax === 'number') player.minerTimerMax = payload.minerTimerMax;
+            if (payload.combatQueue) player.combatQueue = payload.combatQueue;
+            if (typeof payload.combatTimer === 'number') player.combatTimer = payload.combatTimer;
+            if (typeof payload.combatTimerMax === 'number') player.combatTimerMax = payload.combatTimerMax;
+            if (payload.minerQueue2) player2.minerQueue = payload.minerQueue2;
+            if (typeof payload.minerTimer2 === 'number') player2.minerTimer = payload.minerTimer2;
+            if (typeof payload.minerTimerMax2 === 'number') player2.minerTimerMax = payload.minerTimerMax2;
+            if (payload.combatQueue2) player2.combatQueue = payload.combatQueue2;
+            if (typeof payload.combatTimer2 === 'number') player2.combatTimer = payload.combatTimer2;
+            if (typeof payload.combatTimerMax2 === 'number') player2.combatTimerMax = payload.combatTimerMax2;
             units.length = 0;
             (payload.units || []).forEach(d => units.push(new GhostUnit(d)));
             updateActionButtonsUI();
@@ -592,12 +617,13 @@
                 return;
             }
             if (payload.kind === 'input' && isCoopHostNow()) {
-                if (payload.action === 'buyMiner') btnMiner.onclick();
-                else if (payload.action === 'buyClub') btnClub.onclick();
-                else if (payload.action === 'buyArcher') btnArcher.onclick();
-                else if (payload.action === 'attack') setPlayerCommand(CMD_ATTACK);
-                else if (payload.action === 'defend') setPlayerCommand(CMD_DEFEND);
-                else if (payload.action === 'retreat') setPlayerCommand(CMD_RETREAT);
+                // 2. oyuncu girdileri — player2'ye uygula
+                if (payload.action === 'buyMiner') queueUnit('miner', 1);
+                else if (payload.action === 'buyClub') queueUnit('club', 1);
+                else if (payload.action === 'buyArcher') queueUnit('archer', 1);
+                else if (payload.action === 'attack') { player2.command = CMD_ATTACK; }
+                else if (payload.action === 'defend') { player2.command = CMD_DEFEND; }
+                else if (payload.action === 'retreat') { player2.command = CMD_RETREAT; }
                 return;
             }
         }
@@ -843,6 +869,12 @@
             showScreen('game');
             resizeCanvas();
             resetLevel();
+            if (typeof player2 !== "undefined") {
+                player2.gold = 300;
+                player2.command = CMD_DEFEND;
+                player2.minerQueue = []; player2.minerTimer = 0; player2.minerTimerMax = 0;
+                player2.combatQueue = []; player2.combatTimer = 0; player2.combatTimerMax = 0;
+            }
 
             gameStarted = true;
             lastFrameTime = 0;
@@ -883,7 +915,7 @@
                 return;
             }
             if (isCoopGuestNow() && coopVictoryHandled) {
-                showToast('Host sonraki bölümü başlatıyor...');
+                showToast('Diğer oyuncu sonraki bölümü başlatıyor...');
                 return;
             }
             modal.classList.add('hidden');
@@ -898,16 +930,29 @@
         };
 
         (async function bootMenu() {
+            // Sunucu var mı diye hafif kontrol (token yoksa /api/me çağırma → 401 spam olmasın)
+            const token = localStorage.getItem(TOKEN_KEY);
+            useServer = true;
             try {
-                await api('/api/me');
-                useServer = true;
+                if (token) {
+                    const data = await api('/api/me');
+                    currentUser = {
+                        username: data.username,
+                        maxUnlocked: data.maxUnlocked || 1,
+                        cleared: data.cleared || [],
+                    };
+                    enterMainMenu();
+                    return;
+                }
             } catch (e) {
-                if (e && e.status === 401) useServer = true;
-                else useServer = false;
+                if (e && e.status === 401) {
+                    localStorage.removeItem(TOKEN_KEY);
+                } else {
+                    useServer = false;
+                }
             }
 
-            const token = localStorage.getItem(TOKEN_KEY);
-            if (token && useServer) {
+            if (false && token && useServer) {
                 try {
                     const data = await api('/api/me');
                     currentUser = {
