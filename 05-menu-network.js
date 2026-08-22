@@ -1,4 +1,4 @@
-        // ==================== HESAP + MENÜ + SEFER ====================
+// ==================== HESAP + MENÜ + SEFER ====================
         const TOKEN_KEY = 'copAdamToken_v1';
         const LOCAL_USERS_KEY = 'copAdamUsersHashed_v1';
         const LOCAL_SESSION_KEY = 'copAdamLocalSession_v1';
@@ -1158,46 +1158,51 @@
 
 
 
+
         // ==================== MÜZİK ====================
         const MUSIC_KEY = 'copAdamMusicMuted_v1';
         const MUSIC_VOL_KEY = 'copAdamMusicVol_v1';
-        // Eski "kapalı" kaydını temizle — kullanıcı müzik istiyor
-        if (localStorage.getItem(MUSIC_KEY) === '1') {
-            // bırak: kullanıcı bilerek kapatmış olabilir; butonla açılır
-        }
+        // Varsayılan: müzik AÇIK
         let musicMuted = localStorage.getItem(MUSIC_KEY) === '1';
-        let musicVol = Math.min(1, Math.max(0.05, (parseInt(localStorage.getItem(MUSIC_VOL_KEY) || '50', 10) || 50) / 100));
+        let musicVol = Math.min(1, Math.max(0.1, (parseInt(localStorage.getItem(MUSIC_VOL_KEY) || '55', 10) || 55) / 100));
         let musicMode = 'menu';
         let audioMenu = null;
         let audioBattle = null;
 
-        function musicUrl(name) {
-            const base = (window.location.origin || '') + (window.location.pathname.replace(/\/[^/]*$/, '/') || '/');
-            return base + 'music/' + name;
+        function ensureMusicHud() {
+            let hud = document.getElementById('musicHud');
+            if (!hud) {
+                hud = document.createElement('div');
+                hud.id = 'musicHud';
+                hud.innerHTML = '<button type="button" id="musicBtn" title="Müzik">🎵</button>' +
+                    '<input type="range" id="musicVol" min="0" max="100" value="55" title="Ses">';
+                document.body.appendChild(hud);
+            } else if (hud.parentElement !== document.body) {
+                document.body.appendChild(hud);
+            }
+            return hud;
         }
 
-        function makeLoopAudio(name) {
-            const a = new Audio(musicUrl(name));
-            a.loop = true;
-            a.preload = 'auto';
-            a.crossOrigin = 'anonymous';
-            return a;
+        function musicUrl(name) {
+            try { return new URL('music/' + name, window.location.href).href; }
+            catch (_) { return 'music/' + name; }
         }
 
         function ensureTracks() {
             if (!audioMenu) {
-                audioMenu = makeLoopAudio('menu.mp3');
-                audioMenu.addEventListener('error', () => console.warn('menu.mp3 yüklenemedi', audioMenu.src));
+                audioMenu = new Audio(musicUrl('menu.mp3'));
+                audioMenu.loop = true;
+                audioMenu.preload = 'auto';
             }
             if (!audioBattle) {
-                audioBattle = makeLoopAudio('battle.mp3');
-                audioBattle.addEventListener('error', () => console.warn('battle.mp3 yüklenemedi', audioBattle.src));
+                audioBattle = new Audio(musicUrl('battle.mp3'));
+                audioBattle.loop = true;
+                audioBattle.preload = 'auto';
             }
         }
 
         function volFor(mode) {
             if (musicMuted) return 0;
-            // menu biraz kısık ama duyulur
             return musicVol * (mode === 'battle' ? 0.9 : 0.65);
         }
 
@@ -1208,34 +1213,27 @@
 
         async function playTrack(mode) {
             ensureTracks();
-            musicMode = (mode === 'battle') ? 'battle' : 'menu';
+            musicMode = mode === 'battle' ? 'battle' : 'menu';
             applyVolumes();
             updateMusicBtn();
             if (musicMuted) {
-                try { audioMenu && audioMenu.pause(); } catch (_) {}
-                try { audioBattle && audioBattle.pause(); } catch (_) {}
+                try { audioMenu.pause(); audioBattle.pause(); } catch (_) {}
                 return;
             }
             const want = musicMode === 'battle' ? audioBattle : audioMenu;
             const other = musicMode === 'battle' ? audioMenu : audioBattle;
             try { other.pause(); } catch (_) {}
             try {
-                // aynı parçayı başa sarmadan devam ettir
-                const p = want.play();
-                if (p) await p;
-                console.log('[müzik] çalıyor:', musicMode, want.src, 'vol=', want.volume);
-            } catch (err) {
-                console.warn('[müzik] play() hata:', err);
+                await want.play();
+            } catch (e) {
+                console.warn('[müzik] autoplay bekleniyor — ekrana tıkla', e.message);
             }
         }
 
-        function setMusicMode(mode) {
-            playTrack(mode);
-        }
+        function setMusicMode(mode) { playTrack(mode); }
 
         function setMusicVolume(v) {
             musicVol = Math.min(1, Math.max(0, v));
-            if (musicVol < 0.05 && v > 0) musicVol = 0.05;
             localStorage.setItem(MUSIC_VOL_KEY, String(Math.round(musicVol * 100)));
             applyVolumes();
             const volEl = document.getElementById('musicVol');
@@ -1256,39 +1254,24 @@
         }
 
         (function initMusicUI() {
+            ensureMusicHud();
             ensureTracks();
             const btn = document.getElementById('musicBtn');
             const vol = document.getElementById('musicVol');
             if (vol) {
                 vol.value = String(Math.round(musicVol * 100));
-                vol.addEventListener('input', () => {
-                    setMusicVolume((parseInt(vol.value, 10) || 0) / 100);
-                });
+                vol.oninput = () => setMusicVolume((parseInt(vol.value, 10) || 0) / 100);
             }
-            if (btn) {
-                btn.onclick = (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    toggleMusic();
-                };
-            }
+            if (btn) btn.onclick = (e) => { e.preventDefault(); e.stopPropagation(); toggleMusic(); };
             updateMusicBtn();
 
-            // Herhangi bir tıklamada / tuşta müziği başlat (tarayıcı kuralı)
-            const kick = () => {
-                if (musicMuted) return;
-                playTrack(musicMode);
-            };
-            document.addEventListener('pointerdown', kick, { once: false });
-            document.addEventListener('keydown', kick, { once: true });
-
-            // Menü görünürken periyodik dene (bazı tarayıcılarda ilk play sessiz kalır)
-            let tries = 0;
-            const timer = setInterval(() => {
-                tries++;
-                if (musicMuted) return;
-                const a = musicMode === 'battle' ? audioBattle : audioMenu;
-                if (a && a.paused) playTrack(musicMode);
-                if (tries > 8) clearInterval(timer);
-            }, 800);
+            // İlk etkileşimde otomatik çal (tarayıcı kuralı)
+            const kick = () => { if (!musicMuted) playTrack(musicMode); };
+            ['pointerdown', 'touchstart', 'keydown', 'click'].forEach(ev => {
+                document.addEventListener(ev, kick, { passive: true });
+            });
+            // Birkaç kez dene
+            setTimeout(kick, 300);
+            setTimeout(kick, 1000);
+            setTimeout(kick, 2000);
         })();
