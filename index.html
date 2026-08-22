@@ -2,289 +2,171 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <!-- Mobilde ekranın otomatik yakınlaştırılmasını engeller, mobil uyumluluk için çok önemlidir -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Çöp Adam Madenciler ve Savaşçılar</title>
-    <style>
-        /* =========================================================
-           GENEL AYARLAR
-        ========================================================= */
-        * {
-            box-sizing: border-box;
-            user-select: none; /* Metin seçimini engelle */
-            -webkit-user-select: none;
-        }
-
-        body, html {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100%;
-            overflow: hidden; /* Kaydırma çubuklarını gizle */
-            background-color: #87CEEB; /* Gökyüzü rengi */
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-
-        /* Oyun Ekranı (Canvas) */
-        #gameCanvas {
-            display: block;
-            width: 100%;
-            height: 100%;
-            touch-action: none; /* Mobilde ekran kaymasını engelle */
-        }
-
-        /* =========================================================
-           ÜST ARAYÜZ (Altın ve Seviye Bilgisi)
-        ========================================================= */
-        .top-ui {
-            position: absolute;
-            top: 15px;
-            left: 15px;
-            right: 15px;
-            display: flex;
-            justify-content: space-between;
-            pointer-events: none; /* Tıklamaların canvas'a geçmesi için */
-            text-shadow: 2px 2px 3px rgba(0,0,0,0.7);
-            color: white;
-            font-size: 22px;
-            font-weight: bold;
-            z-index: 10;
-        }
-
-        /* =========================================================
-           KOMUT BUTONLARI (SOL ÜSTE ALINDI)
-        ========================================================= */
-        .command-controls {
-            position: fixed; /* Ekranın neresinde olursa olsun sabitler */
-            top: 55px; /* Üstteki Altın yazısının hemen altına yerleşir */
-            left: 15px; /* Sol kenara yaslar */
-            display: flex;
-            gap: 12px;
-            z-index: 20;
-            pointer-events: none; /* Konteyner tıklamayı engellemesin */
-        }
-
-        .cmd-btn {
-            pointer-events: auto; /* Sadece butonlar tıklanabilir olsun */
-            width: 65px;
-            height: 65px;
-            border-radius: 50%; /* Yuvarlak görünüm */
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 13px;
-            font-weight: bold;
-            color: white;
-            cursor: pointer;
-            border: 3px solid rgba(255,255,255,0.2);
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-            transition: transform 0.1s;
-        }
-
-        .cmd-btn:active {
-            transform: scale(0.95);
-        }
-
-        #cmdRetreat { background: #f39c12; } /* Turuncu */
-        #cmdDefend  { background: #2980b9; } /* Mavi */
-        #cmdAttack  { background: #c0392b; } /* Kırmızı */
-
-        /* =========================================================
-           ALT ARAYÜZ (Sadece Birim Çıkarma Butonları Kaldı)
-        ========================================================= */
-        .bottom-ui {
-            position: absolute;
-            bottom: 20px;
-            left: 0;
-            width: 100%;
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-end;
-            padding: 0 20px;
-            pointer-events: none;
-            z-index: 10;
-        }
-
-        .unit-controls {
-            display: flex;
-            gap: 12px;
-        }
-
-        .unit-btn {
-            pointer-events: auto;
-            position: relative;
-            background: #34495e;
-            color: white;
-            border: 2px solid #2c3e50;
-            border-radius: 8px;
-            cursor: pointer;
-            overflow: hidden;
-            font-weight: bold;
-            text-align: center;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-            transition: transform 0.1s;
-            width: 75px;
-            height: 75px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            font-size: 14px;
-        }
-
-        .unit-btn:active {
-            transform: scale(0.95);
-        }
-
-        /* Bekleme süresi (Cooldown) efekti */
-        .cd-fill {
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            height: 0%;
-            background: rgba(0, 0, 0, 0.6);
-            pointer-events: none;
-        }
-
-        /* =========================================================
-           MOBİL UYUMLULUK (Ekran küçüldüğünde devreye girer)
-        ========================================================= */
-        @media (max-width: 768px) {
-            .top-ui {
-                font-size: 18px;
-                top: 10px;
-                left: 10px;
-                right: 10px;
-            }
-
-            /* Komut Butonlarını mobilde sol üstte küçült */
-            .command-controls {
-                top: 40px; /* Mobilde altın yazısı daha küçük olduğu için biraz yukarı aldık */
-                left: 10px;
-                gap: 8px;
-            }
-
-            .cmd-btn {
-                width: 55px;
-                height: 55px;
-                font-size: 11px;
-            }
-
-            /* Birim Çıkarma Butonlarını mobilde alt köşede küçült */
-            .bottom-ui {
-                padding: 0 10px;
-                bottom: 15px;
-            }
-
-            .unit-controls {
-                gap: 8px;
-            }
-
-            .unit-btn {
-                width: 55px;
-                height: 55px;
-                font-size: 11px;
-            }
-        }
-
-        /* =========================================================
-           OYUN SONU / DURAKLATMA EKRANI (Modal)
-        ========================================================= */
-        #modalScreen {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.8);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            z-index: 999;
-            color: white;
-        }
-
-        .modal-content {
-            background: #2c3e50;
-            padding: 30px;
-            border-radius: 12px;
-            text-align: center;
-            border: 2px solid #ecf0f1;
-            box-shadow: 0 0 20px rgba(0,0,0,0.5);
-        }
-
-        #modalTitle {
-            margin: 0 0 20px 0;
-            font-size: 28px;
-        }
-
-        #modalBtn {
-            padding: 12px 24px;
-            font-size: 18px;
-            background: #27ae60;
-            color: white;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: bold;
-            transition: background 0.2s;
-        }
-
-        #modalBtn:hover {
-            background: #2ecc71;
-        }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#2c3e50">
+    <title>Çöp Adam Savaşları</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-    <!-- Üst Bilgi (Altın ve Seviye) -->
-    <div class="top-ui">
-        <div id="goldText">Altın: 300</div>
-        <div id="levelText">Seviye: 1</div>
+    <!-- HESAP -->
+    <div id="authScreen" class="screen-overlay">
+        <div class="menu-panel">
+            <h1>⚔️ Çöp Adam Savaşları</h1>
+            <div class="subtitle">Şifreler hash ile saklanır (sunucu veya güvenli yerel)</div>
+            <div class="auth-tabs">
+                <button type="button" id="tabLogin" class="active">Giriş Yap</button>
+                <button type="button" id="tabRegister">Hesap Oluştur</button>
+            </div>
+            <input class="auth-input" id="authUser" type="text" placeholder="Kullanıcı adı" maxlength="20" autocomplete="username">
+            <input class="auth-input" id="authPass" type="password" placeholder="Şifre" maxlength="32" autocomplete="current-password">
+            <div class="auth-error" id="authError"></div>
+            <button class="menu-btn primary" id="authSubmit">Giriş Yap</button>
+        </div>
     </div>
 
-    <!-- Komut Butonları (Sol Üst Köşede) -->
-    <div class="command-controls">
-        <div class="cmd-btn" id="cmdRetreat">Geri Çekil</div>
-        <div class="cmd-btn" id="cmdDefend">Savunma</div>
-        <div class="cmd-btn" id="cmdAttack">Saldırı</div>
+    <!-- ANA MENÜ -->
+    <div id="mainMenu" class="screen-overlay hidden">
+        <div class="user-chip" id="userChip">Oyuncu</div>
+        <div class="menu-panel">
+            <h1>⚔️ Çöp Adam Savaşları</h1>
+            <div class="subtitle">Bir mod seç</div>
+            <button class="menu-btn primary" id="btnCampaign">1. Sefer Modu Oyna</button>
+            <button class="menu-btn secondary" id="btnFriends">👥 Arkadaşlar</button>
+            <button class="menu-btn muted" id="btnMultiplayer">2. Multiplayer Oyna — Yakında</button>
+            <button class="menu-btn danger small" id="btnLogout">Çıkış Yap</button>
+        </div>
     </div>
 
-    <!-- Alt Arayüz (Birim Çıkarma Butonları) -->
-    <div class="bottom-ui">
-        <div class="unit-controls">
-            <div class="unit-btn" id="btnMiner">
-                Madenci (150)
-                <div class="cd-fill" id="minerCdFill"></div>
-            </div>
-            <div class="unit-btn" id="btnClub">
-                Savaşçı (125)
-                <div class="cd-fill" id="clubCdFill"></div>
-            </div>
-            <div class="unit-btn" id="btnArcher">
-                Okçu (200)
-                <div class="cd-fill" id="archerCdFill"></div>
+    <!-- SEFER HARİTASI -->
+    <div id="campaignScreen" class="screen-overlay hidden">
+        <div class="campaign-wrap" id="campaignWrap">
+            <div class="campaign-title">Sefer Haritası</div>
+            <svg class="campaign-path" viewBox="0 0 900 520" preserveAspectRatio="none">
+                <path d="M140 380 C 280 320, 320 220, 450 200 S 620 160, 760 120" fill="none" stroke="#8B4513" stroke-width="14" stroke-linecap="round"/>
+                <path d="M140 380 C 280 320, 320 220, 450 200 S 620 160, 760 120" fill="none" stroke="#D2B48C" stroke-width="6" stroke-linecap="round" stroke-dasharray="14 10"/>
+            </svg>
+            <div class="campaign-flag" id="campaignFlag">🚩</div>
+            <div class="campaign-node" data-level="1" style="left:15.5%; top:73%;">1</div>
+            <div class="campaign-node" data-level="2" style="left:50%; top:38%;">2</div>
+            <div class="campaign-node" data-level="3" style="left:84%; top:23%;">3</div>
+            <div class="campaign-back">
+                <button class="menu-btn secondary small" id="btnCampaignBack">← Ana Menü</button>
             </div>
         </div>
     </div>
 
-    <!-- Oyun Alanı -->
-    <canvas id="gameCanvas"></canvas>
+    <!-- ARKADAŞLAR EKRANI -->
+    <div id="friendsScreen" class="screen-overlay hidden">
+        <div class="friends-wrap">
+            <h1 style="margin-top:0;">👥 Arkadaşlar</h1>
+            <div class="friend-add-row">
+                <input class="auth-input" id="friendAddInput" type="text" placeholder="Kullanıcı adı" maxlength="20">
+                <button class="menu-btn primary small" id="btnAddFriend">İstek Gönder</button>
+            </div>
+            <div class="auth-error" id="friendAddError"></div>
 
-    <!-- Oyun Sonu Ekranı -->
-    <div id="modalScreen" style="display: none;">
-        <div class="modal-content">
-            <h2 id="modalTitle">Oyun Bitti</h2>
-            <button id="modalBtn">Tekrar Oyna</button>
+            <div class="friend-section-title">Gelen İstekler</div>
+            <div id="friendsIncomingList"><div class="friend-empty">Yükleniyor...</div></div>
+
+            <div class="friend-section-title">Arkadaşların</div>
+            <div id="friendsList"><div class="friend-empty">Yükleniyor...</div></div>
+
+            <button class="menu-btn secondary small" id="btnFriendsBack" style="margin-top:16px;">← Ana Menü</button>
         </div>
     </div>
 
-    <!-- OYUN JAVASCRIPT KODLARI BURAYA GELECEK -->
-    <script>
-        // LÜTFEN BÜTÜN JAVASCRIPT OYUN KODUNUZU BURAYA YAPIŞTIRIN.
-        // İlk mesajda düzenlediğimiz "resizeCanvas" kodunu içeren JS kodunuz bu script etiketleri arasında olmalıdır.
-    </script>
+    <!-- BÖLÜM SEÇİM MODALI: Oyna / Arkadaşımla Oyna -->
+    <div id="levelChoiceModal" class="screen-overlay hidden" style="z-index:1100;">
+        <div class="menu-panel">
+            <h1 id="levelChoiceTitle">Bölüm 1</h1>
+            <button class="menu-btn primary" id="btnPlaySolo">Oyna</button>
+            <button class="menu-btn secondary" id="btnPlayWithFriend">Arkadaşımla Oyna</button>
+            <button class="menu-btn danger small" id="btnLevelChoiceCancel">İptal</button>
+        </div>
+    </div>
+
+    <!-- ARKADAŞ SEÇİCİ (co-op daveti için) -->
+    <div id="friendPickerModal" class="screen-overlay hidden" style="z-index:1110;">
+        <div class="menu-panel">
+            <h1>Arkadaşını Seç</h1>
+            <div id="friendPickerList"></div>
+            <button class="menu-btn danger small" id="btnFriendPickerCancel">İptal</button>
+        </div>
+    </div>
+
+    <!-- DAVET BEKLENİYOR -->
+    <div id="coopWaitingModal" class="screen-overlay hidden" style="z-index:1110;">
+        <div class="menu-panel">
+            <h1 id="coopWaitingText">Bekleniyor...</h1>
+            <button class="menu-btn danger small" id="btnCoopWaitingCancel">İptal</button>
+        </div>
+    </div>
+
+    <!-- GELEN CO-OP DAVETİ -->
+    <div id="coopInviteModal" class="screen-overlay hidden" style="z-index:1120;">
+        <div class="menu-panel">
+            <h1 id="coopInviteText">Davet</h1>
+            <button class="menu-btn primary" id="btnCoopInviteAccept">Kabul Et</button>
+            <button class="menu-btn danger small" id="btnCoopInviteDecline">Reddet</button>
+        </div>
+    </div>
+
+    <div id="toastContainer"></div>
+
+
+    <div id="game-container" class="menu-hidden">
+        <div class="ui-layer">
+            <div class="top-bar">
+                <div class="top-left">
+                    <button class="btn" id="btnMiner" title="Madenci">
+                        ⛏️<span class="btn-cost">150</span>
+                        <span class="queue-badge hidden" id="minerQBadge">0</span>
+                        <div class="cooldown-fill" id="minerCdFill"></div>
+                    </button>
+                    <button class="btn" id="btnClub" title="Sopalı Asker">
+                        🗡️<span class="btn-cost">125</span>
+                        <span class="queue-badge hidden" id="clubQBadge">0</span>
+                        <div class="cooldown-fill" id="clubCdFill"></div>
+                    </button>
+                    <button class="btn" id="btnArcher" title="Okçu" style="display:none;">
+                        🏹<span class="btn-cost">140</span>
+                        <span class="queue-badge hidden" id="archerQBadge">0</span>
+                        <div class="cooldown-fill" id="archerCdFill"></div>
+                    </button>
+                </div>
+                <div class="stats">
+                    💰 Altın: <span id="goldText" style="color: #f1c40f;">300</span> | ⚔️ Bölüm: <span id="levelText" style="color: #e74c3c;">1/3</span>
+                </div>
+            </div>
+
+            <div class="command-bar">
+                <button class="cmd-btn" id="cmdRetreat" title="Geri Çekil">🏃</button>
+                <button class="cmd-btn active" id="cmdDefend" title="Savunma">🛡️</button>
+                <button class="cmd-btn" id="cmdAttack" title="Saldırı">⚔️</button>
+            </div>
+        </div>
+        <canvas id="gameCanvas"></canvas>
+
+        <div id="modalScreen" class="modal hidden">
+            <h1 id="modalTitle">Bölüm Tamamlandı!</h1>
+            <button id="modalBtn">Sonraki Bölüm</button>
+        </div>
+    </div>
+
+
+    <div id="musicHud">
+        <button type="button" id="musicBtn" title="Müzik aç/kapa">🎵</button>
+        <input type="range" id="musicVol" min="0" max="100" value="50" title="Ses">
+    </div>
+
+    <script src="01-core.js"></script>
+    <script src="02-units.js"></script>
+    <script src="03-draw.js"></script>
+    <script src="04-gameplay.js"></script>
+    <script src="05-menu-network.js"></script>
 </body>
 </html>
