@@ -1,4 +1,4 @@
-function setPlayerCommand(cmd) {
+        function setPlayerCommand(cmd) {
             const oi = localOwnerIndex();
             getOwnerState(oi).command = cmd;
             // Solo veya host: player.command senkron (AI tehdit hesabı için host tarafı)
@@ -9,19 +9,19 @@ function setPlayerCommand(cmd) {
 
         cmdBtns[CMD_RETREAT].onclick = () => {
             if (typeof isCoopPlayNow === 'function' && isCoopPlayNow()) {
-                setPlayerCommand(CMD_RETREAT); sendRoomInput('retreat'); return;
+                sendRoomInput('retreat'); return;
             }
             setPlayerCommand(CMD_RETREAT);
         };
         cmdBtns[CMD_DEFEND].onclick = () => {
             if (typeof isCoopPlayNow === 'function' && isCoopPlayNow()) {
-                setPlayerCommand(CMD_DEFEND); sendRoomInput('defend'); return;
+                sendRoomInput('defend'); return;
             }
             setPlayerCommand(CMD_DEFEND);
         };
         cmdBtns[CMD_ATTACK].onclick = () => {
             if (typeof isCoopPlayNow === 'function' && isCoopPlayNow()) {
-                setPlayerCommand(CMD_ATTACK); sendRoomInput('attack'); return;
+                sendRoomInput('attack'); return;
             }
             setPlayerCommand(CMD_ATTACK);
         };
@@ -133,21 +133,18 @@ function setPlayerCommand(cmd) {
 
         btnMiner.onclick = () => {
             if (typeof isCoopPlayNow === 'function' && isCoopPlayNow()) {
-                if (player.gold >= 150) { player.gold -= 150; updateActionButtonsUI(); }
                 sendRoomInput('buyMiner'); return;
             }
             queueUnit('miner', 0);
         };
         btnClub.onclick = () => {
             if (typeof isCoopPlayNow === 'function' && isCoopPlayNow()) {
-                if (player.gold >= 125) { player.gold -= 125; updateActionButtonsUI(); }
                 sendRoomInput('buyClub'); return;
             }
             queueUnit('club', 0);
         };
         btnArcher.onclick = () => {
             if (typeof isCoopPlayNow === 'function' && isCoopPlayNow()) {
-                if (player.gold >= 140) { player.gold -= 140; updateActionButtonsUI(); }
                 sendRoomInput('buyArcher'); return;
             }
             queueUnit('archer', 0);
@@ -253,7 +250,7 @@ function setPlayerCommand(cmd) {
                     enemy.gold -= 150;
                     units.push(new Miner(false));
                 }
-                enemy.minerCooldown = player.minerMaxCooldown * diff.cooldownMult;
+                enemy.minerCooldown = Math.floor(player.minerMaxCooldown * diff.cooldownMult / (typeof coopEnemySpawnMult === "function" ? coopEnemySpawnMult() : 1));
             }
 
             if (enemy.clubCooldown <= 0 && enemy.gold >= 125 && aiFighters.length < Math.min(diff.maxClubmen, MAX_CLUBMEN_PER_TEAM)) {
@@ -262,7 +259,7 @@ function setPlayerCommand(cmd) {
                     units.push(new Clubman(false));
                     if (enemy.aiState === 'retreat') enemy.recoveryUnitsPurchased++;
                 }
-                enemy.clubCooldown = player.clubMaxCooldown * diff.cooldownMult;
+                enemy.clubCooldown = Math.floor(player.clubMaxCooldown * diff.cooldownMult / (typeof coopEnemySpawnMult === "function" ? coopEnemySpawnMult() : 1));
             }
 
             if (enemy.archerCooldown <= 0 && enemy.gold >= 140 && aiArchers.length < Math.min(diff.maxArchers || 0, MAX_ARCHERS_PER_TEAM)) {
@@ -271,7 +268,7 @@ function setPlayerCommand(cmd) {
                     units.push(new Archer(false));
                     if (enemy.aiState === 'retreat') enemy.recoveryUnitsPurchased++;
                 }
-                enemy.archerCooldown = 11 * 60 * diff.cooldownMult;
+                enemy.archerCooldown = Math.floor(11 * 60 * diff.cooldownMult / (typeof coopEnemySpawnMult === "function" ? coopEnemySpawnMult() : 1));
             }
 
             const playerThreatVisible = knownPlayerCount > 0;
@@ -531,8 +528,7 @@ function setPlayerCommand(cmd) {
         }
 
         function update() {
-            // Co-op: fizik sunucuda
-            if (typeof isCoopPlayNow === 'function' && isCoopPlayNow()) return;
+            // Co-op: çift yerel motor — fizik her istemcide (solo ile aynı)
             frames++;
 
             if (isCoopHostNow()) {
@@ -540,8 +536,13 @@ function setPlayerCommand(cmd) {
             }
 
             if (frames % (player.command === CMD_RETREAT ? 150 : 300) === 0) {
-                player.gold += 15;
-                addFloatingText(player.base.x, player.base.y - 120, '+15', '#f1c40f');
+                const g1 = Math.max(1, Math.floor(15 * (typeof coopGoldMult === 'function' ? coopGoldMult() : 1)));
+                player.gold += g1;
+                addFloatingText(player.base.x, player.base.y - 120, '+' + g1, '#f1c40f');
+            }
+            if (typeof isCoopActive === 'function' && isCoopActive() && frames % (player2.command === CMD_RETREAT ? 150 : 300) === 0) {
+                const g2 = Math.max(1, Math.floor(15 * coopGoldMult()));
+                player2.gold += g2;
             }
 
             [player, enemy].forEach(team => {
