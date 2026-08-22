@@ -3368,28 +3368,15 @@ function showScreen(which) {
         }
 
         function openCampaignMap(fromVictory) {
-    showScreen('campaign');
-    refreshCampaignNodes();
-    const flagLv = Math.min(currentUser.maxUnlocked || 1, 3);
-    setFlagToLevel(fromVictory ? Math.max(1, flagLv - 1) : flagLv, false);
-    if (fromVictory) {
-        setTimeout(() => setFlagToLevel(flagLv, true), 80);
-    }
-
-    // ===== EKSİK OLAN NODE TIKLAMA İŞLEVCİ (EKLE) =====
-    document.querySelectorAll('.campaign-node').forEach(node => {
-        node.onclick = function() {
-            const level = parseInt(this.dataset.level, 10);
-            if (this.classList.contains('locked')) {
-                alert('Bu bölüm henüz açılmadı!');
-                return;
+            showScreen('campaign');
+            refreshCampaignNodes();
+            const flagLv = Math.min(currentUser.maxUnlocked || 1, 3);
+            setFlagToLevel(fromVictory ? Math.max(1, flagLv - 1) : flagLv, false);
+            if (fromVictory) {
+                setTimeout(() => setFlagToLevel(flagLv, true), 80);
             }
-            pendingLevelChoice = level;
-            document.getElementById('levelChoiceTitle').textContent = 'Bölüm ' + level;
-            document.getElementById('levelChoiceModal').classList.remove('hidden');
-        };
-    });
-}
+        }
+
         // (Bölüm node tıklama işleyicisi artık yukarıda, Oyna/Arkadaşımla Oyna modalı ile birlikte tanımlı)
 
         function startCampaignLevel(lv) {
@@ -3468,6 +3455,47 @@ function showScreen(which) {
             }
             showScreen('auth');
         })();
+// ===== SEfer haritası tıklama düzeltmesi (EN SONA EKLENDİ) =====
+(function() {
+    // Sayfa yüklendiğinde veya harita açıldığında çalışması için
+    function attachNodeClicks() {
+        document.querySelectorAll('.campaign-node').forEach(node => {
+            // Eski tıklamaları temizle, yeni ekle
+            node.removeEventListener('click', node._clickHandler);
+            node._clickHandler = function(e) {
+                e.stopPropagation();
+                const level = parseInt(this.dataset.level, 10);
+                if (this.classList.contains('locked')) {
+                    alert('Bu bölüm henüz açılmadı!');
+                    return;
+                }
+                // Modal'ı aç
+                pendingLevelChoice = level;
+                document.getElementById('levelChoiceTitle').textContent = 'Bölüm ' + level;
+                document.getElementById('levelChoiceModal').classList.remove('hidden');
+            };
+            node.addEventListener('click', node._clickHandler);
+        });
+    }
+
+    // Sayfa ilk yüklendiğinde dene
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', attachNodeClicks);
+    } else {
+        attachNodeClicks();
+    }
+
+    // "Sefer Modu Oyna" butonuna her basıldığında (harita yeniden açıldığında) tekrar ata
+    const originalOpenCampaign = window.openCampaignMap;
+    if (typeof originalOpenCampaign === 'function') {
+        window.openCampaignMap = function(fromVictory) {
+            originalOpenCampaign(fromVictory);
+            // Harita açıldıktan sonra tıklamaları yeniden bağla
+            setTimeout(attachNodeClicks, 100);
+        };
+    }
+})();
+
     </script>
 </body>
 </html>
