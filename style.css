@@ -3,38 +3,56 @@ html, body {
             background-color: #2c3e50; color: white;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             overflow: hidden; user-select: none;
+            overscroll-behavior: none;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
         }
+        /* Mobil tarayicilarda arac/adres cubugu yuzunden 100vh gercek gorunur
+           yukseklikten buyuk olabiliyor; JS'in ayarladigi --vh degiskenini kullaniyoruz (01-core.js) */
+        html { height: -webkit-fill-available; }
+        body { height: 100vh; height: calc(var(--vh, 1vh) * 100); height: -webkit-fill-available; }
         #game-container {
             position: relative; width: 100vw; height: 100vh;
+            height: calc(var(--vh, 1vh) * 100);
             overflow: hidden; background: #2c3e50;
         }
         canvas { display: block; width: 100%; height: 100%; cursor: grab; touch-action: none; }
         canvas:active { cursor: grabbing; }
         .ui-layer {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            padding: 20px; box-sizing: border-box;
+            padding: clamp(10px, 2.4vw, 20px);
+            padding-top: max(env(safe-area-inset-top), clamp(10px, 2.4vw, 20px));
+            padding-left: max(env(safe-area-inset-left), clamp(10px, 2.4vw, 20px));
+            padding-right: max(env(safe-area-inset-right), clamp(10px, 2.4vw, 20px));
+            padding-bottom: max(env(safe-area-inset-bottom), clamp(10px, 2.4vw, 20px));
+            box-sizing: border-box;
             display: flex; flex-direction: column; justify-content: space-between;
             pointer-events: none;
         }
         .top-bar {
             display: flex; justify-content: space-between; width: 100%;
+            flex-wrap: wrap; gap: 10px;
         }
-        .top-left { display: flex; gap: 20px; }
+        .top-left { display: flex; gap: clamp(8px, 2vw, 20px); flex-wrap: wrap; }
         .command-bar {
-            display: flex; justify-content: center; gap: 20px; pointer-events: auto;
-            margin-bottom: 20px;
+            display: flex; flex-wrap: wrap; justify-content: center; align-items: center;
+            gap: clamp(8px, 2.5vw, 20px); pointer-events: auto;
+            margin-bottom: 0; width: 100%; max-width: 100%; box-sizing: border-box;
         }
         .btn {
-            pointer-events: auto; width: 75px; height: 75px; border-radius: 50%;
+            pointer-events: auto;
+            width: clamp(52px, 9vw, 75px); height: clamp(52px, 9vw, 75px);
+            border-radius: 50%;
             background: #f1c40f; border: 3px solid #d4ac0d; cursor: pointer;
             display: flex; flex-direction: column; align-items: center; justify-content: center;
-            font-size: 28px; font-weight: bold; color: #333;
+            font-size: clamp(20px, 4.2vw, 28px); font-weight: bold; color: #333;
             box-shadow: 0 6px 12px rgba(0,0,0,0.4); transition: transform 0.1s, filter 0.1s;
             position: relative; overflow: hidden;
+            touch-action: manipulation; -webkit-tap-highlight-color: transparent;
         }
         .btn:active { transform: scale(0.95); }
         .btn:disabled { background: #7f8c8d; border-color: #95a5a6; cursor: not-allowed; opacity: 0.9; }
-        .btn-cost { font-size: 15px; margin-top: -2px; z-index: 2; }
+        .btn-cost { font-size: clamp(10px, 2.2vw, 15px); margin-top: -2px; z-index: 2; }
 
         .cooldown-fill {
             position: absolute; inset: 0;
@@ -52,17 +70,23 @@ html, body {
         }
         .cooldown-fill.active { opacity: 1; }
         .cmd-btn {
-            width: 60px; height: 60px; border-radius: 12px; font-size: 28px;
+            width: clamp(40px, 7vw, 60px); height: clamp(40px, 7vw, 60px);
+            border-radius: 12px; font-size: clamp(18px, 3.6vw, 28px);
             background: #ecf0f1; border: 2px solid #bdc3c7; cursor: pointer;
             display: flex; justify-content: center; align-items: center;
+            flex-shrink: 0;
             box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            touch-action: manipulation; -webkit-tap-highlight-color: transparent;
         }
         .cmd-btn.active { background: #2ecc71; border-color: #27ae60; color: white; box-shadow: 0 0 15px #2ecc71; }
         .cmd-btn:active { transform: scale(0.9); }
         .stats {
-            background: rgba(0,0,0,0.7); padding: 12px 25px; border-radius: 25px;
-            font-size: 20px; font-weight: bold; pointer-events: auto; border: 2px solid #555;
+            background: rgba(0,0,0,0.7);
+            padding: clamp(8px, 1.6vw, 12px) clamp(14px, 3vw, 25px);
+            border-radius: 25px;
+            font-size: clamp(13px, 2.6vw, 20px); font-weight: bold; pointer-events: auto; border: 2px solid #555;
             box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+            white-space: nowrap;
         }
         .modal {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
@@ -220,7 +244,7 @@ html, body {
     border: none;
     box-shadow: none;
     color: #fff;
-    font-size: 22px;
+    font-size: clamp(14px, 3vw, 22px);
     font-weight: 900;
     line-height: 1;
     text-align: center;
@@ -228,10 +252,15 @@ html, body {
     pointer-events: none;
 }
 
+.menu-btn, #musicBtn, #musicVol, .cmd-btn, .btn, .campaign-node {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+}
+
 #musicHud {
     position: fixed !important;
-    top: 12px !important;
-    right: 12px !important;
+    top: max(12px, env(safe-area-inset-top)) !important;
+    right: max(12px, env(safe-area-inset-right)) !important;
     z-index: 99999 !important;
     display: flex !important;
     align-items: center !important;
@@ -258,4 +287,27 @@ html, body {
     width: 80px;
     accent-color: #f1c40f;
     cursor: pointer;
+}
+
+/* ===== Ek duyarlı ayarlar: çok küçük / kısa ekranlar ===== */
+@media (max-width: 420px) {
+    .menu-panel { padding: 24px 20px; min-width: 0; }
+    .menu-panel h1 { font-size: 24px; }
+    .auth-input { font-size: 16px; padding: 10px 12px; }
+}
+
+@media (max-height: 430px) and (orientation: landscape) {
+    /* Kısa yatay telefon ekranlarında oyun UI'ını daha da küçült */
+    .btn { width: clamp(40px, 8vh, 56px); height: clamp(40px, 8vh, 56px); font-size: clamp(16px, 3.4vh, 22px); }
+    .cmd-btn { width: clamp(34px, 7vh, 48px); height: clamp(34px, 7vh, 48px); font-size: clamp(16px, 3.2vh, 22px); }
+    .stats { font-size: clamp(11px, 2.4vh, 15px); padding: 6px 14px; }
+    .ui-layer { padding: 8px; padding-top: max(env(safe-area-inset-top), 8px); }
+    .top-left { gap: 6px; }
+    .command-bar { gap: 8px; }
+}
+
+@media (hover: none) and (pointer: coarse) {
+    /* Dokunmatik cihazlarda hover-taşıma efektini kapat, dokunma anında tepki hızlansın */
+    .menu-btn:hover { transform: none; }
+    .campaign-node:hover { transform: none; }
 }
