@@ -1,4 +1,4 @@
-function setPlayerCommand(cmd) {
+        function setPlayerCommand(cmd) {
             const oi = localOwnerIndex();
             getOwnerState(oi).command = cmd;
             // Solo veya host: player.command senkron (AI tehdit hesabı için host tarafı)
@@ -8,15 +8,15 @@ function setPlayerCommand(cmd) {
         }
 
         cmdBtns[CMD_RETREAT].onclick = () => {
-            if (isCoopGuestNow()) { sendRoomInput('retreat'); setPlayerCommand(CMD_RETREAT); return; }
+            if (typeof isCoopPlayNow === 'function' && isCoopPlayNow()) { sendRoomInput('retreat'); setPlayerCommand(CMD_RETREAT); return; }
             setPlayerCommand(CMD_RETREAT);
         };
         cmdBtns[CMD_DEFEND].onclick = () => {
-            if (isCoopGuestNow()) { sendRoomInput('defend'); setPlayerCommand(CMD_DEFEND); return; }
+            if (typeof isCoopPlayNow === 'function' && isCoopPlayNow()) { sendRoomInput('defend'); setPlayerCommand(CMD_DEFEND); return; }
             setPlayerCommand(CMD_DEFEND);
         };
         cmdBtns[CMD_ATTACK].onclick = () => {
-            if (isCoopGuestNow()) { sendRoomInput('attack'); setPlayerCommand(CMD_ATTACK); return; }
+            if (typeof isCoopPlayNow === 'function' && isCoopPlayNow()) { sendRoomInput('attack'); setPlayerCommand(CMD_ATTACK); return; }
             setPlayerCommand(CMD_ATTACK);
         };
 
@@ -126,15 +126,15 @@ function setPlayerCommand(cmd) {
         }
 
         btnMiner.onclick = () => {
-            if (isCoopGuestNow()) { sendRoomInput('buyMiner'); return; }
+            if (typeof isCoopPlayNow === 'function' && isCoopPlayNow()) { sendRoomInput('buyMiner'); return; }
             queueUnit('miner', 0);
         };
         btnClub.onclick = () => {
-            if (isCoopGuestNow()) { sendRoomInput('buyClub'); return; }
+            if (typeof isCoopPlayNow === 'function' && isCoopPlayNow()) { sendRoomInput('buyClub'); return; }
             queueUnit('club', 0);
         };
         btnArcher.onclick = () => {
-            if (isCoopGuestNow()) { sendRoomInput('buyArcher'); return; }
+            if (typeof isCoopPlayNow === 'function' && isCoopPlayNow()) { sendRoomInput('buyArcher'); return; }
             queueUnit('archer', 0);
         };
 
@@ -505,7 +505,8 @@ function setPlayerCommand(cmd) {
         }
 
         function update() {
-            if (isCoopGuestNow()) return;
+            // Co-op: simülasyon sunucuda — yerelde fizik yok
+            if (typeof isCoopPlayNow === 'function' && isCoopPlayNow()) return;
             frames++;
 
             if (isCoopHostNow()) {
