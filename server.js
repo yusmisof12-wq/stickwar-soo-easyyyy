@@ -6,7 +6,8 @@ const fs = require('fs');
 const path = require('path');
 const http = require('http');
 const { WebSocketServer } = require('ws');
-const { GameRoom, TICK_MS } = require('./server-game');
+let GameRoom = null, TICK_MS = 50;
+try { ({ GameRoom, TICK_MS } = require('./server-game')); } catch (_) {}
 
 const PORT = process.env.PORT || 3847;
 const HTML_FILE = process.env.HTML_FILE || 'index.html';
@@ -311,14 +312,15 @@ wss.on('connection', (ws) => {
                 sendTo(to, { type: 'coop_declined', from: ws.username });
                 return;
             }
+            // Çift yerel motor: her iki istemci solo gibi çalışır, sunucu sadece komut iletir
             const roomId = makeRoomId();
             const level = msg.level || 1;
-            const game = new GameRoom(roomId, level, to, ws.username);
             const room = {
                 members: [to, ws.username],
                 slots: { [to]: 0, [ws.username]: 1 },
-                game,
+                game: null,
                 interval: null,
+                inputSeq: 0,
             };
             rooms.set(roomId, room);
             const inviterWs = onlineSockets.get(to);
@@ -327,15 +329,17 @@ wss.on('connection', (ws) => {
             ws.slot = 1;
             sendTo(to, { type: 'coop_start', roomId, slot: 0, level, partner: ws.username });
             ws.send(JSON.stringify({ type: 'coop_start', roomId, slot: 1, level, partner: to }));
-            startRoomLoop(roomId);
             return;
         }
         if (msg.type === 'room_input') {
             const room = rooms.get(msg.roomId);
-            if (!room || !room.game) return;
+            if (!room || !room.members.includes(ws.username)) return;
             const slot = room.slots[ws.username];
             if (slot === undefined) return;
-            room.game.pushInput(slot, msg.action);
+            room.inputSeq = (room.inputSeq || 0) + 1;
+            const payload = { kind: 'input', action: msg.action, slot, seq: room.inputSeq };
+            // Her iki oyuncuya da gönder (gönderen dahil) — aynı sırada uygulansın
+            room.members.forEach(m => sendTo(m, { type: 'room_relay', payload }));
             return;
         }
         if (msg.type === 'ping') {
