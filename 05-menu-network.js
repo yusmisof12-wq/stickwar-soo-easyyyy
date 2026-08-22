@@ -415,19 +415,6 @@
             pendingCoopInvite = null;
         };
 
-        function lockCoopWorld() {
-            // İki oyuncuda aynı harita / aynı kule konumları
-            MIN_WORLD_WIDTH = 2560;
-            GROUND_HEIGHT = 220;
-            worldWidth = 2560;
-            if (player && player.base) player.base.x = 130;
-            if (enemy && enemy.base) enemy.base.x = worldWidth - 130;
-            if (typeof canvas !== 'undefined' && canvas) {
-                cameraX = Math.max(0, Math.min(cameraX, Math.max(0, worldWidth - canvas.width)));
-            }
-            if (typeof updateMineSlots === 'function') updateMineSlots(false);
-        }
-
         function beginCoopLevel(lv) {
             lv = Number(lv) || 1;
             level = lv;
@@ -435,12 +422,9 @@
             gameStarted = true;
             coopVictoryHandled = false;
             showScreen('game');
-            lockCoopWorld();
             resizeCanvas();
-            lockCoopWorld();
             // Solo ile aynı motor — ikimizde de
             if (typeof resetLevel === 'function') resetLevel();
-            lockCoopWorld();
             player2.gold = 300;
             player2.command = CMD_DEFEND;
             player2.minerQueue = []; player2.combatQueue = [];
@@ -452,46 +436,22 @@
             showToast('Arkadaş seferi · Oyuncu ' + (myCoopSlot() + 1) + ' (mavi=2)');
         }
 
-        function announceCoopResult(winner, lv) {
-            if (!coopSession || coopVictoryHandled) return;
-            coopVictoryHandled = true;
-            try {
-                wsSend({
-                    type: 'room_relay',
-                    roomId: coopSession.roomId,
-                    payload: { kind: 'victory', winner: winner, level: lv }
-                });
-            } catch (e) {}
-            showCoopVictory(lv, winner);
-        }
-
         function showCoopVictory(lv, winner) {
+            if (coopVictoryHandled) return;
             coopVictoryHandled = true;
             isGameOver = true;
-            if (typeof stopCoopGuestRenderLoop === 'function') stopCoopGuestRenderLoop();
-            if (typeof animationFrameId !== 'undefined' && animationFrameId !== null) {
-                cancelAnimationFrame(animationFrameId);
-                animationFrameId = null;
-            }
+            stopCoopGuestRenderLoop();
             if (winner === 'enemy') {
-                modalTitle.innerText = 'Kaybettiniz! Heykeliniz Yıkıldı.';
+                modalTitle.innerText = 'Kaybettiniz!';
             } else {
-                const done = Number(lv) || 1;
-                const prevLevel = level;
-                level = done + 1;
-                if (typeof onLevelVictory === 'function' && prevLevel <= done) {
-                    onLevelVictory();
-                }
-                modalTitle.innerText = done >= 3
-                    ? 'Tebrikler! Seferi Bitirdiniz!'
-                    : done + '. Bölüm Tamamlandı!';
+                modalTitle.innerText = Number(lv) >= 3 ? 'Tebrikler! Seferi Bitirdiniz!' : 'Bölüm Tamamlandı!';
             }
             modalBtn.innerText = 'Sefer Haritası';
             modal.classList.remove('hidden');
             modalBtn.onclick = () => {
                 modal.classList.add('hidden');
                 leaveCoopSession();
-                if (typeof openCampaignMap === 'function') openCampaignMap(winner !== 'enemy');
+                if (typeof openCampaignMap === 'function') openCampaignMap(true);
             };
         }
 
@@ -1223,12 +1183,10 @@
             return hud;
         }
 
-// 05-menu-network.js dosyasında musicUrl fonksiyonunu bununla değiştirin:
-function musicUrl(name) {
-    // mp3 dosyaları repo kökünde (music/ klasörü yok), o yüzden doğrudan isimle çağırıyoruz
-    try { return new URL(name, window.location.href).href; }
-    catch (_) { return name; }
-}        
+        function musicUrl(name) {
+            try { return new URL('music/' + name, window.location.href).href; }
+            catch (_) { return 'music/' + name; }
+        }
 
         function ensureTracks() {
             if (!audioMenu) {
