@@ -1,4 +1,4 @@
- function setPlayerCommand(cmd) {
+function setPlayerCommand(cmd) {
             player.command = cmd;
             Object.values(cmdBtns).forEach(b => b.classList.remove('active'));
             cmdBtns[cmd].classList.add('active');
@@ -17,32 +17,80 @@
             setPlayerCommand(CMD_ATTACK);
         };
 
+        // Spawn süreleri (frame) — birim tipine göre
+        const SPAWN_TIME = { miner: 15 * 60, club: 10 * 60, archer: 11 * 60 };
+        const UNIT_COST = { miner: 150, club: 125, archer: 140 };
+        const MAX_QUEUE = 8;
+
+        function countQueued(type) {
+            return (player.spawnQueue || []).filter(t => t === type).length;
+        }
+        function countPlayerUnits(type) {
+            if (type === 'miner') return units.filter(u => u.isPlayer && u instanceof Miner).length;
+            if (type === 'club') return units.filter(u => u.isPlayer && u instanceof Clubman).length;
+            if (type === 'archer') return units.filter(u => u.isPlayer && u instanceof Archer).length;
+            return 0;
+        }
+        function maxForType(type) {
+            if (type === 'miner') return MAX_MINERS_PER_TEAM;
+            if (type === 'club') return MAX_CLUBMEN_PER_TEAM;
+            if (type === 'archer') return MAX_ARCHERS_PER_TEAM;
+            return 0;
+        }
+
+        function queueUnit(type) {
+            if (!player.spawnQueue) player.spawnQueue = [];
+            if (player.gold < UNIT_COST[type]) return false;
+            if (player.spawnQueue.length >= MAX_QUEUE) return false;
+            if (countPlayerUnits(type) + countQueued(type) >= maxForType(type)) return false;
+
+            player.gold -= UNIT_COST[type];
+            player.spawnQueue.push(type);
+            // İlk birim kuyruğa girdiyse spawn süresini başlat
+            if (player.spawnQueue.length === 1) {
+                player.spawnTimerMax = SPAWN_TIME[type];
+                player.spawnTimer = SPAWN_TIME[type];
+            }
+            return true;
+        }
+
+        function processSpawnQueue() {
+            if (!player.spawnQueue) player.spawnQueue = [];
+            if (player.spawnQueue.length === 0) {
+                player.spawnTimer = 0;
+                player.spawnTimerMax = 0;
+                return;
+            }
+            if (player.spawnTimer > 0) {
+                player.spawnTimer--;
+                return;
+            }
+            const type = player.spawnQueue.shift();
+            if (type === 'miner') units.push(new Miner(true));
+            else if (type === 'club') units.push(new Clubman(true));
+            else if (type === 'archer') units.push(new Archer(true));
+
+            if (player.spawnQueue.length > 0) {
+                const next = player.spawnQueue[0];
+                player.spawnTimerMax = SPAWN_TIME[next];
+                player.spawnTimer = SPAWN_TIME[next];
+            } else {
+                player.spawnTimer = 0;
+                player.spawnTimerMax = 0;
+            }
+        }
+
         btnMiner.onclick = () => {
             if (isCoopGuestNow()) { sendRoomInput('buyMiner'); return; }
-            const playerMiners = units.filter(u => u.isPlayer && u instanceof Miner).length;
-            if (player.gold >= 150 && player.minerCooldown <= 0 && playerMiners < MAX_MINERS_PER_TEAM) {
-                player.gold -= 150;
-                units.push(new Miner(true));
-                player.minerCooldown = player.minerMaxCooldown;
-            }
+            queueUnit('miner');
         };
         btnClub.onclick = () => {
             if (isCoopGuestNow()) { sendRoomInput('buyClub'); return; }
-            const playerClubmen = units.filter(u => u.isPlayer && u instanceof Clubman).length;
-            if (player.gold >= 125 && player.clubCooldown <= 0 && playerClubmen < MAX_CLUBMEN_PER_TEAM) {
-                player.gold -= 125;
-                units.push(new Clubman(true));
-                player.clubCooldown = player.clubMaxCooldown;
-            }
+            queueUnit('club');
         };
         btnArcher.onclick = () => {
             if (isCoopGuestNow()) { sendRoomInput('buyArcher'); return; }
-            const playerArchers = units.filter(u => u.isPlayer && u instanceof Archer).length;
-            if (player.gold >= 140 && player.archerCooldown <= 0 && playerArchers < MAX_ARCHERS_PER_TEAM) {
-                player.gold -= 140;
-                units.push(new Archer(true));
-                player.archerCooldown = player.archerMaxCooldown;
-            }
+            queueUnit('archer');
         };
 
         function resetLevel() {
@@ -60,6 +108,9 @@
             player.minerCooldown = 0;
             player.clubCooldown = 0;
             player.archerCooldown = 0;
+            player.spawnQueue = [];
+            player.spawnTimer = 0;
+            player.spawnTimerMax = 0;
             player.clubFormationCounter = 0;
             player.archerFormationCounter = 0;
             player.lastCommand = CMD_DEFEND;
@@ -348,24 +399,26 @@
         }
 
         function updateActionButtonsUI() {
-            // Yuvarlak cooldown (kalan süre conic-gradient)
-            setCircularCooldown(minerCdFill, player.minerCooldown, player.minerMaxCooldown);
-            setCircularCooldown(clubCdFill, player.clubCooldown, player.clubMaxCooldown);
-            setCircularCooldown(archerCdFill, player.archerCooldown, player.archerMaxCooldown);
+            // Yuvarlak spawn süresi: sadece kuyruğun başındaki birim tipinde göster
+            const head = player.spawnQueue && player.spawnQueue[0];
+            setCircularCooldown(minerCdFill, head === 'miner' ? player.spawnTimer : 0, head === 'miner' ? player.spawnTimerMax : 1);
+            setCircularCooldown(clubCdFill, head === 'club' ? player.spawnTimer : 0, head === 'club' ? player.spawnTimerMax : 1);
+            setCircularCooldown(archerCdFill, head === 'archer' ? player.spawnTimer : 0, head === 'archer' ? player.spawnTimerMax : 1);
 
             goldEl.innerText = Math.floor(player.gold);
             levelEl.innerText = Math.min(level, 3) + "/3";
 
-            const playerMiners = units.filter(u => u.isPlayer && getUnitType(u) === 'miner').length;
-            const playerClubmen = units.filter(u => u.isPlayer && getUnitType(u) === 'clubman').length;
-            const playerArchers = units.filter(u => u.isPlayer && getUnitType(u) === 'archer').length;
+            const qLen = (player.spawnQueue || []).length;
+            // Spawn sürerken de sıraya eklenebilir (altın + limit yeterse)
+            btnMiner.disabled = player.gold < 150 || qLen >= MAX_QUEUE ||
+                (countPlayerUnits('miner') + countQueued('miner') >= MAX_MINERS_PER_TEAM);
+            btnClub.disabled = player.gold < 125 || qLen >= MAX_QUEUE ||
+                (countPlayerUnits('club') + countQueued('club') >= MAX_CLUBMEN_PER_TEAM);
 
-            btnMiner.disabled = player.gold < 150 || player.minerCooldown > 0 || playerMiners >= MAX_MINERS_PER_TEAM;
-            btnClub.disabled = player.gold < 125 || player.clubCooldown > 0 || playerClubmen >= MAX_CLUBMEN_PER_TEAM;
-
-            if (level >= 3) {
+            if (level >= 2) {
                 btnArcher.style.display = '';
-                btnArcher.disabled = player.gold < 140 || player.archerCooldown > 0 || playerArchers >= MAX_ARCHERS_PER_TEAM;
+                btnArcher.disabled = player.gold < 140 || qLen >= MAX_QUEUE ||
+                    (countPlayerUnits('archer') + countQueued('archer') >= MAX_ARCHERS_PER_TEAM);
             } else {
                 btnArcher.style.display = 'none';
             }
@@ -444,10 +497,8 @@
                 modal.classList.remove('hidden');
             }
 
-            // Oyuncu cooldown sayacı (takılı kalmasın)
-            if (player.minerCooldown > 0) player.minerCooldown--;
-            if (player.clubCooldown > 0) player.clubCooldown--;
-            if (player.archerCooldown > 0) player.archerCooldown--;
+            // Spawn kuyruğu: sırayla birim üret
+            processSpawnQueue();
 
             updateActionButtonsUI();
         }
