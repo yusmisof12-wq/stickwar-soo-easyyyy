@@ -2786,11 +2786,14 @@
         function isCoopGuestNow() { return !!(coopSession && coopSession.role === 'guest'); }
         function isCoopHostNow() { return !!(coopSession && coopSession.role === 'host'); }
 
-       function wsUrl() {
-    const loc = window.location;
-    const proto = loc.protocol === 'https:' ? 'wss:' : 'ws:';
-    return proto + '//' + loc.host + '/ws';
-}
+        function wsUrl() {
+            const loc = window.location;
+            if (API_BASE) {
+                const proto = loc.protocol === 'https:' ? 'wss:' : 'ws:';
+                return proto + '//' + loc.host + '/ws';
+            }
+            return 'ws://127.0.0.1:3847/ws';
+        }
 
         function connectWS() {
             if (!useServer || !currentUser) return;
@@ -2976,7 +2979,20 @@
             }
         };
 
-      
+        // ---- Bölüm seçimi: Oyna / Arkadaşımla Oyna ----
+        document.querySelectorAll('.campaign-node').forEach(node => {
+            node.onclick = () => {
+                const lv = parseInt(node.dataset.level, 10);
+                if (lv > (currentUser.maxUnlocked || 1)) {
+                    alert('Bu bölüm henüz kilitli!');
+                    return;
+                }
+                pendingLevelChoice = lv;
+                levelChoiceTitle.textContent = 'Bölüm ' + lv;
+                document.getElementById('btnPlayWithFriend').style.display = useServer ? '' : 'none';
+                levelChoiceModal.classList.remove('hidden');
+            };
+        });
 
         document.getElementById('btnPlaySolo').onclick = () => {
             levelChoiceModal.classList.add('hidden');
@@ -3455,47 +3471,28 @@ function showScreen(which) {
             }
             showScreen('auth');
         })();
-// ===== SEfer haritası tıklama düzeltmesi (EN SONA EKLENDİ) =====
-(function() {
-    // Sayfa yüklendiğinde veya harita açıldığında çalışması için
-    function attachNodeClicks() {
-        document.querySelectorAll('.campaign-node').forEach(node => {
-            // Eski tıklamaları temizle, yeni ekle
-            node.removeEventListener('click', node._clickHandler);
-            node._clickHandler = function(e) {
-                e.stopPropagation();
-                const level = parseInt(this.dataset.level, 10);
-                if (this.classList.contains('locked')) {
-                    alert('Bu bölüm henüz açılmadı!');
-                    return;
-                }
-                // Modal'ı aç
-                pendingLevelChoice = level;
-                document.getElementById('levelChoiceTitle').textContent = 'Bölüm ' + level;
-                document.getElementById('levelChoiceModal').classList.remove('hidden');
-            };
-            node.addEventListener('click', node._clickHandler);
-        });
+// ===== EN SON EKLENEN KESİN ÇÖZÜM (Olay Delegasyonu) =====
+document.addEventListener('click', function(e) {
+    // Tıklanan yer veya onun üst elementi '.campaign-node' mu?
+    const node = e.target.closest('.campaign-node');
+    if (!node) return; // Eğer tıklanan yer node değilse hiçbir şey yapma
+
+    const level = parseInt(node.dataset.level, 10);
+    
+    // Kilitli mi kontrol et
+    if (node.classList.contains('locked')) {
+        alert('Bu bölüm henüz açılmadı!');
+        return;
     }
 
-    // Sayfa ilk yüklendiğinde dene
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', attachNodeClicks);
-    } else {
-        attachNodeClicks();
-    }
-
-    // "Sefer Modu Oyna" butonuna her basıldığında (harita yeniden açıldığında) tekrar ata
-    const originalOpenCampaign = window.openCampaignMap;
-    if (typeof originalOpenCampaign === 'function') {
-        window.openCampaignMap = function(fromVictory) {
-            originalOpenCampaign(fromVictory);
-            // Harita açıldıktan sonra tıklamaları yeniden bağla
-            setTimeout(attachNodeClicks, 100);
-        };
-    }
-})();
-
+    // Modalı aç
+    pendingLevelChoice = level;
+    document.getElementById('levelChoiceTitle').textContent = 'Bölüm ' + level;
+    document.getElementById('levelChoiceModal').classList.remove('hidden');
+    
+    // Konsolda görmek için (Çalışıp çalışmadığını anlamak için)
+    console.log('✅ Tıklama başarılı! Seviye:', level);
+});
     </script>
 </body>
 </html>
