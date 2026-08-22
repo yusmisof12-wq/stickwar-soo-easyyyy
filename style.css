@@ -37,9 +37,20 @@ html, body {
         .btn-cost { font-size: 15px; margin-top: -2px; z-index: 2; }
 
         .cooldown-fill {
-            position: absolute; bottom: 0; left: 0; width: 100%; height: 0%;
-            background: rgba(0, 0, 0, 0.65); border-radius: 50%; pointer-events: none; z-index: 1;
+            position: absolute; inset: 0;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 1;
+            /* --cd: kalan cooldown yüzdesi (100% = yeni basıldı, 0% = bitti) */
+            background: conic-gradient(
+                rgba(0, 0, 0, 0.7) 0deg,
+                rgba(0, 0, 0, 0.7) var(--cd-deg, 0deg),
+                transparent var(--cd-deg, 0deg)
+            );
+            opacity: 0;
+            transition: opacity 0.15s;
         }
+        .cooldown-fill.active { opacity: 1; }
         .cmd-btn {
             width: 60px; height: 60px; border-radius: 12px; font-size: 28px;
             background: #ecf0f1; border: 2px solid #bdc3c7; cursor: pointer;
