@@ -95,6 +95,45 @@
             clubFormationCounter: 0,
             archerFormationCounter: 0
         };
+
+        // 2. oyuncu (co-op) — ayrı altın, komut, kuyruk; takım aynı
+        let player2 = {
+            gold: 300,
+            command: CMD_DEFEND,
+            spawnQueue: [],
+            spawnTimer: 0,
+            spawnTimerMax: 0,
+            clubFormationCounter: 0,
+            archerFormationCounter: 0
+        };
+
+        const COLOR_P1 = '#1a1a1a';
+        const COLOR_P2 = '#2980b9'; // mavi — 2. oyuncu
+        const COLOR_ENEMY = '#c0392b';
+
+        function isCoopActive() {
+            return typeof coopSession !== 'undefined' && !!coopSession;
+        }
+        function localOwnerIndex() {
+            return (typeof isCoopGuestNow === 'function' && isCoopGuestNow()) ? 1 : 0;
+        }
+        function getOwnerState(ownerIndex) {
+            return ownerIndex === 1 ? player2 : player;
+        }
+        function unitOwnerState(u) {
+            if (!u || !u.isPlayer) return enemy;
+            return (u.ownerIndex === 1) ? player2 : player;
+        }
+        function unitTeamColor(u) {
+            if (!u || !u.isPlayer) return COLOR_ENEMY;
+            return (u.ownerIndex === 1) ? COLOR_P2 : COLOR_P1;
+        }
+        function coopGoldMult() {
+            return isCoopActive() ? 0.8 : 1;
+        }
+        function coopEnemyGoldMult() {
+            return isCoopActive() ? 1.3 : 1;
+        }
         
         let enemy = {
             gold: 300,
