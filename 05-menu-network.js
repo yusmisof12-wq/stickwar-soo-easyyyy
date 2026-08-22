@@ -858,6 +858,11 @@
             } else {
                 gameContainer.classList.add('menu-hidden');
             }
+        
+            if (typeof setMusicMode === 'function') {
+                if (which === 'game') setMusicMode('battle');
+                else setMusicMode('menu');
+            }
         }
 
         function stopGameLoop() {
@@ -1148,4 +1153,126 @@
                 localStorage.removeItem(LOCAL_SESSION_KEY);
             }
             showScreen('auth');
+        })();
+
+
+        // ==================== MÜZİK ====================
+        // menu.mp3  = Field of Memories (menü / sefer haritası, hafif kısık, loop)
+        // battle.mp3 = Entering the Stronghold (bölüm içinde, loop)
+        const MUSIC_KEY = 'copAdamMusicMuted_v1';
+        const MUSIC_VOL_KEY = 'copAdamMusicVol_v1';
+        let musicMuted = localStorage.getItem(MUSIC_KEY) === '1';
+        let musicVol = Math.min(1, Math.max(0, (parseInt(localStorage.getItem(MUSIC_VOL_KEY) || '40', 10) || 40) / 100));
+        let musicMode = 'menu'; // 'menu' | 'battle'
+        let audioMenu = null;
+        let audioBattle = null;
+        let musicUnlocked = false;
+
+        function makeLoopAudio(src) {
+            const a = new Audio(src);
+            a.loop = true;
+            a.preload = 'auto';
+            return a;
+        }
+
+        function ensureTracks() {
+            if (!audioMenu) audioMenu = makeLoopAudio('music/menu.mp3');
+            if (!audioBattle) audioBattle = makeLoopAudio('music/battle.mp3');
+        }
+
+        function effectiveVolume(mode) {
+            // Field of Memories biraz daha kısık
+            const base = musicMuted ? 0 : musicVol;
+            if (mode === 'menu') return base * 0.55;
+            return base * 0.85;
+        }
+
+        function stopAllMusic() {
+            [audioMenu, audioBattle].forEach(a => {
+                if (!a) return;
+                try { a.pause(); a.currentTime = 0; } catch (_) {}
+            });
+        }
+
+        function playTrack(mode) {
+            ensureTracks();
+            musicMode = mode;
+            if (musicMuted || !musicUnlocked) {
+                updateMusicBtn();
+                return;
+            }
+            const want = mode === 'battle' ? audioBattle : audioMenu;
+            const other = mode === 'battle' ? audioMenu : audioBattle;
+            try { other.pause(); } catch (_) {}
+            want.volume = effectiveVolume(mode);
+            const p = want.play();
+            if (p && p.catch) p.catch(() => {});
+            updateMusicBtn();
+        }
+
+        function setMusicVolume(v) {
+            musicVol = Math.min(1, Math.max(0, v));
+            localStorage.setItem(MUSIC_VOL_KEY, String(Math.round(musicVol * 100)));
+            if (audioMenu) audioMenu.volume = effectiveVolume('menu');
+            if (audioBattle) audioBattle.volume = effectiveVolume('battle');
+            const volEl = document.getElementById('musicVol');
+            if (volEl) volEl.value = String(Math.round(musicVol * 100));
+        }
+
+        function updateMusicBtn() {
+            const btn = document.getElementById('musicBtn');
+            if (!btn) return;
+            btn.textContent = musicMuted ? '🔇' : '🎵';
+            btn.classList.toggle('muted', musicMuted);
+        }
+
+        function setMusicMode(mode) {
+            if (mode !== 'menu' && mode !== 'battle') return;
+            if (musicMode === mode && ((mode === 'menu' && audioMenu && !audioMenu.paused) || (mode === 'battle' && audioBattle && !audioBattle.paused))) {
+                // zaten doğru parça çalıyor
+                if (audioMenu) audioMenu.volume = effectiveVolume('menu');
+                if (audioBattle) audioBattle.volume = effectiveVolume('battle');
+                return;
+            }
+            playTrack(mode);
+        }
+
+        function toggleMusic() {
+            musicMuted = !musicMuted;
+            localStorage.setItem(MUSIC_KEY, musicMuted ? '1' : '0');
+            if (musicMuted) {
+                stopAllMusic();
+            } else {
+                musicUnlocked = true;
+                playTrack(musicMode);
+            }
+            updateMusicBtn();
+        }
+
+        function unlockAndStartMusic() {
+            if (musicUnlocked) return;
+            musicUnlocked = true;
+            if (!musicMuted) playTrack(musicMode);
+        }
+
+        (function initMusicUI() {
+            ensureTracks();
+            const btn = document.getElementById('musicBtn');
+            const vol = document.getElementById('musicVol');
+            if (vol) {
+                vol.value = String(Math.round(musicVol * 100));
+                vol.addEventListener('input', () => setMusicVolume((parseInt(vol.value, 10) || 0) / 100));
+            }
+            if (btn) btn.addEventListener('click', () => {
+                musicUnlocked = true;
+                toggleMusic();
+            });
+            updateMusicBtn();
+            const unlock = () => {
+                document.removeEventListener('pointerdown', unlock);
+                document.removeEventListener('keydown', unlock);
+                unlockAndStartMusic();
+            };
+            document.addEventListener('pointerdown', unlock);
+            document.addEventListener('keydown', unlock);
         })();
