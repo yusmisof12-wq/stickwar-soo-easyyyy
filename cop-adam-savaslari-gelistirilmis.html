@@ -165,53 +165,23 @@
         @keyframes toastIn { from { opacity: 0; transform: translateY(-10px);} to { opacity: 1; transform: translateY(0);} }
 
         #campaignScreen { align-items: stretch; }
-        
-        /* ===== DÜZELTİLEN KISIMLAR ===== */
         .campaign-wrap {
-            position: relative;
-            z-index: 1;
-            width: min(900px, 94vw);
-            height: min(520px, 78vh);
-            margin: auto;
-            border-radius: 18px;
-            overflow: visible;
-            border: 3px solid #f1c40f;
-            box-shadow: 0 16px 40px rgba(0,0,0,0.5);
+            position: relative; z-index: 1; width: min(900px, 94vw); height: min(520px, 78vh);
+            margin: auto; border-radius: 18px; overflow: hidden;
+            border: 3px solid #f1c40f; box-shadow: 0 16px 40px rgba(0,0,0,0.5);
             background: linear-gradient(180deg, #87ceeb 0%, #7ec850 55%, #5d8a3e 100%);
-            flex-shrink: 0;
-            flex-grow: 0;
         }
-
         .campaign-path {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none !important;
-            z-index: 1;
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
         }
-
         .campaign-node {
-            position: absolute;
-            width: 72px;
-            height: 72px;
-            margin-left: -36px;
-            margin-top: -36px;
-            border-radius: 50%;
-            border: 4px solid #fff;
-            background: #e67e22;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 22px;
-            font-weight: bold;
-            color: #fff;
-            cursor: pointer;
-            box-shadow: 0 6px 16px rgba(0,0,0,0.35);
-            transition: transform 0.15s, filter 0.15s;
-            z-index: 10;
-            pointer-events: auto !important;
+            position: absolute; width: 72px; height: 72px; margin-left: -36px; margin-top: -36px;
+            border-radius: 50%; border: 4px solid #fff; background: #e67e22;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 22px; font-weight: bold; color: #fff; cursor: pointer;
+            box-shadow: 0 6px 16px rgba(0,0,0,0.35); transition: transform 0.15s, filter 0.15s;
+            z-index: 2;
         }
         .campaign-node:hover { transform: scale(1.08); }
         .campaign-node.locked { background: #7f8c8d; cursor: not-allowed; filter: grayscale(0.4); }
@@ -263,7 +233,7 @@
         <div class="menu-panel">
             <h1>⚔️ Çöp Adam Savaşları</h1>
             <div class="subtitle">Bir mod seç</div>
-            <button class="menu-btn primary" id="btnCampaign">1. Sefer Modu Oyna</button>
+            <button class="menu-btn primary" id="btnCampaign" onclick="openCampaignMap(false)">1. Sefer Modu Oyna</button>
             <button class="menu-btn secondary" id="btnFriends">👥 Arkadaşlar</button>
             <button class="menu-btn muted" id="btnMultiplayer">2. Multiplayer Oyna — Yakında</button>
             <button class="menu-btn danger small" id="btnLogout">Çıkış Yap</button>
@@ -309,7 +279,7 @@
     </div>
 
     <!-- BÖLÜM SEÇİM MODALI: Oyna / Arkadaşımla Oyna -->
-    <div id="levelChoiceModal" class="screen-overlay hidden" style="z-index:50;">
+    <div id="levelChoiceModal" class="screen-overlay hidden" style="z-index:1100;">
         <div class="menu-panel">
             <h1 id="levelChoiceTitle">Bölüm 1</h1>
             <button class="menu-btn primary" id="btnPlaySolo">Oyna</button>
@@ -319,7 +289,7 @@
     </div>
 
     <!-- ARKADAŞ SEÇİCİ (co-op daveti için) -->
-    <div id="friendPickerModal" class="screen-overlay hidden" style="z-index:55;">
+    <div id="friendPickerModal" class="screen-overlay hidden" style="z-index:1110;">
         <div class="menu-panel">
             <h1>Arkadaşını Seç</h1>
             <div id="friendPickerList"></div>
@@ -328,7 +298,7 @@
     </div>
 
     <!-- DAVET BEKLENİYOR -->
-    <div id="coopWaitingModal" class="screen-overlay hidden" style="z-index:55;">
+    <div id="coopWaitingModal" class="screen-overlay hidden" style="z-index:1110;">
         <div class="menu-panel">
             <h1 id="coopWaitingText">Bekleniyor...</h1>
             <button class="menu-btn danger small" id="btnCoopWaitingCancel">İptal</button>
@@ -336,7 +306,7 @@
     </div>
 
     <!-- GELEN CO-OP DAVETİ -->
-    <div id="coopInviteModal" class="screen-overlay hidden" style="z-index:56;">
+    <div id="coopInviteModal" class="screen-overlay hidden" style="z-index:1120;">
         <div class="menu-panel">
             <h1 id="coopInviteText">Davet</h1>
             <button class="menu-btn primary" id="btnCoopInviteAccept">Kabul Et</button>
@@ -345,6 +315,7 @@
     </div>
 
     <div id="toastContainer"></div>
+
 
     <div id="game-container" class="menu-hidden">
         <div class="ui-layer">
@@ -2545,6 +2516,7 @@
         }
 
         function update() {
+            if (isCoopGuestNow()) return;
             frames++;
 
             if (isCoopHostNow()) {
@@ -2611,8 +2583,17 @@
             units = units.filter(u => u.hp > 0);
             projectiles = projectiles.filter(p => p.active);
 
-            if (enemy.base.hp <= 0) {
+            if (enemy.base.hp <= 0 && !coopVictoryHandled) {
                 isGameOver = true;
+                coopVictoryHandled = true;
+                const completedLevel = level;
+                if (isCoopHostNow()) {
+                    wsSend({
+                        type: 'room_relay',
+                        roomId: coopSession.roomId,
+                        payload: { kind: 'victory', level: completedLevel }
+                    });
+                }
                 level++;
                 if (typeof onLevelVictory === 'function') onLevelVictory();
                 if (level > 3) {
@@ -2631,6 +2612,7 @@
             }
 
             goldEl.innerText = player.gold;
+            if (isCoopHostNow() || isCoopGuestNow()) goldEl.parentElement && (goldEl.parentElement.title = 'Ortak takım altını');
             levelEl.innerText = Math.min(level, 3) + "/3";
             const playerMiners = units.filter(u => u.isPlayer && u instanceof Miner).length;
             const playerClubmen = units.filter(u => u.isPlayer && u instanceof Clubman).length;
@@ -2811,6 +2793,8 @@
         let latestHostSnapshot = null;
         let coopGuestLoopId = null;
         let coopBroadcastCounter = 0;
+        let coopVictoryHandled = false;
+        let coopNextLevelRequested = false;
 
         function isCoopGuestNow() { return !!(coopSession && coopSession.role === 'guest'); }
         function isCoopHostNow() { return !!(coopSession && coopSession.role === 'host'); }
@@ -2888,6 +2872,8 @@
                 coopWaitingModal.classList.add('hidden');
                 coopInviteModal.classList.add('hidden');
                 coopSession = { roomId: msg.roomId, role: msg.role, partner: msg.partner };
+                coopVictoryHandled = false;
+                coopNextLevelRequested = false;
                 beginCoopLevel(msg.level);
                 return;
             }
@@ -3008,7 +2994,7 @@
             }
         };
 
-        // ---- Bölüm seçimi: Oyna / Arkadaşımla Oyna ----
+        // ---- Bölüm seçimi: önce "Oyna / Arkadaşımla Oyna" seçimi göster ----
         document.querySelectorAll('.campaign-node').forEach(node => {
             node.onclick = () => {
                 const lv = parseInt(node.dataset.level, 10);
@@ -3018,14 +3004,15 @@
                 }
                 pendingLevelChoice = lv;
                 levelChoiceTitle.textContent = 'Bölüm ' + lv;
-                document.getElementById('btnPlayWithFriend').style.display = useServer ? '' : 'none';
+                document.getElementById('btnPlayWithFriend').style.display = '';
                 levelChoiceModal.classList.remove('hidden');
             };
         });
 
         document.getElementById('btnPlaySolo').onclick = () => {
+            const lv = Number(pendingLevelChoice);
             levelChoiceModal.classList.add('hidden');
-            startCampaignLevel(pendingLevelChoice);
+            if (lv >= 1 && lv <= 3) startCampaignLevel(lv);
         };
 
         document.getElementById('btnLevelChoiceCancel').onclick = () => {
@@ -3087,19 +3074,49 @@
 
         // ---- Co-op oturum başlatma (host tam simülasyonu çalıştırır, guest sadece izler) ----
         function beginCoopLevel(lv) {
-            level = lv;
+            level = Number(lv);
             isGameOver = false;
+            coopVictoryHandled = false;
+            coopNextLevelRequested = false;
             modal.classList.add('hidden');
+            levelChoiceModal.classList.add('hidden');
+            friendPickerModal.classList.add('hidden');
+            coopWaitingModal.classList.add('hidden');
+            coopInviteModal.classList.add('hidden');
+            stopCoopGuestRenderLoop();
+            if (typeof stopGameLoop === 'function') stopGameLoop();
             showScreen('game');
             resizeCanvas();
             if (coopSession.role === 'host') {
                 resetLevel();
                 gameStarted = true;
+                draw();
                 startGameLoop();
             } else {
+                // Guest kendi simülasyonunu çalıştırmaz; sadece Host'un ortak savaşını çizer.
                 latestHostSnapshot = null;
+                units.length = 0;
+                projectiles.length = 0;
+                player.gold = 300;
+                player.base.hp = 1000;
+                player.base.maxHp = 1000;
+                enemy.base.hp = level === 1 ? 280 : (level === 2 ? 900 : 1800);
+                enemy.base.maxHp = enemy.base.hp;
+                setPlayerCommand(CMD_DEFEND);
+                gameStarted = true;
+                draw();
                 startCoopGuestRenderLoop();
             }
+        }
+
+        function showCoopVictory(lv) {
+            if (!isCoopGuestNow() || coopVictoryHandled) return;
+            coopVictoryHandled = true;
+            isGameOver = true;
+            stopCoopGuestRenderLoop();
+            modalTitle.innerText = Number(lv) >= 3 ? 'Tebrikler! Seferi Bitirdiniz!' : 'Bölüm Tamamlandı!';
+            modalBtn.innerText = Number(lv) >= 3 ? 'Sefer Haritası' : 'Sonraki Bölüm';
+            modal.classList.remove('hidden');
         }
 
         function leaveCoopSession() {
@@ -3197,6 +3214,18 @@
             if (!coopSession || !payload) return;
             if (payload.kind === 'state' && isCoopGuestNow()) {
                 applyHostSnapshot(payload);
+                return;
+            }
+            if (payload.kind === 'victory' && isCoopGuestNow()) {
+                showCoopVictory(payload.level);
+                return;
+            }
+            if (payload.kind === 'next_level' && isCoopGuestNow()) {
+                const next = Number(payload.level);
+                if (Number.isInteger(next) && next >= 1 && next <= 3) {
+                    coopNextLevelRequested = false;
+                    beginCoopLevel(next);
+                }
                 return;
             }
             if (payload.kind === 'input' && isCoopHostNow()) {
@@ -3413,6 +3442,7 @@ function showScreen(which) {
         }
 
         function openCampaignMap(fromVictory) {
+            levelChoiceModal.classList.add('hidden');
             showScreen('campaign');
             refreshCampaignNodes();
             const flagLv = Math.min(currentUser.maxUnlocked || 1, 3);
@@ -3425,13 +3455,43 @@ function showScreen(which) {
         // (Bölüm node tıklama işleyicisi artık yukarıda, Oyna/Arkadaşımla Oyna modalı ile birlikte tanımlı)
 
         function startCampaignLevel(lv) {
+            lv = Number(lv);
+            if (!Number.isInteger(lv) || lv < 1 || lv > 3) return;
+            if (!currentUser) {
+                showScreen('auth');
+                return;
+            }
+
+            const maxUnlocked = Number(currentUser.maxUnlocked || 1);
+            if (lv > maxUnlocked) {
+                alert('Bu bölüm henüz kilitli!');
+                return;
+            }
+
+            // Harita ve tüm menü/modallar kapansın.
+            levelChoiceModal.classList.add('hidden');
+            friendPickerModal.classList.add('hidden');
+            coopWaitingModal.classList.add('hidden');
+            coopInviteModal.classList.add('hidden');
+
+            // Devam eden oyun döngüsünü güvenli şekilde durdur.
+            if (typeof stopGameLoop === 'function') stopGameLoop();
+
             level = lv;
             isGameOver = false;
-            modal.classList.add('hidden');
+            gameStarted = false;
+
+            // Oyun ekranını göster ve seviyeyi sıfırla.
             showScreen('game');
             resizeCanvas();
             resetLevel();
+
             gameStarted = true;
+            lastFrameTime = 0;
+            accumulatedTime = 0;
+
+            // İlk kareyi hemen çiz ve oyun döngüsünü başlat.
+            draw();
             startGameLoop();
         }
 
@@ -3447,6 +3507,28 @@ function showScreen(which) {
         }
 
         modalBtn.onclick = () => {
+            if (isCoopHostNow() && coopVictoryHandled && isGameOver) {
+                const nextLevel = level;
+                if (nextLevel <= 3) {
+                    modal.classList.add('hidden');
+                    coopNextLevelRequested = true;
+                    wsSend({
+                        type: 'room_relay',
+                        roomId: coopSession.roomId,
+                        payload: { kind: 'next_level', level: nextLevel }
+                    });
+                    beginCoopLevel(nextLevel);
+                } else {
+                    modal.classList.add('hidden');
+                    leaveCoopSession();
+                }
+                return;
+            }
+            if (isCoopGuestNow() && coopVictoryHandled) {
+                // Guest, Host'un next_level mesajını bekler.
+                showToast('Host sonraki bölümü başlatıyor...');
+                return;
+            }
             modal.classList.add('hidden');
             if (player.base.hp <= 0) {
                 isGameOver = false;
@@ -3502,4 +3584,4 @@ function showScreen(which) {
         })();
     </script>
 </body>
-</html>
+</html> 
