@@ -19,6 +19,15 @@
         let panStartX = 0;
         let panCameraStartX = 0;
 
+        // ---- Mobil / responsive yardımcılar ----
+        function isTouchDevice() {
+            try {
+                return window.matchMedia('(pointer: coarse)').matches || ('ontouchstart' in window) || (navigator.maxTouchPoints || 0) > 0;
+            } catch (e) {
+                return ('ontouchstart' in window);
+            }
+        }
+
         function resizeCanvas() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
@@ -26,7 +35,12 @@
             cameraX = Math.max(0, Math.min(cameraX, worldWidth - canvas.width));
             updateMineSlots(false);
         }
-        window.addEventListener('resize', resizeCanvas);
+
+        function handleViewportChange() {
+            resizeCanvas();
+        }
+        window.addEventListener('resize', handleViewportChange);
+        window.addEventListener('orientationchange', () => setTimeout(handleViewportChange, 200));
 
         const CMD_ATTACK = 1;
         const CMD_DEFEND = 2;
