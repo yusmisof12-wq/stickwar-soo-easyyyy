@@ -1,4 +1,4 @@
-        // ==================== HESAP + MENÜ + SEFER ====================
+    // ==================== HESAP + MENÜ + SEFER ====================
         const TOKEN_KEY = 'copAdamToken_v1';
         const LOCAL_USERS_KEY = 'copAdamUsersHashed_v1';
         const LOCAL_SESSION_KEY = 'copAdamLocalSession_v1';
@@ -466,10 +466,20 @@
             showScreen('menu');
         }
 
+        function clientGroundY() {
+            return (typeof canvas !== 'undefined' ? canvas.height : 700) - GROUND_HEIGHT + 28;
+        }
+
         class GhostUnit {
             constructor(d) {
-                this.x = d.x; this.y = d.y; this.hp = d.hp; this.maxHp = d.mhp || 1;
-                this.isPlayer = d.p; this.type = d.t; this.walking = d.w; this.drawAmt = d.d || 0;
+                this.x = d.x;
+                // Sunucu yOff (zemin ofseti) → istemci zemini
+                const gy = clientGroundY();
+                this.y = (typeof d.yOff === 'number') ? gy + d.yOff : (d.y || gy);
+                this.hp = d.hp; this.maxHp = d.mhp || 1;
+                this.isPlayer = d.p;
+                this.type = d.t === 'club' ? 'clubman' : d.t;
+                this.walking = d.w; this.drawAmt = d.d || 0;
                 this.deliver = !!d.dl; this.bagGold = d.bg || 0;
                 this.bodyLean = d.bl || 0; this.armRaise = d.ar || 0; this.swingAngle = d.sw || 0;
                 this.ownerIndex = d.oi || 0;
@@ -477,31 +487,44 @@
                 this.anim = d.an || 0;
                 this.state = d.st || '';
                 this.stuckArrows = d.sa || [];
+                this.attacking = !!d.atk;
+                this._walkPhase = Math.random() * 60;
             }
             draw(ctx) {
+                // Her kare zemine yapıştır (uçmasın)
+                this.y = clientGroundY() + (this._yOff || 0);
                 const isFlipped = this.flip;
                 const color = !this.isPlayer ? '#c0392b' : (this.ownerIndex === 1 ? '#2980b9' : '#1a1a1a');
 
                 if (this.type === 'miner') {
                     drawMinerBackpack(ctx, this.x, this.y, isFlipped, this.bagGold, this.deliver);
-                    const mining = this.state === 'mine' || this.state === 'mining' || this.swingAngle;
+                    const mining = this.state === 'mine' || this.state === 'mining' || Math.abs(this.swingAngle) > 0.05;
                     drawStickman(ctx, this.x, this.y, color, this.deliver ? 'none' : 'pickaxe',
                         mining ? Math.max(1, this.anim || 20) : 0,
-                        this.walking, isFlipped, this.swingAngle, this.bodyLean, this.armRaise,
+                        !!this.walking && !mining, isFlipped, this.swingAngle, this.bodyLean, this.armRaise,
                         false, true, this.isPlayer);
                 } else if (this.type === 'clubman') {
-                    drawStickman(ctx, this.x, this.y, color, 'club', this.anim, this.walking && this.anim === 0, isFlipped, 0);
+                    // Yürüme / vuruş animasyonu
+                    let clubAnim = 0;
+                    let isWalk = false;
+                    if (this.attacking || (this.anim > 0 && this.anim % 25 > 5 && this.anim % 25 < 22)) {
+                        clubAnim = 20 + (this.anim % 25);
+                    } else if (this.walking) {
+                        this._walkPhase = (this._walkPhase || 0) + 1.2;
+                        clubAnim = 0;
+                        isWalk = true;
+                    }
+                    drawStickman(ctx, this.x, this.y, color, 'club', clubAnim, isWalk, isFlipped, 0);
                 } else if (this.type === 'archer') {
-                    drawStickman(ctx, this.x, this.y, color, 'bow', 0, this.walking, isFlipped, this.drawAmt);
+                    drawStickman(ctx, this.x, this.y, color, 'bow', 0, !!this.walking, isFlipped, this.drawAmt);
                 } else {
-                    drawStickman(ctx, this.x, this.y, color, 'pickaxe', 0, this.walking, isFlipped, 0);
+                    drawStickman(ctx, this.x, this.y, color, 'pickaxe', 0, !!this.walking, isFlipped, 0);
                 }
-                if (typeof drawStuckArrows === 'function') drawStuckArrows(ctx, this);
 
                 ctx.fillStyle = 'red';
                 ctx.fillRect(this.x - 15, this.y - 65, 30, 4);
                 ctx.fillStyle = '#2ecc71';
-                ctx.fillRect(this.x - 15, this.y - 65, 30 * Math.max(0, this.hp / this.maxHp), 4);
+                ctx.fillRect(this.x - 15, this.y - 65, 30 * Math.max(0, this.hp / (this.maxHp || 1)), 4);
             }
         }
 
@@ -608,16 +631,25 @@
                 if (typeof payload.enemyBaseHp === 'number') enemy.base.hp = payload.enemyBaseHp;
                 if (typeof payload.level === 'number') level = payload.level;
                 units.length = 0;
-                (payload.units || []).forEach(d => units.push(new GhostUnit(d)));
+                (payload.units || []).forEach(d => {
+                    const g = new GhostUnit(d);
+                    g._yOff = typeof d.yOff === 'number' ? d.yOff : 0;
+                    units.push(g);
+                });
+                const gy = clientGroundY();
                 if (Array.isArray(payload.floats)) {
                     floatingTexts = payload.floats.map(f => ({
-                        x: f.x, y: f.y, text: f.text, color: f.color || '#f1c40f',
+                        x: f.x,
+                        y: (typeof f.yOff === 'number' ? gy + f.yOff : f.y),
+                        text: f.text, color: f.color || '#f1c40f',
                         isBig: !!f.isBig, life: f.life || 40
                     }));
                 }
                 if (Array.isArray(payload.arrows)) {
                     projectiles = payload.arrows.map(a => ({
-                        x: a.x, y: a.y, angle: a.a, active: true,
+                        x: a.x,
+                        y: (typeof a.yOff === 'number' ? gy + a.yOff : a.y),
+                        angle: a.a, active: true,
                         draw(ctx) {
                             ctx.save(); ctx.translate(this.x, this.y); ctx.rotate(this.angle);
                             ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
@@ -656,7 +688,11 @@
             if (typeof payload.combatTimer2 === 'number') player2.combatTimer = payload.combatTimer2;
             if (typeof payload.combatTimerMax2 === 'number') player2.combatTimerMax = payload.combatTimerMax2;
             units.length = 0;
-            (payload.units || []).forEach(d => units.push(new GhostUnit(d)));
+            (payload.units || []).forEach(d => {
+                    const g = new GhostUnit(d);
+                    g._yOff = typeof d.yOff === 'number' ? d.yOff : 0;
+                    units.push(g);
+                });
 
             // Uçan yazılar + oklar (misafir de görsün)
             if (Array.isArray(payload.floats)) {
