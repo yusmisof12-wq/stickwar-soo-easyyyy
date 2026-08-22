@@ -349,6 +349,8 @@
         let player = {
             gold: 300,
             command: CMD_DEFEND,
+            lastCommand: CMD_DEFEND,
+            retreatGraceTimer: 0,
             base: { x: 130, y: 0, hp: 1000, maxHp: 1000 },
             minerCooldown: 0, minerMaxCooldown: 15 * 60,
             clubCooldown: 0, clubMaxCooldown: 10 * 60,
@@ -364,6 +366,7 @@
             aiTimer: 0,
             aiState: 'defend',
             lastCommand: CMD_DEFEND,
+            retreatGraceTimer: 0,
             retreatTimer: 0,
             regroupTimer: 0,
             attackLossCount: 0,
@@ -1274,25 +1277,27 @@
                 }
                 this.target = (closest && minDist <= this.range) ? closest : null;
 
-                // Kendi takımının en ileri (en önde savaşan) sopalısı: okçu her zaman onun gerisinde durur
+                // Kendi takımının en ileri (en önde savaşan) sopalısı: okçu her zaman onun tam gerisinde/hizasında durur
                 const myClubmen = units.filter(u => u.isPlayer === this.isPlayer && u instanceof Clubman && u.hp > 0);
-                let frontlineX = null;
+                let frontClubman = null;
                 if (myClubmen.length > 0) {
-                    frontlineX = this.isPlayer
-                        ? Math.max(...myClubmen.map(c => c.x))  // oyuncu sağa ilerler → en ileri = en büyük x (solunda kalacağız)
-                        : Math.min(...myClubmen.map(c => c.x)); // düşman sola ilerler → en ileri = en küçük x (sağında kalacağız)
+                    frontClubman = this.isPlayer
+                        ? myClubmen.reduce((a, b) => b.x > a.x ? b : a)  // oyuncu sağa ilerler → en ileri = en büyük x
+                        : myClubmen.reduce((a, b) => b.x < a.x ? b : a); // düşman sola ilerler → en ileri = en küçük x
                 }
 
                 let desiredX;
+                let desiredY = this.baseY;
                 if (cmd === CMD_ATTACK) {
                     desiredX = enemyBase.x + (this.isPlayer ? -260 : 260);
                 } else {
                     desiredX = myBase.x + (this.isPlayer ? 220 : -220);
                 }
-                if (frontlineX !== null) {
+                if (frontClubman) {
                     desiredX = this.isPlayer
-                        ? Math.min(desiredX, frontlineX - this.safeGap)  // oyuncu: sopalının solunda (gerisinde) kal
-                        : Math.max(desiredX, frontlineX + this.safeGap); // düşman: sopalının sağında (gerisinde) kal
+                        ? Math.min(desiredX, frontClubman.x - this.safeGap)  // oyuncu: sopalının tam solunda (gerisinde) kal
+                        : Math.max(desiredX, frontClubman.x + this.safeGap); // düşman: sopalının tam sağında (gerisinde) kal
+                    desiredY = frontClubman.y; // aynı hizada dur (tam yanında görünsün)
                 }
                 // Düşman çok yakınsa mesafeyi korumak için birazcık geri kayar
                 if (this.target) {
@@ -1304,9 +1309,9 @@
                 }
 
                 let actualMoved = false;
-                const distToDesired = Math.hypot(desiredX - this.x, this.baseY - this.y);
+                const distToDesired = Math.hypot(desiredX - this.x, desiredY - this.y);
                 if (distToDesired > 8) {
-                    let angle = Math.atan2(this.baseY - this.y, desiredX - this.x);
+                    let angle = Math.atan2(desiredY - this.y, desiredX - this.x);
                     this.x += Math.cos(angle) * 1.6 * SPEED_MULT * slowMul;
                     this.y += Math.sin(angle) * 1.2 * SPEED_MULT * slowMul;
                     actualMoved = true;
@@ -2122,12 +2127,15 @@
             player.archerCooldown = 0;
             player.clubFormationCounter = 0;
             player.archerFormationCounter = 0;
+            player.lastCommand = CMD_DEFEND;
+            player.retreatGraceTimer = 0;
 
             enemy.gold = 300;
             enemy.command = CMD_DEFEND;
             enemy.aiTimer = 0;
             enemy.aiState = 'defend';
             enemy.lastCommand = CMD_DEFEND;
+            enemy.retreatGraceTimer = 0;
             enemy.retreatTimer = 0;
             enemy.regroupTimer = 0;
             enemy.attackLossCount = 0;
@@ -2429,9 +2437,18 @@
                 addFloatingText(player.base.x, player.base.y - 120, '+15', '#f1c40f');
             }
 
+            // Geri çekilmeden savunmaya geçince 3 saniye (180 kare) dokunulmazlık ver
+            [player, enemy].forEach(team => {
+                if (team.command !== CMD_RETREAT && team.lastCommand === CMD_RETREAT) {
+                    team.retreatGraceTimer = 180;
+                }
+                if (team.retreatGraceTimer > 0) team.retreatGraceTimer--;
+                team.lastCommand = team.command;
+            });
+
             units.forEach(u => {
-                const teamCommand = u.isPlayer ? player.command : enemy.command;
-                u.isInvulnerable = teamCommand === CMD_RETREAT;
+                const team = u.isPlayer ? player : enemy;
+                u.isInvulnerable = team.command === CMD_RETREAT || team.retreatGraceTimer > 0;
             });
 
             updateAI();
