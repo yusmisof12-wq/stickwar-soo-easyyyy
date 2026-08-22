@@ -1207,9 +1207,9 @@
 
                 this.hp = 50;
                 this.maxHp = 50;
-                this.range = 460;      // uzun menzil
-                this.safeGap = 90;     // kendi sopalılarının gerisinde durma payı
-                this.tooClose = 150;   // bu mesafeden yakınsa biraz geri kaçar
+                this.range = 520;      // çok uzun menzil
+                this.safeGap = 130;    // kendi sopalılarının gerisinde durma payı
+                this.tooClose = 240;   // bu mesafeden yakınsa geri kaçar (uzaktan atış için)
                 this.attackCooldown = 130;
                 this.attackTimer = 0;
                 this.drawAmount = 0;
@@ -1274,13 +1274,13 @@
                 }
                 this.target = (closest && minDist <= this.range) ? closest : null;
 
-                // Kendi takımının en ileri sopalısı: okçu sıra düzeninde hep onun gerisinde durur
+                // Kendi takımının en ileri (en önde savaşan) sopalısı: okçu her zaman onun gerisinde durur
                 const myClubmen = units.filter(u => u.isPlayer === this.isPlayer && u instanceof Clubman && u.hp > 0);
                 let frontlineX = null;
                 if (myClubmen.length > 0) {
                     frontlineX = this.isPlayer
-                        ? Math.min(...myClubmen.map(c => c.x))
-                        : Math.max(...myClubmen.map(c => c.x));
+                        ? Math.max(...myClubmen.map(c => c.x))  // oyuncu sağa ilerler → en ileri = en büyük x (solunda kalacağız)
+                        : Math.min(...myClubmen.map(c => c.x)); // düşman sola ilerler → en ileri = en küçük x (sağında kalacağız)
                 }
 
                 let desiredX;
@@ -1291,8 +1291,8 @@
                 }
                 if (frontlineX !== null) {
                     desiredX = this.isPlayer
-                        ? Math.max(desiredX, frontlineX + this.safeGap)
-                        : Math.min(desiredX, frontlineX - this.safeGap);
+                        ? Math.min(desiredX, frontlineX - this.safeGap)  // oyuncu: sopalının solunda (gerisinde) kal
+                        : Math.max(desiredX, frontlineX + this.safeGap); // düşman: sopalının sağında (gerisinde) kal
                 }
                 // Düşman çok yakınsa mesafeyi korumak için birazcık geri kayar
                 if (this.target) {
