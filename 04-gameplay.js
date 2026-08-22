@@ -8,15 +8,15 @@
         }
 
         cmdBtns[CMD_RETREAT].onclick = () => {
-            if (typeof isCoopPlayNow === 'function' && isCoopPlayNow()) { sendRoomInput('retreat'); setPlayerCommand(CMD_RETREAT); return; }
+            if (typeof isCoopGuestNow === 'function' && isCoopGuestNow()) { sendRoomInput('retreat'); setPlayerCommand(CMD_RETREAT); return; }
             setPlayerCommand(CMD_RETREAT);
         };
         cmdBtns[CMD_DEFEND].onclick = () => {
-            if (typeof isCoopPlayNow === 'function' && isCoopPlayNow()) { sendRoomInput('defend'); setPlayerCommand(CMD_DEFEND); return; }
+            if (typeof isCoopGuestNow === 'function' && isCoopGuestNow()) { sendRoomInput('defend'); setPlayerCommand(CMD_DEFEND); return; }
             setPlayerCommand(CMD_DEFEND);
         };
         cmdBtns[CMD_ATTACK].onclick = () => {
-            if (typeof isCoopPlayNow === 'function' && isCoopPlayNow()) { sendRoomInput('attack'); setPlayerCommand(CMD_ATTACK); return; }
+            if (typeof isCoopGuestNow === 'function' && isCoopGuestNow()) { sendRoomInput('attack'); setPlayerCommand(CMD_ATTACK); return; }
             setPlayerCommand(CMD_ATTACK);
         };
 
@@ -126,15 +126,15 @@
         }
 
         btnMiner.onclick = () => {
-            if (typeof isCoopPlayNow === 'function' && isCoopPlayNow()) { sendRoomInput('buyMiner'); return; }
+            if (typeof isCoopGuestNow === 'function' && isCoopGuestNow()) { sendRoomInput('buyMiner'); return; }
             queueUnit('miner', 0);
         };
         btnClub.onclick = () => {
-            if (typeof isCoopPlayNow === 'function' && isCoopPlayNow()) { sendRoomInput('buyClub'); return; }
+            if (typeof isCoopGuestNow === 'function' && isCoopGuestNow()) { sendRoomInput('buyClub'); return; }
             queueUnit('club', 0);
         };
         btnArcher.onclick = () => {
-            if (typeof isCoopPlayNow === 'function' && isCoopPlayNow()) { sendRoomInput('buyArcher'); return; }
+            if (typeof isCoopGuestNow === 'function' && isCoopGuestNow()) { sendRoomInput('buyArcher'); return; }
             queueUnit('archer', 0);
         };
 
@@ -505,8 +505,8 @@
         }
 
         function update() {
-            // Co-op: simülasyon sunucuda — yerelde fizik yok
-            if (typeof isCoopPlayNow === 'function' && isCoopPlayNow()) return;
+            // Co-op slot 1: fizik yok (state alır). Slot 0 solo ile aynı fizik.
+            if (typeof isCoopGuestNow === 'function' && isCoopGuestNow()) return;
             frames++;
 
             if (isCoopHostNow()) {
