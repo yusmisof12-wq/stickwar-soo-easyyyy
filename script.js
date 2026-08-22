@@ -100,6 +100,7 @@
                 <button class="menu-btn secondary" id="btnFriendsBack">← Ana Menü</button>
             </div>`;
         document.body.appendChild(wrap);
+
         document.getElementById('btnFriendsBack').onclick = () => showScreen('menu');
         document.getElementById('friendSearchBtn').onclick = doFriendSearch;
         document.getElementById('friendSearchInput').addEventListener('keydown', e => {
@@ -138,10 +139,7 @@
     async function refreshFriends() {
         try {
             const data = await api('/api/friends');
-            renderFriendsFromState({
-                friends: data.friends,
-                incomingRequests: data.incomingRequests,
-            });
+            renderFriendsFromState({ friends: data.friends, incomingRequests: data.incomingRequests });
         } catch (e) {}
     }
 
@@ -180,7 +178,7 @@
                 </div>`).join('');
     }
 
-    // ==================== SEVİYE SEÇİM VE DİĞER EKRANLAR ====================
+    // ==================== SEVİYE SEÇİM & DİĞER EKRANLAR ====================
     let pendingLevel = null;
 
     function buildLevelChoiceDom() {
@@ -198,10 +196,7 @@
             </div>`;
         document.body.appendChild(wrap);
         document.getElementById('btnLevelChoiceBack').onclick = () => showScreen('campaign');
-        document.getElementById('btnPlaySolo').onclick = () => {
-            showScreen('game');
-            startCampaignLevel(pendingLevel);
-        };
+        document.getElementById('btnPlaySolo').onclick = () => { showScreen('game'); startCampaignLevel(pendingLevel); };
         document.getElementById('btnPlayWithFriend').onclick = () => openFriendPickerForLevel(pendingLevel);
     }
 
@@ -351,7 +346,7 @@
         Net.socket.emit('mp:queue:join');
     }
 
-    // ==================== OYUN BAŞLATMA ====================
+    // ==================== OYUN FONKSİYONLARI ====================
     function joinRoomAndStart({ roomId, mode, level, isHost, peerUsername }) {
         Net.active = true;
         Net.mode = mode;
@@ -392,7 +387,6 @@
         showScreen('menu');
     }
 
-    // ==================== EKRAN KAPATMA (BUG FIX) ====================
     const _origShowScreen = window.showScreen;
     window.showScreen = function (which) {
         ['friendsScreen', 'levelChoiceScreen', 'friendPickerScreen', 'waitingFriendScreen', 'matchmakingScreen'].forEach(id => {
@@ -402,7 +396,6 @@
         _origShowScreen(which);
     };
 
-    // ==================== VERSUS MODU DÜZELTİLMİŞ ====================
     const _originalUpdateAI = window.updateAI;
     window.updateAI = function () {
         if (Net.active && Net.isHost && Net.mode === 'versus') return;
@@ -460,20 +453,12 @@
         hostBroadcastTimer = setInterval(() => {
             if (!Net.active || !Net.isHost || isGameOver) { clearInterval(hostBroadcastTimer); return; }
             const snapshot = {
-                worldWidth,
-                level,
+                worldWidth, level,
                 playerBase: { x: player.base.x, y: player.base.y, hp: player.base.hp, maxHp: player.base.maxHp },
                 enemyBase: { x: enemy.base.x, y: enemy.base.y, hp: enemy.base.hp, maxHp: enemy.base.maxHp },
-                playerGold: player.gold,
-                enemyGold: enemy.gold,
-                playerCommand: player.command,
-                enemyCommand: enemy.command,
-                units: units.map(u => ({
-                    x: Math.round(u.x), y: Math.round(u.y),
-                    hp: Math.round(u.hp), maxHp: u.maxHp,
-                    isPlayer: u.isPlayer,
-                    type: u instanceof Miner ? 'miner' : (u instanceof Clubman ? 'club' : 'archer'),
-                })),
+                playerGold: player.gold, enemyGold: enemy.gold,
+                playerCommand: player.command, enemyCommand: enemy.command,
+                units: units.map(u => ({ x: Math.round(u.x), y: Math.round(u.y), hp: Math.round(u.hp), maxHp: u.maxHp, isPlayer: u.isPlayer, type: u instanceof Miner ? 'miner' : (u instanceof Clubman ? 'club' : 'archer') })),
                 over: isGameOver,
             };
             Net.socket.emit('game:state', snapshot);
