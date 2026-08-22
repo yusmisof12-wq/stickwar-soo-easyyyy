@@ -6,7 +6,8 @@ const fs = require('fs');
 const path = require('path');
 const http = require('http');
 const { WebSocketServer } = require('ws');
-const { GameRoom, TICK_MS } = require('./server-game');
+let GameRoom = null, TICK_MS = 50;
+try { ({ GameRoom, TICK_MS } = require('./server-game')); } catch (e) { console.warn('server-game yok, relay mod'); }
 
 const PORT = process.env.PORT || 3847;
 const HTML_FILE = process.env.HTML_FILE || 'index.html';
@@ -311,14 +312,14 @@ wss.on('connection', (ws) => {
                 sendTo(to, { type: 'coop_declined', from: ws.username });
                 return;
             }
-            // to = davet eden (slot 0), ws = kabul eden (slot 1) — eşit oyuncular
+            // slot 0 = davet eden (tam sefer motorunu çalıştırır), slot 1 = diğer oyuncu
+            // İkisi de "oyuncu"; simülasyon solo ile aynı istemci motoru (slot 0)
             const roomId = makeRoomId();
             const level = msg.level || 1;
-            const game = new GameRoom(roomId, level, to, ws.username);
             const room = {
                 members: [to, ws.username],
                 slots: { [to]: 0, [ws.username]: 1 },
-                game,
+                game: null,
                 interval: null,
             };
             rooms.set(roomId, room);
@@ -328,15 +329,26 @@ wss.on('connection', (ws) => {
             ws.slot = 1;
             sendTo(to, { type: 'coop_start', roomId, slot: 0, level, partner: ws.username });
             ws.send(JSON.stringify({ type: 'coop_start', roomId, slot: 1, level, partner: to }));
-            startRoomLoop(roomId);
             return;
         }
+        // Girdi: diğer oyuncuya ilet (slot 0 simüle eder)
         if (msg.type === 'room_input') {
             const room = rooms.get(msg.roomId);
-            if (!room || !room.game) return;
-            const slot = room.slots[ws.username];
-            if (slot === undefined) return;
-            room.game.pushInput(slot, msg.action);
+            if (!room || !room.members.includes(ws.username)) return;
+            room.members.forEach(m => {
+                if (m === ws.username) return;
+                sendTo(m, { type: 'room_relay', payload: { kind: 'input', action: msg.action, fromSlot: room.slots[ws.username] } });
+            });
+            return;
+        }
+        // State: slot 0'ın tam oyun state'ini herkese yayınla
+        if (msg.type === 'room_state') {
+            const room = rooms.get(msg.roomId);
+            if (!room || !room.members.includes(ws.username)) return;
+            room.members.forEach(m => {
+                if (m === ws.username) return;
+                sendTo(m, { type: 'room_relay', payload: msg.payload });
+            });
             return;
         }
         if (msg.type === 'ping') {
