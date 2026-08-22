@@ -1,233 +1,290 @@
-/* =========================================================
-   GENEL AYARLAR
-========================================================= */
-* {
-    box-sizing: border-box;
-    user-select: none; /* Metin seçimini engelle */
-    -webkit-user-select: none;
-}
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <!-- Mobilde ekranın otomatik yakınlaştırılmasını engeller, mobil uyumluluk için çok önemlidir -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Çöp Adam Madenciler ve Savaşçılar</title>
+    <style>
+        /* =========================================================
+           GENEL AYARLAR
+        ========================================================= */
+        * {
+            box-sizing: border-box;
+            user-select: none; /* Metin seçimini engelle */
+            -webkit-user-select: none;
+        }
 
-body, html {
-    margin: 0;
-    padding: 0;
-    width: 100%;
-    height: 100%;
-    overflow: hidden; /* Kaydırma çubuklarını gizle */
-    background-color: #87CEEB; /* Gökyüzü rengi */
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-}
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden; /* Kaydırma çubuklarını gizle */
+            background-color: #87CEEB; /* Gökyüzü rengi */
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
 
-/* Oyun Ekranı */
-#gameCanvas {
-    display: block;
-    width: 100%;
-    height: 100%;
-    touch-action: none; /* Mobilde ekran kaymasını engelle */
-}
+        /* Oyun Ekranı (Canvas) */
+        #gameCanvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            touch-action: none; /* Mobilde ekran kaymasını engelle */
+        }
 
-/* =========================================================
-   ÜST ARAYÜZ (Altın ve Seviye Bilgisi)
-========================================================= */
-.top-ui {
-    position: absolute;
-    top: 15px;
-    left: 15px;
-    right: 15px;
-    display: flex;
-    justify-content: space-between;
-    pointer-events: none; /* Tıklamaların canvas'a geçmesi için */
-    text-shadow: 2px 2px 3px rgba(0,0,0,0.7);
-    color: white;
-    font-size: 22px;
-    font-weight: bold;
-    z-index: 10;
-}
+        /* =========================================================
+           ÜST ARAYÜZ (Altın ve Seviye Bilgisi)
+        ========================================================= */
+        .top-ui {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            right: 15px;
+            display: flex;
+            justify-content: space-between;
+            pointer-events: none; /* Tıklamaların canvas'a geçmesi için */
+            text-shadow: 2px 2px 3px rgba(0,0,0,0.7);
+            color: white;
+            font-size: 22px;
+            font-weight: bold;
+            z-index: 10;
+        }
 
-/* =========================================================
-   KOMUT BUTONLARI (SOL ÜSTE ALINDI)
-========================================================= */
-.command-controls {
-    position: fixed; /* Ekranın neresinde olursa olsun sabitler */
-    top: 55px; /* Üstteki Altın yazısının hemen altına yerleşir */
-    left: 15px; /* Sol kenara yaslar */
-    display: flex;
-    gap: 12px;
-    z-index: 20;
-    pointer-events: none; /* Konteyner tıklamayı engellemesin */
-}
+        /* =========================================================
+           KOMUT BUTONLARI (SOL ÜSTE ALINDI)
+        ========================================================= */
+        .command-controls {
+            position: fixed; /* Ekranın neresinde olursa olsun sabitler */
+            top: 55px; /* Üstteki Altın yazısının hemen altına yerleşir */
+            left: 15px; /* Sol kenara yaslar */
+            display: flex;
+            gap: 12px;
+            z-index: 20;
+            pointer-events: none; /* Konteyner tıklamayı engellemesin */
+        }
 
-.cmd-btn {
-    pointer-events: auto; /* Sadece butonlar tıklanabilir olsun */
-    width: 65px;
-    height: 65px;
-    border-radius: 50%; /* Yuvarlak görünüm */
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 13px;
-    font-weight: bold;
-    color: white;
-    cursor: pointer;
-    border: 3px solid rgba(255,255,255,0.2);
-    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-    transition: transform 0.1s;
-}
+        .cmd-btn {
+            pointer-events: auto; /* Sadece butonlar tıklanabilir olsun */
+            width: 65px;
+            height: 65px;
+            border-radius: 50%; /* Yuvarlak görünüm */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            font-weight: bold;
+            color: white;
+            cursor: pointer;
+            border: 3px solid rgba(255,255,255,0.2);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            transition: transform 0.1s;
+        }
 
-.cmd-btn:active {
-    transform: scale(0.95);
-}
+        .cmd-btn:active {
+            transform: scale(0.95);
+        }
 
-#cmdRetreat { background: #f39c12; } /* Turuncu */
-#cmdDefend  { background: #2980b9; } /* Mavi */
-#cmdAttack  { background: #c0392b; } /* Kırmızı */
+        #cmdRetreat { background: #f39c12; } /* Turuncu */
+        #cmdDefend  { background: #2980b9; } /* Mavi */
+        #cmdAttack  { background: #c0392b; } /* Kırmızı */
 
+        /* =========================================================
+           ALT ARAYÜZ (Sadece Birim Çıkarma Butonları Kaldı)
+        ========================================================= */
+        .bottom-ui {
+            position: absolute;
+            bottom: 20px;
+            left: 0;
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            padding: 0 20px;
+            pointer-events: none;
+            z-index: 10;
+        }
 
-/* =========================================================
-   ALT ARAYÜZ (Sadece Birim Çıkarma Butonları Kaldı)
-========================================================= */
-.bottom-ui {
-    position: absolute;
-    bottom: 20px;
-    left: 0;
-    width: 100%;
-    display: flex;
-    justify-content: space-between; /* Solda kalmalarını sağlar */
-    align-items: flex-end;
-    padding: 0 20px;
-    pointer-events: none;
-    z-index: 10;
-}
+        .unit-controls {
+            display: flex;
+            gap: 12px;
+        }
 
-.unit-controls {
-    display: flex;
-    gap: 12px;
-}
+        .unit-btn {
+            pointer-events: auto;
+            position: relative;
+            background: #34495e;
+            color: white;
+            border: 2px solid #2c3e50;
+            border-radius: 8px;
+            cursor: pointer;
+            overflow: hidden;
+            font-weight: bold;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            transition: transform 0.1s;
+            width: 75px;
+            height: 75px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+        }
 
-.btn, .unit-btn {
-    pointer-events: auto;
-    position: relative;
-    background: #34495e;
-    color: white;
-    border: 2px solid #2c3e50;
-    border-radius: 8px;
-    cursor: pointer;
-    overflow: hidden;
-    font-weight: bold;
-    text-align: center;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-    transition: transform 0.1s;
-}
+        .unit-btn:active {
+            transform: scale(0.95);
+        }
 
-.btn:active, .unit-btn:active {
-    transform: scale(0.95);
-}
+        /* Bekleme süresi (Cooldown) efekti */
+        .cd-fill {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 0%;
+            background: rgba(0, 0, 0, 0.6);
+            pointer-events: none;
+        }
 
-.unit-btn {
-    width: 75px;
-    height: 75px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    font-size: 14px;
-}
+        /* =========================================================
+           MOBİL UYUMLULUK (Ekran küçüldüğünde devreye girer)
+        ========================================================= */
+        @media (max-width: 768px) {
+            .top-ui {
+                font-size: 18px;
+                top: 10px;
+                left: 10px;
+                right: 10px;
+            }
 
-/* Bekleme süresi (Cooldown) efekti */
-.cd-fill {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    height: 0%;
-    background: rgba(0, 0, 0, 0.6);
-    pointer-events: none;
-}
+            /* Komut Butonlarını mobilde sol üstte küçült */
+            .command-controls {
+                top: 40px; /* Mobilde altın yazısı daha küçük olduğu için biraz yukarı aldık */
+                left: 10px;
+                gap: 8px;
+            }
 
-/* =========================================================
-   MOBİL UYUMLULUK (Ekran küçüldüğünde devreye girer)
-========================================================= */
-@media (max-width: 768px) {
-    .top-ui {
-        font-size: 18px;
-        top: 10px;
-        left: 10px;
-        right: 10px;
-    }
+            .cmd-btn {
+                width: 55px;
+                height: 55px;
+                font-size: 11px;
+            }
 
-    /* Komut Butonlarını mobilde sol üstte küçült */
-    .command-controls {
-        top: 40px; /* Mobilde altın yazısı daha küçük olduğu için biraz yukarı aldık */
-        left: 10px;
-        gap: 8px;
-    }
+            /* Birim Çıkarma Butonlarını mobilde alt köşede küçült */
+            .bottom-ui {
+                padding: 0 10px;
+                bottom: 15px;
+            }
 
-    .cmd-btn {
-        width: 55px;
-        height: 55px;
-        font-size: 11px;
-    }
+            .unit-controls {
+                gap: 8px;
+            }
 
-    /* Birim Çıkarma Butonlarını mobilde alt köşede küçült */
-    .bottom-ui {
-        padding: 0 10px;
-        bottom: 15px;
-    }
+            .unit-btn {
+                width: 55px;
+                height: 55px;
+                font-size: 11px;
+            }
+        }
 
-    .unit-controls {
-        gap: 8px;
-    }
+        /* =========================================================
+           OYUN SONU / DURAKLATMA EKRANI (Modal)
+        ========================================================= */
+        #modalScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 999;
+            color: white;
+        }
 
-    .unit-btn {
-        width: 55px;
-        height: 55px;
-        font-size: 11px;
-    }
-}
+        .modal-content {
+            background: #2c3e50;
+            padding: 30px;
+            border-radius: 12px;
+            text-align: center;
+            border: 2px solid #ecf0f1;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
 
-/* =========================================================
-   OYUN SONU / DURAKLATMA EKRANI (Modal)
-========================================================= */
-#modalScreen {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.8);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    z-index: 999;
-    color: white;
-}
+        #modalTitle {
+            margin: 0 0 20px 0;
+            font-size: 28px;
+        }
 
-.modal-content {
-    background: #2c3e50;
-    padding: 30px;
-    border-radius: 12px;
-    text-align: center;
-    border: 2px solid #ecf0f1;
-    box-shadow: 0 0 20px rgba(0,0,0,0.5);
-}
+        #modalBtn {
+            padding: 12px 24px;
+            font-size: 18px;
+            background: #27ae60;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.2s;
+        }
 
-#modalTitle {
-    margin: 0 0 20px 0;
-    font-size: 28px;
-}
+        #modalBtn:hover {
+            background: #2ecc71;
+        }
+    </style>
+</head>
+<body>
 
-#modalBtn {
-    padding: 12px 24px;
-    font-size: 18px;
-    background: #27ae60;
-    color: white;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    font-weight: bold;
-    transition: background 0.2s;
-}
+    <!-- Üst Bilgi (Altın ve Seviye) -->
+    <div class="top-ui">
+        <div id="goldText">Altın: 300</div>
+        <div id="levelText">Seviye: 1</div>
+    </div>
 
-#modalBtn:hover {
-    background: #2ecc71;
-}
+    <!-- Komut Butonları (Sol Üst Köşede) -->
+    <div class="command-controls">
+        <div class="cmd-btn" id="cmdRetreat">Geri Çekil</div>
+        <div class="cmd-btn" id="cmdDefend">Savunma</div>
+        <div class="cmd-btn" id="cmdAttack">Saldırı</div>
+    </div>
+
+    <!-- Alt Arayüz (Birim Çıkarma Butonları) -->
+    <div class="bottom-ui">
+        <div class="unit-controls">
+            <div class="unit-btn" id="btnMiner">
+                Madenci (150)
+                <div class="cd-fill" id="minerCdFill"></div>
+            </div>
+            <div class="unit-btn" id="btnClub">
+                Savaşçı (125)
+                <div class="cd-fill" id="clubCdFill"></div>
+            </div>
+            <div class="unit-btn" id="btnArcher">
+                Okçu (200)
+                <div class="cd-fill" id="archerCdFill"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Oyun Alanı -->
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- Oyun Sonu Ekranı -->
+    <div id="modalScreen" style="display: none;">
+        <div class="modal-content">
+            <h2 id="modalTitle">Oyun Bitti</h2>
+            <button id="modalBtn">Tekrar Oyna</button>
+        </div>
+    </div>
+
+    <!-- OYUN JAVASCRIPT KODLARI BURAYA GELECEK -->
+    <script>
+        // LÜTFEN BÜTÜN JAVASCRIPT OYUN KODUNUZU BURAYA YAPIŞTIRIN.
+        // İlk mesajda düzenlediğimiz "resizeCanvas" kodunu içeren JS kodunuz bu script etiketleri arasında olmalıdır.
+    </script>
+</body>
+</html>
