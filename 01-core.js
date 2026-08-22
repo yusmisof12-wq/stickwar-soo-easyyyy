@@ -123,7 +123,10 @@
             return typeof coopSession !== 'undefined' && !!coopSession && !!coopSession.roomId;
         }
         function localOwnerIndex() {
-            return (typeof isCoopGuestNow === 'function' && isCoopGuestNow()) ? 1 : 0;
+            if (typeof isCoopPlayNow === 'function' && isCoopPlayNow() && typeof myCoopSlot === 'function') {
+                return myCoopSlot();
+            }
+            return 0;
         }
         function getOwnerState(ownerIndex) {
             return ownerIndex === 1 ? player2 : player;
@@ -141,10 +144,16 @@
             return (u.ownerIndex === 1) ? COLOR_P2 : COLOR_P1;
         }
         function coopGoldMult() {
+            // Sadece arkadaş seferi: oyuncular 0.8x
             return isCoopActive() ? 0.8 : 1;
         }
         function coopEnemyGoldMult() {
-            return isCoopActive() ? 1.3 : 1;
+            // Sadece arkadaş seferi: düşman 1.2x
+            return isCoopActive() ? 1.2 : 1;
+        }
+        function coopEnemySpawnMult() {
+            // AI birim yerleştirme hızı 1.2x (cooldown / 1.2)
+            return isCoopActive() ? 1.2 : 1;
         }
         
         let enemy = {
