@@ -1,28 +1,23 @@
 // ==================== SABİTLER VE DEĞİŞKENLER ====================
 const canvas = document.getElementById('gameCanvas');
 const minerFaceImg = new Image();
-minerFaceImg.src = ''; 
+minerFaceImg.src = '';
 const minerFaceEnemyImg = new Image();
 minerFaceEnemyImg.src = '';
 const ctx = canvas.getContext('2d');
-
-// Bunları 'const' yerine 'let' yapıyoruz ki mobilde değiştirebilelim
 let GROUND_HEIGHT = 220;
-let MIN_WORLD_WIDTH = 2560; // 2600'den 40 birim küçültüldü
-
+let MIN_WORLD_WIDTH = 2560;
 const AI_VISION_RANGE = 620;
-const MAX_MINERS_PER_TEAM = 99; 
+const MAX_MINERS_PER_TEAM = 99;
 const MAX_CLUBMEN_PER_TEAM = 28;
 const MAX_ARCHERS_PER_TEAM = 14;
-const SPEED_MULT = 1.8; 
-
+const SPEED_MULT = 1.8;
 let worldWidth = MIN_WORLD_WIDTH;
 let cameraX = 0;
 let isPanning = false;
 let panStartX = 0;
 let panCameraStartX = 0;
 
-// ---- Mobil / responsive yardımcılar ----
 function isTouchDevice() {
     try {
         return window.matchMedia('(pointer: coarse)').matches || ('ontouchstart' in window) || (navigator.maxTouchPoints || 0) > 0;
@@ -34,26 +29,27 @@ function isTouchDevice() {
 function resizeCanvas() {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
-    
-    // Mobil ekran kontrolü (Örn: Genişlik 768px'den küçükse)
+
     const isMobile = canvas.width < 768;
-    
-    // Mobilde dünya genişliğini 1400 -> 1360, Masaüstünde 2600 -> 2560 yapıyoruz (-40 birim)
+
     MIN_WORLD_WIDTH = isMobile ? 1360 : 2560;
-    GROUND_HEIGHT = isMobile ? 150 : 220; 
-    
-    // Ekran genişliğine eklenen payı da -40 birim düşürüyoruz (Mobil 400->360, Masaüstü 800->760)
+    GROUND_HEIGHT = isMobile ? 150 : 220;
+
     worldWidth = Math.max(MIN_WORLD_WIDTH, canvas.width + (isMobile ? 360 : 760));
-    cameraX = Math.max(0, Math.min(cameraX, worldWidth - canvas.width));
-    
+
+    if (typeof isCoopActive === 'function' && isCoopActive()) {
+        MIN_WORLD_WIDTH = 2560;
+        GROUND_HEIGHT = 220;
+        worldWidth = 2560;
+        if (player && player.base) player.base.x = 130;
+        if (enemy && enemy.base) enemy.base.x = worldWidth - 130;
+    }
+
+    cameraX = Math.max(0, Math.min(cameraX, Math.max(0, worldWidth - canvas.width)));
     updateMineSlots(false);
 }
 
 function setViewportHeightVar() {
-    // Bazi mobil tarayicilarda 100vh, arac/adres cubugu yuzunden gercek
-    // gorunur yukseklikten buyuktur; bu da alttaki komut butonlarinin
-    // ekran disina tasmasina yol acar. Gercek yuksekligi CSS
-    // degiskenine yaziyoruz.
     const vh = window.innerHeight * 0.01;
     document.documentElement.style.setProperty('--vh', vh + 'px');
 }
@@ -62,6 +58,7 @@ function handleViewportChange() {
     setViewportHeightVar();
     resizeCanvas();
 }
+
 window.addEventListener('resize', handleViewportChange);
 window.addEventListener('orientationchange', () => setTimeout(handleViewportChange, 200));
 setViewportHeightVar();
@@ -71,7 +68,7 @@ const CMD_DEFEND = 2;
 const CMD_RETREAT = 3;
 
 const AI_DIFFICULTY = {
-    1: { 
+    1: {
         cooldownMult: 3.5,
         mistakeChance: 0.55,
         badReaction: true,
@@ -82,7 +79,7 @@ const AI_DIFFICULTY = {
         retreatHpThreshold: 0.35,
         passiveGoldMult: 0.45
     },
-    2: { 
+    2: {
         cooldownMult: 1.5,
         mistakeChance: 0.15,
         badReaction: false,
@@ -93,7 +90,7 @@ const AI_DIFFICULTY = {
         retreatHpThreshold: 0.35,
         passiveGoldMult: 0.85
     },
-    3: { 
+    3: {
         cooldownMult: 1.0,
         mistakeChance: 0.0,
         badReaction: false,
@@ -137,7 +134,6 @@ let player = {
     archerFormationCounter: 0
 };
 
-// 2. oyuncu (co-op) — ayrı altın, komut, kuyruk; takım aynı
 let player2 = {
     gold: 300,
     command: CMD_DEFEND,
@@ -154,21 +150,24 @@ let player2 = {
 };
 
 const COLOR_P1 = '#1a1a1a';
-const COLOR_P2 = '#2980b9'; // mavi — 2. oyuncu
+const COLOR_P2 = '#2980b9';
 const COLOR_ENEMY = '#c0392b';
 
 function isCoopActive() {
     return typeof coopSession !== 'undefined' && !!coopSession && !!coopSession.roomId;
 }
+
 function localOwnerIndex() {
     if (typeof isCoopPlayNow === 'function' && isCoopPlayNow() && typeof myCoopSlot === 'function') {
         return myCoopSlot();
     }
     return 0;
 }
+
 function getOwnerState(ownerIndex) {
     return ownerIndex === 1 ? player2 : player;
 }
+
 function unitOwnerState(u) {
     if (!u || !u.isPlayer) return enemy;
     try {
@@ -177,20 +176,21 @@ function unitOwnerState(u) {
         return player;
     }
 }
+
 function unitTeamColor(u) {
     if (!u || !u.isPlayer) return COLOR_ENEMY;
     return (u.ownerIndex === 1) ? COLOR_P2 : COLOR_P1;
 }
+
 function coopGoldMult() {
-    // Sadece arkadaş seferi: oyuncular 0.8x
     return isCoopActive() ? 0.8 : 1;
 }
+
 function coopEnemyGoldMult() {
-    // Sadece arkadaş seferi: düşman 1.2x
     return isCoopActive() ? 1.2 : 1;
 }
+
 function coopEnemySpawnMult() {
-    // AI birim yerleştirme hızı 1.2x (cooldown / 1.2)
     return isCoopActive() ? 1.2 : 1;
 }
 
@@ -222,37 +222,22 @@ let pMineOffsets = [];
 let eMineOffsets = [];
 
 const clubSpawnOffsets = [
-    { dx: 80, dy: 0 },
-    { dx: 140, dy: 45 },
-    { dx: 50, dy: -45 },
-    { dx: 170, dy: 70 },
-    { dx: 110, dy: -70 },
-    { dx: 60, dy: 55 },
-    { dx: 150, dy: -25 },
-    { dx: 90, dy: 30 },
-    { dx: 180, dy: -55 },
-    { dx: 120, dy: 80 },
-    { dx: 40, dy: -80 },
-    { dx: 160, dy: 60 }
+    { dx: 80, dy: 0 }, { dx: 140, dy: 45 }, { dx: 50, dy: -45 },
+    { dx: 170, dy: 70 }, { dx: 110, dy: -70 }, { dx: 60, dy: 55 },
+    { dx: 150, dy: -25 }, { dx: 90, dy: 30 }, { dx: 180, dy: -55 },
+    { dx: 120, dy: 80 }, { dx: 40, dy: -80 }, { dx: 160, dy: 60 }
 ];
+
 const minerSpawnOffsets = [
-    { dx: 70, dy: 0 },
-    { dx: 120, dy: 30 },
-    { dx: 30, dy: -30 },
-    { dx: 150, dy: 50 },
-    { dx: 80, dy: -50 },
-    { dx: 100, dy: 40 },
-    { dx: 50, dy: 45 },
-    { dx: 130, dy: -40 },
-    { dx: 90, dy: -60 }
+    { dx: 70, dy: 0 }, { dx: 120, dy: 30 }, { dx: 30, dy: -30 },
+    { dx: 150, dy: 50 }, { dx: 80, dy: -50 }, { dx: 100, dy: 40 },
+    { dx: 50, dy: 45 }, { dx: 130, dy: -40 }, { dx: 90, dy: -60 }
 ];
 
 function initMines() {
     const baseOffsets = [
-        { x: 220, y: -50 },
-        { x: 220, y: 50 },
-        { x: 180, y: -80 },
-        { x: 180, y: 80 }
+        { x: 220, y: -50 }, { x: 220, y: 50 },
+        { x: 180, y: -80 }, { x: 180, y: 80 }
     ];
     pMineOffsets = baseOffsets.map(pos => ({
         x: pos.x + (Math.random() * 20 - 10),
@@ -271,7 +256,6 @@ function updateMineSlots(resetAssignments = false) {
     let baseCenterY = grassTop + (GROUND_HEIGHT / 2);
     player.base.y = baseCenterY;
     enemy.base.y = baseCenterY;
-
     const refreshSlots = (slots, offsets, base) => {
         slots.length = offsets.length;
         offsets.forEach((offset, index) => {
@@ -285,10 +269,10 @@ function updateMineSlots(resetAssignments = false) {
             });
         });
     };
-
     refreshSlots(playerMineSlots, pMineOffsets, player.base);
     refreshSlots(enemyMineSlots, eMineOffsets, enemy.base);
 }
+
 resizeCanvas();
 
 canvas.addEventListener('pointerdown', event => {
