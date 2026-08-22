@@ -1,20 +1,10 @@
 // server.js
-// Çöp Adam Savaşları - Express + Socket.IO sunucu
+// Çöp Adam Savaşları - Express + WebSocket sunucusu
 // - Oyunun HTML dosyasını statik olarak sunar
-// - /api/register, /api/login, /api/logout, /api/me, /api/progress
-// - Arkadaş sistemi: /api/friends, /api/friends/request|accept|decline|remove, /api/users/search
-// - Socket.IO: online durumu, arkadaşlık istekleri (canlı), sefer daveti (co-op),
-//   hızlı eşleşme (versus) ve host->guest oyun durumu röle sistemi.
-//
-// MİMARİ NOTU (host-authoritative):
-// Bu oyun canvas üstünde 60fps fizik/animasyon çalıştırıyor. İki tarayıcıda
-// aynı simülasyonu bağımsız çalıştırıp senkron tutmak (lockstep) çok kırılgan
-// olur. Bunun yerine odadaki bir taraf ("host") oyunun TEK simülasyonunu
-// çalıştırır, diğer taraf ("guest") sadece komutlarını (saldırı/savunma/geri
-// çekil, birim satın al) sunucu üzerinden host'a yollar; host da düzenli
-// aralıklarla basit bir "game:state" anlık görüntüsünü guest'e yollar, guest
-// bunu ekranda basitçe çizer. Sunucu burada sadece güvenilir bir röle
-// (relay) — oyun mantığının kendisini simüle etmiyor.
+// - /api/register, /api/login, /api/logout, /api/me, /api/progress uçlarını sağlar
+// - Arkadaş sistemi: /api/friends, /api/friends/request, /api/friends/accept, /api/friends/decline, /api/friends/remove
+// - WebSocket (/ws): çevrimiçi durumu, arkadaşla co-op daveti/kabulü ve oda (room) içi mesaj aktarımı
+// - Kullanıcılar data/users.json dosyasında saklanır (basit dosya tabanlı "veritabanı")
 
 const express = require('express');
 const cors = require('cors');
@@ -22,10 +12,12 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const http = require('http');
-const { Server } = require('socket.io');
+const { WebSocketServer } = require('ws');
 
 // ==================== AYARLAR ====================
 const PORT = process.env.PORT || 3847;
+// Oyunun ana HTML dosyasının adı. Kendi dosya adınla eşleşmiyorsa burayı güncelle
+// ya da dosyayı bu isimle (ya da index.html olarak) proje köküne koy.
 const HTML_FILE = 'cop-adam-savaslari-gelistirilmis.html';
 const DATA_DIR = path.join(__dirname, 'data');
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
@@ -45,15 +37,15 @@ function saveUsers(users) {
     fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2), 'utf8');
 }
 
-let users = loadUsers();
+let users = loadUsers(); // { username: { salt, hash, maxUnlocked, cleared, friends, incoming, outgoing } }
 
-// Eski kayıtlara arkadaş alanlarını ekle (geriye dönük uyumluluk)
+// Eski kayıtlarda olmayan alanları tamamla (arkadaş sistemi sonradan eklendi)
 function ensureUserShape(u) {
-    if (!u.friends) u.friends = [];
-    if (!u.incomingRequests) u.incomingRequests = [];
-    if (!u.outgoingRequests) u.outgoingRequests = [];
-    if (!u.maxUnlocked) u.maxUnlocked = 1;
-    if (!u.cleared) u.cleared = [];
+    if (!Array.isArray(u.friends)) u.friends = [];
+    if (!Array.isArray(u.incoming)) u.incoming = [];
+    if (!Array.isArray(u.outgoing)) u.outgoing = [];
+    if (typeof u.maxUnlocked !== 'number') u.maxUnlocked = 1;
+    if (!Array.isArray(u.cleared)) u.cleared = [];
     return u;
 }
 Object.keys(users).forEach(name => ensureUserShape(users[name]));
@@ -77,6 +69,7 @@ function makeRoomId() {
 
 // ==================== EXPRESS UYGULAMASI ====================
 const app = express();
+
 app.use(cors());
 app.use(express.json());
 
@@ -90,6 +83,7 @@ app.get('/', (req, res) => {
         );
     }
 });
+
 app.use(express.static(__dirname, { index: false }));
 
 // ==================== AUTH MIDDLEWARE ====================
@@ -114,19 +108,23 @@ function publicUser(username) {
     };
 }
 
-// ==================== HESAP ROTALARI ====================
+// ==================== AUTH ROTALARI ====================
+
 app.post('/api/register', (req, res) => {
     const { username, password } = req.body || {};
+
     if (typeof username !== 'string' || username.trim().length < 3) {
         return res.status(400).json({ error: 'Kullanıcı adı en az 3 karakter olmalı' });
     }
     if (typeof password !== 'string' || password.length < 3) {
         return res.status(400).json({ error: 'Şifre en az 3 karakter olmalı' });
     }
+
     const name = username.trim();
     if (users[name]) {
         return res.status(409).json({ error: 'Bu kullanıcı adı alınmış' });
     }
+
     const salt = makeSalt();
     users[name] = ensureUserShape({
         salt,
@@ -135,23 +133,34 @@ app.post('/api/register', (req, res) => {
         cleared: [],
     });
     saveUsers(users);
+
     const token = makeToken();
     sessions.set(token, name);
+
     res.json({ token, ...publicUser(name) });
 });
 
 app.post('/api/login', (req, res) => {
     const { username, password } = req.body || {};
+
     if (typeof username !== 'string' || typeof password !== 'string') {
         return res.status(400).json({ error: 'Kullanıcı adı veya şifre hatalı' });
     }
+
     const name = username.trim();
     const u = users[name];
-    if (!u) return res.status(401).json({ error: 'Kullanıcı adı veya şifre hatalı' });
+    if (!u) {
+        return res.status(401).json({ error: 'Kullanıcı adı veya şifre hatalı' });
+    }
+
     const check = hashPassword(password, u.salt);
-    if (check !== u.hash) return res.status(401).json({ error: 'Kullanıcı adı veya şifre hatalı' });
+    if (check !== u.hash) {
+        return res.status(401).json({ error: 'Kullanıcı adı veya şifre hatalı' });
+    }
+
     const token = makeToken();
     sessions.set(token, name);
+
     res.json({ token, ...publicUser(name) });
 });
 
@@ -167,222 +176,233 @@ app.get('/api/me', requireAuth, (req, res) => {
 app.post('/api/progress', requireAuth, (req, res) => {
     const { maxUnlocked, cleared } = req.body || {};
     const u = users[req.username];
+
     if (typeof maxUnlocked === 'number' && maxUnlocked > (u.maxUnlocked || 1)) {
         u.maxUnlocked = maxUnlocked;
     } else if (!u.maxUnlocked) {
         u.maxUnlocked = 1;
     }
+
     if (Array.isArray(cleared)) {
         const merged = new Set([...(u.cleared || []), ...cleared]);
         u.cleared = Array.from(merged);
     }
+
     saveUsers(users);
     res.json(publicUser(req.username));
 });
 
 // ==================== ARKADAŞ SİSTEMİ ====================
-app.get('/api/friends', requireAuth, (req, res) => {
-    const u = ensureUserShape(users[req.username]);
-    res.json({
-        friends: u.friends.map(f => ({ username: f, online: onlineUsers.has(f) })),
-        incomingRequests: u.incomingRequests,
-        outgoingRequests: u.outgoingRequests,
-    });
-});
 
-app.get('/api/users/search', requireAuth, (req, res) => {
-    const q = (req.query.q || '').toString().trim().toLowerCase();
-    if (q.length < 2) return res.json({ results: [] });
-    const results = Object.keys(users)
-        .filter(name => name.toLowerCase().includes(q) && name !== req.username)
-        .slice(0, 10)
-        .map(name => ({ username: name, online: onlineUsers.has(name) }));
-    res.json({ results });
+const onlineSockets = new Map(); // username -> WebSocket
+
+function isOnline(username) {
+    return onlineSockets.has(username);
+}
+
+function friendsPayload(username) {
+    const u = users[username];
+    return {
+        friends: (u.friends || []).map(f => ({ username: f, online: isOnline(f) })),
+        incoming: u.incoming || [],
+        outgoing: u.outgoing || [],
+    };
+}
+
+function sendTo(username, obj) {
+    const ws = onlineSockets.get(username);
+    if (ws && ws.readyState === ws.OPEN) {
+        try { ws.send(JSON.stringify(obj)); } catch (e) { /* yoksay */ }
+    }
+}
+
+app.get('/api/friends', requireAuth, (req, res) => {
+    res.json(friendsPayload(req.username));
 });
 
 app.post('/api/friends/request', requireAuth, (req, res) => {
-    const { toUsername } = req.body || {};
-    const from = req.username;
-    if (!toUsername || !users[toUsername]) return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
-    if (toUsername === from) return res.status(400).json({ error: 'Kendine istek atamazsın' });
-    const a = ensureUserShape(users[from]);
-    const b = ensureUserShape(users[toUsername]);
-    if (a.friends.includes(toUsername)) return res.status(409).json({ error: 'Zaten arkadaşsınız' });
-    if (a.outgoingRequests.includes(toUsername)) return res.status(409).json({ error: 'İstek zaten gönderildi' });
+    const target = ((req.body && req.body.username) || '').trim();
+    const me = req.username;
 
-    if (a.incomingRequests.includes(toUsername)) {
-        // Karşılıklı istek → otomatik arkadaş ol
-        a.incomingRequests = a.incomingRequests.filter(x => x !== toUsername);
-        b.outgoingRequests = b.outgoingRequests.filter(x => x !== from);
-        a.friends.push(toUsername);
-        b.friends.push(from);
-        saveUsers(users);
-        notifyUser(toUsername, 'friend:accepted', { username: from });
-        return res.json({ status: 'accepted' });
+    if (!target || target === me) {
+        return res.status(400).json({ error: 'Geçersiz kullanıcı adı' });
+    }
+    if (!users[target]) {
+        return res.status(404).json({ error: 'Böyle bir kullanıcı yok' });
+    }
+    const meRec = users[me];
+    const targetRec = users[target];
+
+    if (meRec.friends.includes(target)) {
+        return res.status(409).json({ error: 'Zaten arkadaşsınız' });
     }
 
-    a.outgoingRequests.push(toUsername);
-    b.incomingRequests.push(from);
+    if (meRec.incoming.includes(target)) {
+        meRec.friends.push(target);
+        targetRec.friends.push(me);
+        meRec.incoming = meRec.incoming.filter(x => x !== target);
+        targetRec.outgoing = targetRec.outgoing.filter(x => x !== me);
+        saveUsers(users);
+        sendTo(target, { type: 'friend_accepted', username: me });
+        return res.json({ status: 'accepted', ...friendsPayload(me) });
+    }
+
+    if (meRec.outgoing.includes(target)) {
+        return res.status(409).json({ error: 'İstek zaten gönderildi' });
+    }
+
+    meRec.outgoing.push(target);
+    targetRec.incoming.push(me);
     saveUsers(users);
-    notifyUser(toUsername, 'friend:request', { username: from });
-    res.json({ status: 'sent' });
+    sendTo(target, { type: 'friend_request', username: me });
+
+    res.json({ status: 'sent', ...friendsPayload(me) });
 });
 
 app.post('/api/friends/accept', requireAuth, (req, res) => {
-    const { fromUsername } = req.body || {};
+    const from = ((req.body && req.body.username) || '').trim();
     const me = req.username;
-    const a = ensureUserShape(users[me]);
-    const b = users[fromUsername] && ensureUserShape(users[fromUsername]);
-    if (!b || !a.incomingRequests.includes(fromUsername)) {
-        return res.status(404).json({ error: 'İstek bulunamadı' });
+    const meRec = users[me];
+
+    if (!from || !meRec.incoming.includes(from) || !users[from]) {
+        return res.status(400).json({ error: 'Böyle bir istek yok' });
     }
-    a.incomingRequests = a.incomingRequests.filter(x => x !== fromUsername);
-    b.outgoingRequests = b.outgoingRequests.filter(x => x !== me);
-    a.friends.push(fromUsername);
-    b.friends.push(me);
+    const fromRec = users[from];
+
+    meRec.friends.push(from);
+    fromRec.friends.push(me);
+    meRec.incoming = meRec.incoming.filter(x => x !== from);
+    fromRec.outgoing = fromRec.outgoing.filter(x => x !== me);
     saveUsers(users);
-    notifyUser(fromUsername, 'friend:accepted', { username: me });
-    res.json({ status: 'accepted' });
+
+    sendTo(from, { type: 'friend_accepted', username: me });
+    res.json(friendsPayload(me));
 });
 
 app.post('/api/friends/decline', requireAuth, (req, res) => {
-    const { fromUsername } = req.body || {};
+    const from = ((req.body && req.body.username) || '').trim();
     const me = req.username;
-    const a = ensureUserShape(users[me]);
-    const b = users[fromUsername] && ensureUserShape(users[fromUsername]);
-    a.incomingRequests = a.incomingRequests.filter(x => x !== fromUsername);
-    if (b) b.outgoingRequests = b.outgoingRequests.filter(x => x !== me);
-    saveUsers(users);
-    res.json({ status: 'declined' });
+    const meRec = users[me];
+
+    if (from && users[from]) {
+        meRec.incoming = meRec.incoming.filter(x => x !== from);
+        users[from].outgoing = users[from].outgoing.filter(x => x !== me);
+        saveUsers(users);
+    }
+    res.json(friendsPayload(me));
 });
 
 app.post('/api/friends/remove', requireAuth, (req, res) => {
-    const { username: target } = req.body || {};
+    const target = ((req.body && req.body.username) || '').trim();
     const me = req.username;
-    const a = ensureUserShape(users[me]);
-    const b = users[target] && ensureUserShape(users[target]);
-    a.friends = a.friends.filter(x => x !== target);
-    if (b) b.friends = b.friends.filter(x => x !== me);
+    const meRec = users[me];
+
+    meRec.friends = meRec.friends.filter(x => x !== target);
+    if (users[target]) {
+        users[target].friends = users[target].friends.filter(x => x !== me);
+    }
     saveUsers(users);
-    res.json({ status: 'removed' });
+    res.json(friendsPayload(me));
 });
 
-// ==================== SOCKET.IO ====================
+// ==================== HTTP + WEBSOCKET SUNUCUSU ====================
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: '*' } });
+const wss = new WebSocketServer({ server, path: '/ws' });
 
-const onlineUsers = new Map();  // username -> socket.id
-const quickQueue = [];          // [{ username, socketId }]  — hızlı eşleşme (versus) kuyruğu
-const rooms = new Map();        // roomId -> { host, guest, mode: 'coop'|'versus', level }
+const rooms = new Map(); // roomId -> { members: [usernameA, usernameB] }
 
-function notifyUser(username, event, payload) {
-    const sid = onlineUsers.get(username);
-    if (sid) io.to(sid).emit(event, payload);
+function leaveRoomForUser(username, ws) {
+    const roomId = ws && ws.roomId;
+    if (!roomId) return;
+    const room = rooms.get(roomId);
+    if (!room) return;
+    room.members = room.members.filter(m => m !== username);
+    room.members.forEach(m => sendTo(m, { type: 'partner_left', roomId }));
+    if (room.members.length === 0) rooms.delete(roomId);
+    ws.roomId = null;
 }
 
-// Bağlantı kurarken token doğrulama (login token'ı ile aynı)
-io.use((socket, next) => {
-    const token = socket.handshake.auth && socket.handshake.auth.token;
-    const username = token && sessions.get(token);
-    if (!username || !users[username]) return next(new Error('unauthorized'));
-    socket.username = username;
-    next();
-});
+wss.on('connection', (ws) => {
+    ws.username = null;
+    ws.roomId = null;
 
-io.on('connection', socket => {
-    const username = socket.username;
-    onlineUsers.set(username, socket.id);
+    ws.on('message', (raw) => {
+        let msg;
+        try { msg = JSON.parse(raw); } catch (e) { return; }
+        if (!msg || typeof msg.type !== 'string') return;
 
-    const me = ensureUserShape(users[username]);
-    me.friends.forEach(f => notifyUser(f, 'friend:online', { username }));
-
-    socket.on('friends:refresh', () => {
-        const u = ensureUserShape(users[username]);
-        socket.emit('friends:state', {
-            friends: u.friends.map(f => ({ username: f, online: onlineUsers.has(f) })),
-            incomingRequests: u.incomingRequests,
-        });
-    });
-
-    // ---- Sefer daveti (co-op) ----
-    socket.on('invite:send', ({ toUsername, level }) => {
-        if (!onlineUsers.has(toUsername)) {
-            socket.emit('invite:failed', { reason: 'offline', toUsername });
+        if (msg.type === 'auth') {
+            const username = sessions.get(msg.token);
+            if (!username || !users[username]) {
+                ws.send(JSON.stringify({ type: 'auth_error', error: 'Geçersiz oturum' }));
+                ws.close();
+                return;
+            }
+            ws.username = username;
+            const prev = onlineSockets.get(username);
+            if (prev && prev !== ws) { try { prev.close(); } catch (e) {} }
+            onlineSockets.set(username, ws);
+            ws.send(JSON.stringify({ type: 'auth_ok', username }));
             return;
         }
-        notifyUser(toUsername, 'invite:received', { fromUsername: username, level });
-    });
 
-    socket.on('invite:accept', ({ toUsername, level }) => {
-        // toUsername = daveti gönderen kişi → o host olur
-        const roomId = makeRoomId();
-        rooms.set(roomId, { host: toUsername, guest: username, mode: 'coop', level });
-        notifyUser(toUsername, 'invite:accepted', { roomId, guestUsername: username, level, isHost: true });
-        socket.emit('invite:accepted', { roomId, guestUsername: toUsername, level, isHost: false });
-    });
+        if (!ws.username) return;
 
-    socket.on('invite:decline', ({ toUsername }) => {
-        notifyUser(toUsername, 'invite:declined', { byUsername: username });
-    });
+        if (msg.type === 'coop_invite') {
+            const to = msg.to;
+            const meRec = users[ws.username];
+            if (!to || !meRec.friends.includes(to)) {
+                ws.send(JSON.stringify({ type: 'error', error: 'Bu kişi arkadaşın değil' }));
+                return;
+            }
+            if (!isOnline(to)) {
+                ws.send(JSON.stringify({ type: 'error', error: 'Arkadaşın şu an çevrimiçi değil' }));
+                return;
+            }
+            sendTo(to, { type: 'coop_invite', from: ws.username, level: msg.level });
+            ws.send(JSON.stringify({ type: 'invite_sent', to }));
+            return;
+        }
 
-    // ---- Hızlı eşleşme (rastgele rakip, versus) ----
-    socket.on('mp:queue:join', () => {
-        if (quickQueue.some(q => q.username === username)) return;
-        quickQueue.push({ username, socketId: socket.id });
-        if (quickQueue.length >= 2) {
-            const a = quickQueue.shift();
-            const b = quickQueue.shift();
+        if (msg.type === 'coop_response') {
+            const to = msg.to;
+            if (!msg.accept) {
+                sendTo(to, { type: 'coop_declined', from: ws.username });
+                return;
+            }
             const roomId = makeRoomId();
-            rooms.set(roomId, { host: a.username, guest: b.username, mode: 'versus' });
-            io.to(a.socketId).emit('mp:matched', { roomId, opponent: b.username, isHost: true });
-            io.to(b.socketId).emit('mp:matched', { roomId, opponent: a.username, isHost: false });
-        } else {
-            socket.emit('mp:queue:waiting');
+            rooms.set(roomId, { members: [to, ws.username] });
+
+            const hostWs = onlineSockets.get(to);
+            if (hostWs) hostWs.roomId = roomId;
+            ws.roomId = roomId;
+
+            sendTo(to, { type: 'coop_start', roomId, role: 'host', level: msg.level, partner: ws.username });
+            ws.send(JSON.stringify({ type: 'coop_start', roomId, role: 'guest', level: msg.level, partner: to }));
+            return;
         }
-    });
-    socket.on('mp:queue:leave', () => {
-        const idx = quickQueue.findIndex(q => q.username === username);
-        if (idx >= 0) quickQueue.splice(idx, 1);
-    });
 
-    // ---- Oda içi röle: host <-> guest ----
-    socket.on('room:join', ({ roomId }) => {
-        const room = rooms.get(roomId);
-        if (!room || (room.host !== username && room.guest !== username)) return;
-        socket.join(roomId);
-        socket.roomId = roomId;
-        const other = room.host === username ? room.guest : room.host;
-        socket.emit('room:ready', { otherOnline: onlineUsers.has(other), mode: room.mode, level: room.level });
-        socket.to(roomId).emit('room:peerJoined');
-    });
+        if (msg.type === 'room_relay') {
+            const room = rooms.get(msg.roomId);
+            if (!room || !room.members.includes(ws.username)) return;
+            room.members.forEach(m => {
+                if (m === ws.username) return;
+                sendTo(m, { type: 'room_relay', payload: msg.payload, from: ws.username });
+            });
+            return;
+        }
 
-    // host -> guest: periyodik oyun durumu anlık görüntüsü
-    socket.on('game:state', payload => {
-        if (socket.roomId) socket.to(socket.roomId).emit('game:state', payload);
-    });
-    // guest -> host: komutlar (saldırı/savunma/geri çekil, birim satın al)
-    socket.on('game:input', payload => {
-        if (socket.roomId) socket.to(socket.roomId).emit('game:input', payload);
-    });
-    socket.on('room:leave', () => {
-        if (socket.roomId) {
-            socket.to(socket.roomId).emit('room:peerLeft');
-            rooms.delete(socket.roomId);
-            socket.leave(socket.roomId);
-            socket.roomId = null;
+        if (msg.type === 'leave_room') {
+            leaveRoomForUser(ws.username, ws);
+            return;
         }
     });
 
-    socket.on('disconnect', () => {
-        onlineUsers.delete(username);
-        const idx = quickQueue.findIndex(q => q.username === username);
-        if (idx >= 0) quickQueue.splice(idx, 1);
-        if (socket.roomId) {
-            socket.to(socket.roomId).emit('room:peerLeft');
-            rooms.delete(socket.roomId);
+    ws.on('close', () => {
+        if (ws.username) {
+            if (onlineSockets.get(ws.username) === ws) onlineSockets.delete(ws.username);
+            leaveRoomForUser(ws.username, ws);
         }
-        const u2 = ensureUserShape(users[username] || { friends: [] });
-        (u2.friends || []).forEach(f => notifyUser(f, 'friend:offline', { username }));
     });
 });
 
@@ -390,4 +410,5 @@ io.on('connection', socket => {
 server.listen(PORT, () => {
     console.log(`Çöp Adam Savaşları sunucusu çalışıyor: http://localhost:${PORT}`);
     console.log(`Oyun dosyası: ${HTML_FILE}`);
+    console.log(`WebSocket: ws://localhost:${PORT}/ws`);
 });
