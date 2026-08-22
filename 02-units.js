@@ -1,4 +1,4 @@
-        // ==================== SINIFLAR ====================
+// ==================== SINIFLAR ====================
         class Miner {
             constructor(isPlayer) {
                 this.isPlayer = isPlayer;
@@ -799,7 +799,10 @@
                     actualMoved = true;
                 }
 
-                if (this.target) {
+                // Hedef canlı ve menzildeyse ateş animasyonu; yoksa animasyon yok
+                const canShoot = this.target && this.target.hp > 0 &&
+                    Math.hypot(this.target.x - this.x, this.target.y - this.y) < this.range + 40;
+                if (canShoot) {
                     this.attackTimer++;
                     const CYCLE = this.attackCooldown;
                     const DRAW_START = Math.floor(CYCLE * 0.55);
@@ -883,28 +886,33 @@
                         this.isWalking = false;
                     }
                 } else if (this.state === 'active') {
-                    this.attackTimer++;
-                    const CYCLE = 120;
-                    const DRAW_START = 80;
-                    const SHOOT_AT = 116;
-                    if (this.attackTimer < DRAW_START) {
-                        this.drawAmount = 0;
-                    } else if (this.attackTimer < SHOOT_AT) {
-                        this.drawAmount = (this.attackTimer - DRAW_START) / (SHOOT_AT - DRAW_START);
-                    } else {
-                        this.drawAmount = 0;
+                    // Sadece menzilde hedef varken yay çek / ateş animasyonu
+                    let enemies = units.filter(u => u.isPlayer !== this.isPlayer && u.hp > 0 && !u.isInvulnerable);
+                    let target = null;
+                    if (enemies.length > 0) {
+                        target = enemies.reduce((prev, curr) =>
+                            Math.abs(curr.x - this.x) < Math.abs(prev.x - this.x) ? curr : prev);
+                        if (Math.abs(target.x - this.x) >= 700) target = null;
                     }
-                    if (this.attackTimer === SHOOT_AT) {
-                        let enemies = units.filter(u => u.isPlayer !== this.isPlayer && u.hp > 0 && !u.isInvulnerable);
-                        if (enemies.length > 0) {
-                            let target = enemies.reduce((prev, curr) => Math.abs(curr.x - this.x) < Math.abs(prev.x - this.x) ? curr : prev);
-                            if (Math.abs(target.x - this.x) < 700) {
-                                projectiles.push(new Arrow(this.x, this.y - 30, target, this.isPlayer));
-                            }
-                        }
-                    }
-                    if (this.attackTimer >= CYCLE) {
+                    if (!target) {
                         this.attackTimer = 0;
+                        this.drawAmount = Math.max(0, this.drawAmount - 0.12);
+                    } else {
+                        this.attackTimer++;
+                        const CYCLE = 120;
+                        const DRAW_START = 80;
+                        const SHOOT_AT = 116;
+                        if (this.attackTimer < DRAW_START) {
+                            this.drawAmount = 0;
+                        } else if (this.attackTimer < SHOOT_AT) {
+                            this.drawAmount = (this.attackTimer - DRAW_START) / (SHOOT_AT - DRAW_START);
+                        } else {
+                            this.drawAmount = 0;
+                        }
+                        if (this.attackTimer === SHOOT_AT) {
+                            projectiles.push(new Arrow(this.x, this.y - 30, target, this.isPlayer));
+                        }
+                        if (this.attackTimer >= CYCLE) this.attackTimer = 0;
                     }
                     this.isWalking = false;
                 }
@@ -1004,4 +1012,3 @@
                 ctx.restore();
             }
         }
-
