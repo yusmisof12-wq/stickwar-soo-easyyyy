@@ -328,7 +328,7 @@
                 attackThreshold: 2,
                 maxMiners: 999,
                 maxClubmen: 999,
-                maxArchers: 0,
+                maxArchers: 10,
                 retreatHpThreshold: 0.4,
                 passiveGoldMult: 1.0
             }
@@ -1276,6 +1276,9 @@
                     if (d < minDist) { minDist = d; closest = e; }
                 }
                 this.target = (closest && minDist <= this.range) ? closest : null;
+                // Harita dışındaysa (henüz geri çekilmeden dönüyor/görünmüyor) ateş etmesin
+                const onMap = this.x > -50 && this.x < worldWidth + 50;
+                if (!onMap) this.target = null;
 
                 // Kendi takımının en ileri (en önde savaşan) sopalısı: okçu her zaman onun tam gerisinde/hizasında durur
                 const myClubmen = units.filter(u => u.isPlayer === this.isPlayer && u instanceof Clubman && u.hp > 0);
@@ -2571,7 +2574,10 @@
         const LOCAL_USERS_KEY = 'copAdamUsersHashed_v1';
         const LOCAL_SESSION_KEY = 'copAdamLocalSession_v1';
         // Sunucu aynı origin'de çalışıyorsa kullanılır; yoksa yerel (hash'li) moda düşer
-        const API_BASE = (typeof location !== 'undefined' && location.protocol.startsWith('http') && location.port)
+        // Sayfa http/https ile sunuluyorsa (Render dahil, port olsun olmasın) her zaman
+        // aynı sunucudaki API'yi kullan. Sadece dosyayı doğrudan file:// ile açarsan
+        // yerel geliştirme sunucusuna (127.0.0.1:3847) düşer.
+        const API_BASE = (typeof location !== 'undefined' && location.protocol.startsWith('http'))
             ? ''
             : 'http://127.0.0.1:3847';
 
