@@ -100,6 +100,8 @@
         let player2 = {
             gold: 300,
             command: CMD_DEFEND,
+            lastCommand: CMD_DEFEND,
+            retreatGraceTimer: 0,
             spawnQueue: [],
             spawnTimer: 0,
             spawnTimerMax: 0,
@@ -122,7 +124,11 @@
         }
         function unitOwnerState(u) {
             if (!u || !u.isPlayer) return enemy;
-            return (u.ownerIndex === 1) ? player2 : player;
+            try {
+                return (u.ownerIndex === 1) ? player2 : player;
+            } catch (e) {
+                return player;
+            }
         }
         function unitTeamColor(u) {
             if (!u || !u.isPlayer) return COLOR_ENEMY;
