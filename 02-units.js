@@ -1,7 +1,8 @@
 // ==================== SINIFLAR ====================
         class Miner {
-            constructor(isPlayer) {
+            constructor(isPlayer, ownerIndex = 0) {
                 this.isPlayer = isPlayer;
+                this.ownerIndex = isPlayer ? (ownerIndex || 0) : 0;
                 this.baseX = isPlayer ? player.base.x : enemy.base.x;
                 this.baseY = isPlayer ? player.base.y : enemy.base.y;
                 const myTeam = units.filter(u => u.isPlayer === isPlayer && u instanceof Miner);
@@ -135,7 +136,7 @@
             }
 
             update() {
-                let cmd = this.isPlayer ? player.command : enemy.command;
+                let cmd = this.isPlayer ? unitOwnerState(this).command : enemy.command;
                 this.prevX = this.x;
                 this.baseX = this.isPlayer ? player.base.x : enemy.base.x;
                 this.baseY = this.isPlayer ? player.base.y : enemy.base.y;
@@ -417,7 +418,7 @@
                 const bagOY = isDeliver ? (this.bagOffsetY || 0) : 0;
                 drawMinerBackpack(ctx, this.x + (isFlipped ? -bagOX : bagOX), this.y + bagOY, isFlipped, this.bagGold || 0, isDeliver && this.bagHold);
 
-                const minerColor = this.isPlayer ? '#1a1a1a' : '#c0392b';
+                const minerColor = unitTeamColor(this);
                 const striking = isAtk && this.attackTimer > 0 && !moved;
                 const animFrame = this.state === 'mining' ? this.actionTimer : (striking ? this.attackTimer : 0);
                 drawStickman(ctx, this.x, this.y, minerColor, isDeliver ? 'none' : 'pickaxe',
@@ -464,7 +465,7 @@
             }
 
             update() {
-                let cmd = this.isPlayer ? player.command : enemy.command;
+                let cmd = this.isPlayer ? unitOwnerState(this).command : enemy.command;
                 let enemies = units.filter(u => u.isPlayer !== this.isPlayer && u.hp > 0 && !u.isInvulnerable);
                 let enemyBase = this.isPlayer ? enemy.base : player.base;
                 let myBase = this.isPlayer ? player.base : enemy.base;
@@ -643,12 +644,12 @@
                 } else if (this.isAttacking && this.target) {
                     isFlipped = (this.target.x < this.x);
                 } else {
-                    let cmd = this.isPlayer ? player.command : enemy.command;
+                    let cmd = this.isPlayer ? unitOwnerState(this).command : enemy.command;
                     if (cmd === CMD_RETREAT) isFlipped = this.isPlayer;
                     else if (cmd === CMD_ATTACK) isFlipped = !this.isPlayer;
                     else isFlipped = !this.isPlayer;
                 }
-                const clubColor = this.isPlayer ? '#1a1a1a' : '#c0392b';
+                const clubColor = unitTeamColor(this);
                 let clubAnim = 0;
                 if (this.isAttacking) {
                     clubAnim = this.attackTimer;
@@ -667,8 +668,9 @@
         }
 
         class Archer {
-            constructor(isPlayer) {
+            constructor(isPlayer, ownerIndex = 0) {
                 this.isPlayer = isPlayer;
+                this.ownerIndex = isPlayer ? (ownerIndex || 0) : 0;
                 this.baseX = isPlayer ? player.base.x : enemy.base.x;
                 this.baseY = isPlayer ? player.base.y : enemy.base.y;
 
@@ -697,7 +699,7 @@
             }
 
             update() {
-                let cmd = this.isPlayer ? player.command : enemy.command;
+                let cmd = this.isPlayer ? unitOwnerState(this).command : enemy.command;
                 let enemies = units.filter(u => u.isPlayer !== this.isPlayer && u.hp > 0 && !u.isInvulnerable);
                 let enemyBase = this.isPlayer ? enemy.base : player.base;
                 let myBase = this.isPlayer ? player.base : enemy.base;
@@ -835,7 +837,7 @@
                 } else if (Math.abs(dx) > 0.3) {
                     isFlipped = dx < 0;
                 }
-                const archerColor = this.isPlayer ? '#1a1a1a' : '#c0392b';
+                const archerColor = unitTeamColor(this);
                 drawStickman(ctx, this.x, this.y, archerColor, 'bow', 0, this._isActuallyWalking, isFlipped, this.drawAmount);
                 drawStuckArrows(ctx, this);
 
@@ -847,8 +849,9 @@
         }
 
         class BaseArcherUnit {
-            constructor(isPlayer, offsetX, offsetY, climbSpeed) {
+            constructor(isPlayer, offsetX, offsetY, climbSpeed, ownerIndex = 0) {
                 this.isPlayer = isPlayer;
+                this.ownerIndex = isPlayer ? (ownerIndex || 0) : 0;
                 const base = isPlayer ? player.base : enemy.base;
                 this.x = base.x + offsetX;
                 this.y = base.y + 100;
@@ -933,7 +936,7 @@
                         isFlipped = (target.x < this.x);
                     }
                 }
-                drawStickman(ctx, this.x, this.y, this.isPlayer ? 'black' : '#c0392b', currentWeapon, this.climbAnim, this.isWalking, isFlipped, this.state === 'active' ? this.drawAmount : 0);
+                drawStickman(ctx, this.x, this.y, unitTeamColor(this), currentWeapon, this.climbAnim, this.isWalking, isFlipped, this.state === 'active' ? this.drawAmount : 0);
             }
         }
 
