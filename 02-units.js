@@ -1,1017 +1,619 @@
-// ==================== SINIFLAR ====================
-        class Miner {
-            constructor(isPlayer, ownerIndex = 0) {
-                this.isPlayer = isPlayer;
-                this.ownerIndex = isPlayer ? (ownerIndex || 0) : 0;
-                this.baseX = isPlayer ? player.base.x : enemy.base.x;
-                this.baseY = isPlayer ? player.base.y : enemy.base.y;
-                const myTeam = units.filter(u => u.isPlayer === isPlayer && u instanceof Miner);
-                const index = myTeam.length % minerSpawnOffsets.length;
-                const offset = minerSpawnOffsets[index];
-                this.x = this.baseX + (isPlayer ? offset.dx : -offset.dx);
-                this.y = this.baseY + offset.dy;
-                this.hp = 100;
-                this.maxHp = 100;
-                this.state = 'assigning_slot';
-                this.targetSlot = null;
-                this.mineX = 0;
-                this.mineY = 0;
-                this.hits = 0;
-                this.actionTimer = 0;
-                this.prevX = this.x;
-                this.localOffset = { dx: 0, dy: 0 };
-                this.attackCooldown = 60;
-                this.attackTimer = 0;
-                this.range = 30;
-                this.damage = 8;
-                this.target = null;
-                this.isInvulnerable = false;
-                this.combatMode = false;
-                this.wanderTimer = 0;
-                this.wanderTargetX = this.x;
-                this.wanderTargetY = this.y;
-                this.isWandering = false;
-                this.miningSwing = 0;
-                this.miningPhase = 0;
-                this.bodyLean = 0;
-                this.armRaise = 0;
-                this.holdingRock = false;
-                this.bagGold = 0;
-                this.deliverTimer = 0;
-                this.bagHold = false;
-                this.bagOffsetX = 0;
-                this.bagOffsetY = 0;
-                this.stunTimer = 0;
-                this.slowTimer = 0;
-                this.stuckArrows = [];
-                this._isActuallyWalking = false;
+function setPlayerCommand(cmd) {
+            const oi = localOwnerIndex();
+            getOwnerState(oi).command = cmd;
+            // Solo veya host: player.command senkron (AI tehdit hesabı için host tarafı)
+            if (oi === 0) player.command = cmd;
+            Object.values(cmdBtns).forEach(b => b.classList.remove('active'));
+            if (cmdBtns[cmd]) cmdBtns[cmd].classList.add('active');
+        }
+
+        cmdBtns[CMD_RETREAT].onclick = () => {
+            if (isCoopGuestNow()) { sendRoomInput('retreat'); setPlayerCommand(CMD_RETREAT); return; }
+            setPlayerCommand(CMD_RETREAT);
+        };
+        cmdBtns[CMD_DEFEND].onclick = () => {
+            if (isCoopGuestNow()) { sendRoomInput('defend'); setPlayerCommand(CMD_DEFEND); return; }
+            setPlayerCommand(CMD_DEFEND);
+        };
+        cmdBtns[CMD_ATTACK].onclick = () => {
+            if (isCoopGuestNow()) { sendRoomInput('attack'); setPlayerCommand(CMD_ATTACK); return; }
+            setPlayerCommand(CMD_ATTACK);
+        };
+
+        // Spawn süreleri (frame) — birim tipine göre
+        const SPAWN_TIME = { miner: 15 * 60, club: 10 * 60, archer: 11 * 60 };
+        const UNIT_COST = { miner: 150, club: 125, archer: 140 };
+        const MAX_QUEUE = 8;
+
+        function countQueued(type) {
+            return (player.spawnQueue || []).filter(t => t === type).length;
+        }
+        function countPlayerUnits(type) {
+            if (type === 'miner') return units.filter(u => u.isPlayer && u instanceof Miner).length;
+            if (type === 'club') return units.filter(u => u.isPlayer && u instanceof Clubman).length;
+            if (type === 'archer') return units.filter(u => u.isPlayer && u instanceof Archer).length;
+            return 0;
+        }
+        function maxForType(type) {
+            if (type === 'miner') return MAX_MINERS_PER_TEAM;
+            if (type === 'club') return MAX_CLUBMEN_PER_TEAM;
+            if (type === 'archer') return MAX_ARCHERS_PER_TEAM;
+            return 0;
+        }
+
+        function countQueuedFor(ownerIndex, type) {
+            const st = getOwnerState(ownerIndex);
+            return (st.spawnQueue || []).filter(t => t === type).length;
+        }
+        function countPlayerUnitsFor(ownerIndex, type) {
+            return units.filter(u => u.isPlayer && (u.ownerIndex || 0) === ownerIndex && (
+                (type === 'miner' && u instanceof Miner) ||
+                (type === 'club' && u instanceof Clubman) ||
+                (type === 'archer' && u instanceof Archer)
+            )).length;
+        }
+
+        function queueUnit(type, ownerIndex) {
+            if (ownerIndex === undefined) ownerIndex = localOwnerIndex();
+            const st = getOwnerState(ownerIndex);
+            if (!st.spawnQueue) st.spawnQueue = [];
+            if (st.gold < UNIT_COST[type]) return false;
+            if (st.spawnQueue.length >= MAX_QUEUE) return false;
+            // Takım limiti: tüm oyuncu birimleri + kuyruk
+            const teamCount = countPlayerUnits(type) + countQueued(type) + countQueuedFor(1, type) - countQueuedFor(0, type) + countQueuedFor(0, type);
+            // basit: toplam canlı + her iki kuyruk
+            const live = countPlayerUnits(type);
+            const q0 = countQueuedFor(0, type);
+            const q1 = countQueuedFor(1, type);
+            if (live + q0 + q1 >= maxForType(type)) return false;
+
+            st.gold -= UNIT_COST[type];
+            st.spawnQueue.push(type);
+            if (st.spawnQueue.length === 1) {
+                st.spawnTimerMax = SPAWN_TIME[type];
+                st.spawnTimer = SPAWN_TIME[type];
             }
+            return true;
+        }
 
-            releaseSlot() {
-                if (this.targetSlot) {
-                    this.targetSlot.miners = this.targetSlot.miners.filter(m => m !== this);
-                    this.targetSlot = null;
-                }
+        function processSpawnQueueFor(ownerIndex) {
+            const st = getOwnerState(ownerIndex);
+            if (!st.spawnQueue) st.spawnQueue = [];
+            if (st.spawnQueue.length === 0) {
+                st.spawnTimer = 0;
+                st.spawnTimerMax = 0;
+                return;
             }
-
-            assignSlot() {
-                this.releaseSlot();
-                this.baseX = this.isPlayer ? player.base.x : enemy.base.x;
-                this.baseY = this.isPlayer ? player.base.y : enemy.base.y;
-
-                let mySlots = this.isPlayer ? playerMineSlots : enemyMineSlots;
-                let available = mySlots.find(slot => slot.miners.length < 2);
-
-                if (available) {
-                    this.targetSlot = available;
-                    available.miners.push(this);
-                    const offsets = [
-                        { dx: -32, dy: 4 },
-                        { dx: 32, dy: 4 },
-                        { dx: -32, dy: -12 },
-                        { dx: 32, dy: -12 }
-                    ];
-                    let usedOffsets = available.miners.slice(0, -1).map(m => m.localOffset);
-                    let freeOffset = offsets.find(o => !usedOffsets.some(u => u.dx === o.dx && u.dy === o.dy));
-                    if (!freeOffset) {
-                        freeOffset = offsets[available.miners.length % offsets.length];
-                    }
-                    this.localOffset = freeOffset;
-                    this.mineX = available.x + freeOffset.dx;
-                    this.mineY = available.y + freeOffset.dy;
-                    this.state = 'going_mine';
-                    this.isWandering = false;
-                    this.combatMode = false;
-                } else {
-                    this.state = 'attacking';
-                    this.combatMode = true;
-                    this.damage = 4;
-                    this.isWandering = false;
-                    this.findTarget();
-                }
+            if (st.spawnTimer > 0) {
+                st.spawnTimer--;
+                return;
             }
+            const type = st.spawnQueue.shift();
+            if (type === 'miner') units.push(new Miner(true, ownerIndex));
+            else if (type === 'club') units.push(new Clubman(true, ownerIndex));
+            else if (type === 'archer') units.push(new Archer(true, ownerIndex));
 
-            findTarget() {
-                let enemies = units.filter(u => u.isPlayer !== this.isPlayer && u.hp > 0 && !u.isInvulnerable);
-                if (enemies.length > 0) {
-                    let closest = null;
-                    let minDist = Infinity;
-                    for (let e of enemies) {
-                        let dist = Math.hypot(e.x - this.x, e.y - this.y);
-                        if (dist < minDist) {
-                            minDist = dist;
-                            closest = e;
-                        }
-                    }
-                    this.target = closest;
-                } else {
-                    let enemyBase = this.isPlayer ? enemy.base : player.base;
-                    this.target = enemyBase;
-                }
-            }
-
-            updateWander() {
-                this.wanderTimer++;
-                if (this.wanderTimer > 180 + Math.random() * 120) {
-                    this.wanderTimer = 0;
-                    let range = 80;
-                    this.wanderTargetX = this.baseX + (this.isPlayer ? 1 : -1) * (Math.random() * range - range/2);
-                    this.wanderTargetY = this.baseY + (Math.random() * range - range/2);
-                    this.isWandering = true;
-                }
-
-                if (this.isWandering) {
-                    let dx = this.wanderTargetX - this.x;
-                    let dy = this.wanderTargetY - this.y;
-                    let dist = Math.hypot(dx, dy);
-                    if (dist > 5) {
-                        let angle = Math.atan2(dy, dx);
-                        this.x += Math.cos(angle) * 0.8 * SPEED_MULT;
-                        this.y += Math.sin(angle) * 0.8 * SPEED_MULT;
-                    } else {
-                        this.isWandering = false;
-                        this.wanderTimer = 0;
-                    }
-                }
-            }
-
-            update() {
-                let cmd = this.isPlayer ? unitOwnerState(this).command : enemy.command;
-                this.prevX = this.x;
-                this.baseX = this.isPlayer ? player.base.x : enemy.base.x;
-                this.baseY = this.isPlayer ? player.base.y : enemy.base.y;
-
-                if (this.stunTimer > 0) {
-                    this.stunTimer--;
-                    this._isActuallyWalking = false;
-                    return;
-                }
-                if (this.slowTimer > 0) this.slowTimer--;
-                const slowMul = this.slowTimer > 0 ? 0.4 : 1;
-
-                if (cmd === CMD_RETREAT) {
-                    this.releaseSlot();
-                    this.isWandering = false;
-                    let targetX = this.isPlayer ? -150 : worldWidth + 150;
-                    let targetY = this.baseY;
-                    if (Math.hypot(this.x - targetX, this.y - targetY) > 3) {
-                        let angle = Math.atan2(targetY - this.y, targetX - this.x);
-                        this.x += Math.cos(angle) * 1.5 * SPEED_MULT * slowMul;
-                        this.y += Math.sin(angle) * 1.2 * SPEED_MULT * slowMul;
-                        this.state = 'retreating';
-                        this._isActuallyWalking = true;
-                    } else {
-                        this.state = 'outside';
-                        this._isActuallyWalking = false;
-                    }
-                    return;
-                }
-
-                if (this.state === 'outside') {
-                    this.assignSlot();
-                }
-
-                if (this.state === 'retreating' || this.state === 'idle' || this.state === 'assigning_slot') {
-                    this.assignSlot();
-                }
-
-                if (this.state === 'attacking') {
-                    this.damage = 4;
-                if (!this.target || this.target.hp <= 0 || this.target.isInvulnerable) {
-                    this.findTarget();
-                }
-                    const nearbyThreat = units.some(u =>
-                        u.isPlayer !== this.isPlayer && u.hp > 0 && !u.isInvulnerable &&
-                        Math.hypot(u.x - this.x, u.y - this.y) < 180
-                    );
-                    if (!nearbyThreat && !this.combatMode && (!this.target || this.target.hp <= 0 || this.target.maxHp > 200)) {
-                        this.assignSlot();
-                    } else if (this.target) {
-                        let dist = Math.hypot(this.target.x - this.x, this.target.y - this.y);
-                        if (dist <= this.range) {
-                            this.attackTimer++;
-                            if (this.attackTimer === 45) {
-                                this.target.hp -= this.damage;
-                                if (this.target.stunTimer !== undefined) this.target.stunTimer = 40;
-                                addFloatingText(this.target.x, this.target.y, '-' + this.damage, '#e74c3c');
-                            }
-                            if (this.attackTimer >= this.attackCooldown) {
-                                this.attackTimer = 0;
-                            }
-                        } else {
-                            let angle = Math.atan2(this.target.y - this.y, this.target.x - this.x);
-                            this.x += Math.cos(angle) * 1.3 * SPEED_MULT * slowMul;
-                            this.y += Math.sin(angle) * 1.1 * SPEED_MULT * slowMul;
-                            this.attackTimer = 0;
-                        }
-                    } else if (this.combatMode) {
-                        this.assignSlot();
-                    }
-                    let grassTop = canvas.height - GROUND_HEIGHT;
-                    let minY = grassTop + 20;
-                    let maxY = canvas.height - 20;
-                    if (this.y < minY) this.y = minY;
-                    if (this.y > maxY) this.y = maxY;
-                    return;
-                }
-
-                if (this.state === 'going_mine') {
-                    let dist = Math.hypot(this.mineX - this.x, this.mineY - this.y);
-                    if (dist > 4) {
-                        let angle = Math.atan2(this.mineY - this.y, this.mineX - this.x);
-                        this.x += Math.cos(angle) * 1.5 * SPEED_MULT;
-                        this.y += Math.sin(angle) * 1.5 * SPEED_MULT;
-                    } else {
-                        this.x = this.mineX;
-                        this.y = this.mineY;
-                        this.state = 'mining';
-                        this.hits = 0;
-                        this.actionTimer = 0;
-                        this.miningSwing = 0;
-                        this.miningPhase = 0;
-                        this.bodyLean = 0.1;
-                        this.armRaise = 0;
-                        this.holdingRock = false;
-                        this.bagGold = 0;
-                    }
-                } else if (this.state === 'mining') {
-                    const attacker = units.find(u =>
-                        u.isPlayer !== this.isPlayer && u.hp > 0 && !u.isInvulnerable &&
-                        Math.hypot(u.x - this.x, u.y - this.y) < 90
-                    );
-                    if (attacker) {
-                        this.releaseSlot();
-                        this.state = 'attacking';
-                        this.combatMode = false;
-                        this.damage = 4;
-                        this.target = attacker;
-                        this.attackTimer = 0;
-                        this.bodyLean = 0;
-                        this.armRaise = 0;
-                    } else {
-                    this.actionTimer++;
-                    const CYCLE = 70;
-                    const cycle = this.actionTimer % CYCLE;
-                    this.holdingRock = false;
-                    const easeInOut = (t) => t * t * (3 - 2 * t);
-
-                    if (cycle < 28) {
-                        const t = easeInOut(cycle / 28);
-                        this.miningPhase = 0;
-                        this.bodyLean = 0.28 + t * 0.08;
-                        this.armRaise = 0.3 + t * 0.7;
-                        this.miningSwing = -0.85 + t * 0.25;
-                    } else if (cycle < 48) {
-                        const t = easeInOut((cycle - 28) / 20);
-                        this.miningPhase = 1;
-                        this.bodyLean = 0.36 + t * 0.12;
-                        this.armRaise = 1 - t;
-                        this.miningSwing = -0.6 + t * 2.0;
-                        if (cycle === 40) {
-                            const side = (this.localOffset && this.localOffset.dx > 0) ? -14 : 14;
-                            spawnMiningSparks(this.x + side, this.y - 8);
-                        }
-                    } else {
-                        const t = easeInOut((cycle - 48) / 22);
-                        this.miningPhase = 2;
-                        this.bodyLean = 0.48 - t * 0.18;
-                        this.armRaise = 0.15 + t * 0.2;
-                        this.miningSwing = 1.4 - t * 0.5;
-                    }
-
-                    if (cycle === 40) {
-                        this.bagGold = Math.min(6, this.bagGold + 1);
-                        this.hits++;
-                        if (this.isPlayer) {
-                            addFloatingText(this.x + 10, this.y - 40, '+1', '#f1c40f');
-                        }
-                    }
-                    if (this.hits >= 6 && cycle >= 55) {
-                        const t = easeInOut((cycle - 55) / 15);
-                        this.bodyLean = 0.3 * (1 - t);
-                        this.armRaise = 0.3 * (1 - t);
-                        this.miningSwing = 0.5 * (1 - t);
-                        if (cycle >= 69) {
-                            this.releaseSlot();
-                            this.state = 'going_base';
-                            this.miningSwing = 0;
-                            this.miningPhase = 0;
-                            this.bodyLean = 0;
-                            this.armRaise = 0;
-                            this.holdingRock = false;
-                        }
-                    }
-                    }
-                } else if (this.state === 'going_base') {
-                    let dist = Math.hypot(this.baseX - this.x, this.baseY - this.y);
-                    if (dist > 35) {
-                        let angle = Math.atan2(this.baseY - this.y, this.baseX - this.x);
-                        this.x += Math.cos(angle) * 1.5 * SPEED_MULT;
-                        this.y += Math.sin(angle) * 1.5 * SPEED_MULT;
-                    } else {
-                        this.state = 'delivering';
-                        this.deliverTimer = 0;
-                        this.bagHold = false;
-                        this.bagOffsetX = 0;
-                        this.bagOffsetY = 0;
-                        this.bodyLean = 0;
-                        this.armRaise = 0;
-                    }
-                } else if (this.state === 'delivering') {
-                    this.deliverTimer++;
-                    const t = this.deliverTimer;
-                    if (t <= 45) {
-                        const p = t / 45;
-                        this.bagHold = true;
-                        this.bagOffsetX = -18 + p * 28;
-                        this.bagOffsetY = -18 + p * 12;
-                        this.bodyLean = p * 0.25;
-                        this.armRaise = p * 0.6;
-                    } else if (t <= 160) {
-                        this.bagHold = true;
-                        this.bagOffsetX = 10;
-                        this.bagOffsetY = -6;
-                        this.bodyLean = 0.25;
-                        this.armRaise = 0.5;
-                        if ((t - 46) % 18 === 0 && this.bagGold > 0) {
-                            this.bagGold--;
-                            const gx = this.x + (this.isPlayer ? 20 : -20);
-                            const gy = this.y - 30;
-                            spawnMiningSparks(gx, gy);
-                            if (this.isPlayer) {
-                                player.gold += 13;
-                                addFloatingText(gx, gy - 20, '+13', '#f1c40f');
-                            } else {
-                                enemy.gold += 13;
-                            }
-                        }
-                    } else if (t <= 200) {
-                        const p = (t - 160) / 40;
-                        this.bagHold = true;
-                        this.bagOffsetX = 10 - p * 28;
-                        this.bagOffsetY = -6 - p * 12;
-                        this.bodyLean = 0.25 * (1 - p);
-                        this.armRaise = 0.5 * (1 - p);
-                        this.bagGold = 0;
-                    } else {
-                        if (this.bagGold > 0) {
-                            const leftover = this.bagGold * 13;
-                            if (this.isPlayer) {
-                                player.gold += leftover;
-                                addFloatingText(this.x, this.y - 50, '+' + leftover, '#f1c40f');
-                            } else {
-                                enemy.gold += leftover;
-                            }
-                            this.bagGold = 0;
-                        }
-                        this.bagHold = false;
-                        this.bagOffsetX = 0;
-                        this.bagOffsetY = 0;
-                        this.deliverTimer = 0;
-                        this.bodyLean = 0;
-                        this.armRaise = 0;
-                        this.assignSlot();
-                    }
-                } else {
-                    this.updateWander();
-                }
-
-                let grassTop = canvas.height - GROUND_HEIGHT;
-                let minY = grassTop + 20;
-                let maxY = canvas.height - 20;
-                if (this.y < minY) this.y = minY;
-                if (this.y > maxY) this.y = maxY;
-            }
-
-            draw(ctx) {
-                if (this.state === 'outside') return;
-                let isFlipped = false;
-                if (this.state === 'mining' || this.state === 'going_mine') {
-                    if (this.localOffset && this.localOffset.dx !== 0) {
-                        isFlipped = this.localOffset.dx > 0;
-                    } else if (this.targetSlot) {
-                        isFlipped = this.x > this.targetSlot.x;
-                    } else {
-                        isFlipped = false;
-                    }
-                } else {
-                    const mdx = this.x - this.prevX;
-                    if (Math.abs(mdx) > 0.3) {
-                        isFlipped = mdx < 0;
-                    } else if (this.state === 'attacking' && this.target) {
-                        isFlipped = (this.target.x < this.x);
-                    } else if (this.state === 'going_base' || this.state === 'delivering') {
-                        isFlipped = !this.isPlayer;
-                    } else {
-                        isFlipped = !this.isPlayer;
-                    }
-                }
-
-                const isDeliver = this.state === 'delivering';
-                const isAtk = this.state === 'attacking';
-                const moved = Math.hypot(this.x - this.prevX, 0) > 0.35;
-                let isWalking = moved && this.state !== 'mining' && !isDeliver;
-                let swingAngle = this.state === 'mining' ? this.miningSwing : 0;
-                let lean = (this.state === 'mining' || isDeliver) ? this.bodyLean : 0;
-                let raise = (this.state === 'mining' || isDeliver) ? this.armRaise : 0;
-                const bagOX = isDeliver ? (this.bagOffsetX || 0) : 0;
-                const bagOY = isDeliver ? (this.bagOffsetY || 0) : 0;
-                drawMinerBackpack(ctx, this.x + (isFlipped ? -bagOX : bagOX), this.y + bagOY, isFlipped, this.bagGold || 0, isDeliver && this.bagHold);
-
-                const minerColor = unitTeamColor(this);
-                const striking = isAtk && this.attackTimer > 0 && !moved;
-                const animFrame = this.state === 'mining' ? this.actionTimer : (striking ? this.attackTimer : 0);
-                drawStickman(ctx, this.x, this.y, minerColor, isDeliver ? 'none' : 'pickaxe',
-                             animFrame, isWalking, isFlipped, swingAngle,
-                             lean, raise, false, false, this.isPlayer);
-                drawStuckArrows(ctx, this);
-
-                ctx.fillStyle = 'red';
-                ctx.fillRect(this.x - 15, this.y - 65, 30, 4);
-                ctx.fillStyle = '#2ecc71';
-                ctx.fillRect(this.x - 15, this.y - 65, 30 * (this.hp / this.maxHp), 4);
+            if (st.spawnQueue.length > 0) {
+                const next = st.spawnQueue[0];
+                st.spawnTimerMax = SPAWN_TIME[next];
+                st.spawnTimer = SPAWN_TIME[next];
+            } else {
+                st.spawnTimer = 0;
+                st.spawnTimerMax = 0;
             }
         }
 
-        class Clubman {
-            constructor(isPlayer) {
-                this.isPlayer = isPlayer;
-                this.baseX = isPlayer ? player.base.x : enemy.base.x;
-                this.baseY = isPlayer ? player.base.y : enemy.base.y;
+        function processSpawnQueue() {
+            processSpawnQueueFor(0);
+            if (isCoopActive()) processSpawnQueueFor(1);
+        }
 
-                this.x = this.baseX + (isPlayer ? -60 : 60);
-                this.y = this.baseY + (Math.random() * 40 - 20);
+        btnMiner.onclick = () => {
+            if (isCoopGuestNow()) { sendRoomInput('buyMiner'); return; }
+            queueUnit('miner', 0);
+        };
+        btnClub.onclick = () => {
+            if (isCoopGuestNow()) { sendRoomInput('buyClub'); return; }
+            queueUnit('club', 0);
+        };
+        btnArcher.onclick = () => {
+            if (isCoopGuestNow()) { sendRoomInput('buyArcher'); return; }
+            queueUnit('archer', 0);
+        };
 
-                this.formationIndex = isPlayer ? player.clubFormationCounter++ : enemy.clubFormationCounter++;
+        function resetLevel() {
+            units.forEach(u => { if (u instanceof Miner) u.releaseSlot(); });
+            units = [];
+            projectiles = [];
+            floatingTexts = [];
+            retreatArchers = [];
+            miningSparks = [];
 
-                this.hp = 100;
-                this.maxHp = 100;
-                this.damage = 10;
-                this.attackCooldown = 100;
-                this.attackTimer = 0;
-                this.range = 52;
-                this.isAttacking = false;
-                this.didHitThisSwing = false;
-                this.attackRecover = 0;
-                this.target = null;
-                this.prevX = this.x;
-                this.isInvulnerable = false;
-                this.targetX = null;
-                this.targetY = null;
-                this._isActuallyWalking = false;
-                this.stunTimer = 0;
-                this.slowTimer = 0;
-                this.stuckArrows = [];
+            player.gold = 300;
+            player.base.hp = 1000;
+            player.base.maxHp = 1000;
+            setPlayerCommand(CMD_DEFEND);
+            player.minerCooldown = 0;
+            player.clubCooldown = 0;
+            player.archerCooldown = 0;
+            player.spawnQueue = [];
+            player.spawnTimer = 0;
+            player.spawnTimerMax = 0;
+            player2.gold = 300;
+            player2.command = CMD_DEFEND;
+            player2.spawnQueue = [];
+            player2.spawnTimer = 0;
+            player2.spawnTimerMax = 0;
+            player2.clubFormationCounter = 0;
+            player2.archerFormationCounter = 0;
+            player.clubFormationCounter = 0;
+            player.archerFormationCounter = 0;
+            player.lastCommand = CMD_DEFEND;
+            player.retreatGraceTimer = 0;
+
+            enemy.gold = 300;
+            enemy.command = CMD_DEFEND;
+            enemy.aiTimer = 0;
+            enemy.aiState = 'defend';
+            enemy.lastCommand = CMD_DEFEND;
+            enemy.retreatGraceTimer = 0;
+            enemy.retreatTimer = 0;
+            enemy.regroupTimer = 0;
+            enemy.attackLossCount = 0;
+            enemy.lastAttackUnits = 0;
+            enemy.clubFormationCounter = 0;
+            enemy.archerFormationCounter = 0;
+            enemy.minerCooldown = 0;
+            enemy.clubCooldown = 0;
+            enemy.archerCooldown = 0;
+            enemy.retreatGoldSaved = 0;
+            enemy.recoveryUnitsPurchased = 0;
+            enemy.retreatCooldown = 0;
+
+            if (typeof initMines === 'function') initMines();
+
+            if (level === 1) enemy.base.maxHp = 280;
+            else if (level === 2) enemy.base.maxHp = 900;
+            else if (level === 3) enemy.base.maxHp = 1800;
+
+            enemy.base.hp = enemy.base.maxHp;
+            frames = 0;
+            cameraX = 0;
+        }
+
+        function updateAI() {
+            enemy.aiTimer++;
+            const diff = getAiDifficulty();
+            const passiveGoldInterval = enemy.command === CMD_RETREAT ? 150 : 300;
+
+            if (enemy.retreatCooldown > 0) enemy.retreatCooldown--;
+
+            if (enemy.aiTimer % passiveGoldInterval === 0) {
+                const goldAmount = Math.floor(15 * diff.passiveGoldMult);
+                if (goldAmount > 0) {
+                    enemy.gold += Math.floor(goldAmount * coopEnemyGoldMult());
+                    if (enemy.aiState === 'retreat') enemy.retreatGoldSaved += goldAmount;
+                }
             }
 
-            update() {
-                let cmd = this.isPlayer ? unitOwnerState(this).command : enemy.command;
-                let enemies = units.filter(u => u.isPlayer !== this.isPlayer && u.hp > 0 && !u.isInvulnerable);
-                let enemyBase = this.isPlayer ? enemy.base : player.base;
-                let myBase = this.isPlayer ? player.base : enemy.base;
-                this.prevX = this.x;
-                this.baseX = this.isPlayer ? player.base.x : enemy.base.x;
-                this.baseY = this.isPlayer ? player.base.y : enemy.base.y;
-
-                if (this.stunTimer > 0) {
-                    this.stunTimer--;
-                    this.isAttacking = false;
-                    this._isActuallyWalking = false;
-                    return;
+            const aiMiners = units.filter(u => !u.isPlayer && u instanceof Miner);
+            const aiFighters = units.filter(u => !u.isPlayer && u instanceof Clubman && u.hp > 0);
+            const aiArchers = units.filter(u => !u.isPlayer && u instanceof Archer && u.hp > 0);
+            const aiCombatUnits = aiFighters.concat(aiArchers);
+            const visiblePlayerFighters = units.filter(u => {
+                if (!(u.isPlayer && (u instanceof Clubman || u instanceof Archer) && u.hp > 0)) return false;
+                if (Math.abs(u.x - enemy.base.x) < AI_VISION_RANGE) return true;
+                for (const af of aiCombatUnits) {
+                    if (Math.hypot(u.x - af.x, u.y - af.y) < 350) return true;
                 }
-                if (this.slowTimer > 0) this.slowTimer--;
-                const slowMul = this.slowTimer > 0 ? 0.4 : 1;
+                return false;
+            });
+            const knownPlayerCount = visiblePlayerFighters.length;
 
-                let grassTop = canvas.height - GROUND_HEIGHT;
-                let minY = grassTop + 15;
-                let maxY = canvas.height - 20;
-                if (this.y < minY) this.y = minY;
-                if (this.y > maxY) this.y = maxY;
+            if (enemy.minerCooldown > 0) enemy.minerCooldown--;
+            if (enemy.clubCooldown > 0) enemy.clubCooldown--;
+            if (enemy.archerCooldown > 0) enemy.archerCooldown--;
 
-                let targetFrontlineX = this.x;
-                let targetFrontlineY = this.baseY;
-                if (cmd === CMD_RETREAT) {
-                    targetFrontlineX = this.isPlayer ? -150 : worldWidth + 150;
-                    targetFrontlineY = this.baseY;
-                } else if (cmd === CMD_DEFEND) {
-                    if (this.targetX !== null && this.targetY !== null) {
-                        targetFrontlineX = this.targetX;
-                        targetFrontlineY = this.targetY;
-                    } else {
-                        targetFrontlineX = myBase.x + (this.isPlayer ? 300 : -300);
-                        targetFrontlineY = myBase.y;
-                    }
-                } else if (cmd === CMD_ATTACK) {
-                    targetFrontlineX = enemyBase.x + (this.isPlayer ? -100 : 100);
-                    targetFrontlineY = enemyBase.y;
+            if (enemy.minerCooldown <= 0 && enemy.gold >= 150 && aiMiners.length < Math.min(diff.maxMiners, MAX_MINERS_PER_TEAM)) {
+                if (Math.random() >= diff.mistakeChance) {
+                    enemy.gold -= 150;
+                    units.push(new Miner(false));
                 }
+                enemy.minerCooldown = player.minerMaxCooldown * diff.cooldownMult;
+            }
 
-                const visibleEnemies = enemies.filter(e =>
-                    cmd === CMD_ATTACK || (cmd === CMD_DEFEND && Math.abs(e.x - myBase.x) < 550)
+            if (enemy.clubCooldown <= 0 && enemy.gold >= 125 && aiFighters.length < Math.min(diff.maxClubmen, MAX_CLUBMEN_PER_TEAM)) {
+                if (Math.random() >= diff.mistakeChance) {
+                    enemy.gold -= 125;
+                    units.push(new Clubman(false));
+                    if (enemy.aiState === 'retreat') enemy.recoveryUnitsPurchased++;
+                }
+                enemy.clubCooldown = player.clubMaxCooldown * diff.cooldownMult;
+            }
+
+            if (enemy.archerCooldown <= 0 && enemy.gold >= 140 && aiArchers.length < Math.min(diff.maxArchers || 0, MAX_ARCHERS_PER_TEAM)) {
+                if (Math.random() >= diff.mistakeChance) {
+                    enemy.gold -= 140;
+                    units.push(new Archer(false));
+                    if (enemy.aiState === 'retreat') enemy.recoveryUnitsPurchased++;
+                }
+                enemy.archerCooldown = 11 * 60 * diff.cooldownMult;
+            }
+
+            const playerThreatVisible = knownPlayerCount > 0;
+            const defenseTarget = 1;
+            const armyGoal = Math.max(diff.attackThreshold + 2, knownPlayerCount + 2, 5);
+
+            if (enemy.aiState === 'attack') {
+                if (aiCombatUnits.length < enemy.lastAttackUnits) {
+                    enemy.attackLossCount += enemy.lastAttackUnits - aiCombatUnits.length;
+                }
+                enemy.lastAttackUnits = aiCombatUnits.length;
+            }
+
+            let newState = 'defend';
+            let newCommand = CMD_DEFEND;
+
+            if (enemy.aiState === 'retreat') {
+                enemy.retreatTimer = Math.max(0, enemy.retreatTimer - 1);
+                const recovered = aiCombatUnits.length >= defenseTarget && enemy.retreatGoldSaved >= 30;
+                if (enemy.retreatTimer === 0 && recovered) {
+                    newState = 'defend';
+                    newCommand = CMD_DEFEND;
+                    enemy.attackLossCount = 0;
+                    enemy.lastAttackUnits = aiCombatUnits.length;
+                    enemy.retreatCooldown = 300;
+                } else {
+                    newState = 'retreat';
+                    newCommand = CMD_RETREAT;
+                }
+            } else {
+                const canRetreat = enemy.retreatCooldown <= 0;
+                const weakCastle = enemy.base.hp < enemy.base.maxHp * diff.retreatHpThreshold;
+                const tookHeavyLosses = enemy.attackLossCount >= 4;
+                const shouldRetreat = canRetreat && (
+                    (aiCombatUnits.length === 0 && playerThreatVisible) || weakCastle || tookHeavyLosses
                 );
-                const hasValidTarget = this.target && this.target !== enemyBase &&
-                    this.target.hp > 0 && visibleEnemies.includes(this.target);
 
-                if (!hasValidTarget) this.target = null;
-
-                let bestScore = Infinity;
-                if (!this.target) {
-                    for (let e of visibleEnemies) {
-                        let dist = Math.hypot(e.x - this.x, e.y - this.y);
-                        let currentAttackers = units.filter(u => u.isPlayer === this.isPlayer && u instanceof Clubman && u.target === e).length;
-                        let score = dist + (currentAttackers * 120);
-                        if (score < bestScore) {
-                            bestScore = score;
-                            this.target = e;
-                        }
-                    }
-                }
-
-                let distToTarget = this.target ? Math.hypot(this.target.x - this.x, this.target.y - this.y) : Infinity;
-                if (cmd === CMD_ATTACK && !this.target) {
-                    this.target = enemyBase;
-                    distToTarget = Math.hypot(enemyBase.x - this.x, enemyBase.y - this.y);
-                } else if (cmd !== CMD_ATTACK && this.target === enemyBase) {
-                    this.target = null;
-                    distToTarget = Infinity;
-                }
-
-                this.isAttacking = false;
-                let actualMoved = false;
-                if (cmd === CMD_RETREAT) {
-                    if (Math.hypot(this.x - targetFrontlineX, this.y - targetFrontlineY) > 5) {
-                        let angle = Math.atan2(targetFrontlineY - this.y, targetFrontlineX - this.x);
-                        this.x += Math.cos(angle) * 2.0 * SPEED_MULT * slowMul;
-                        this.y += Math.sin(angle) * 1.5 * SPEED_MULT * slowMul;
-                        actualMoved = true;
-                    } else {
-                        this.x = targetFrontlineX;
-                        this.y = targetFrontlineY;
-                    }
-                    this.attackTimer = 0;
+                if (shouldRetreat) {
+                    newState = 'retreat';
+                    newCommand = CMD_RETREAT;
+                    enemy.retreatTimer = 300;
+                    enemy.retreatGoldSaved = 0;
+                    enemy.recoveryUnitsPurchased = 0;
                 } else {
-                    if (this.target && distToTarget <= this.range) {
-                        const foe = this.target;
-                        const mutual = foe instanceof Clubman && foe.target === this &&
-                            Math.hypot(foe.x - this.x, foe.y - this.y) <= (foe.range || this.range) + 8;
+                    const castleCritical = enemy.base.hp < enemy.base.maxHp * 0.35;
+                    const hasAdvantage = aiCombatUnits.length >= knownPlayerCount + 1;
+                    const combatCap = Math.min(diff.maxClubmen, MAX_CLUBMEN_PER_TEAM) + Math.min(diff.maxArchers || 0, MAX_ARCHERS_PER_TEAM);
+                    const canOutproduce = aiCombatUnits.length < combatCap;
 
-                        if (mutual) {
-                            if (this.combatTurn === undefined && foe.combatTurn === undefined) {
-                                const iGoFirst = (this.isPlayer !== foe.isPlayer)
-                                    ? this.isPlayer
-                                    : ((this.formationIndex || 0) <= (foe.formationIndex || 0));
-                                this.combatTurn = iGoFirst;
-                                foe.combatTurn = !iGoFirst;
-                            }
-                            if (!this.combatTurn) {
-                                this.isAttacking = false;
-                                this.attackTimer = 0;
-                                this.didHitThisSwing = false;
+                    if (castleCritical && !hasAdvantage) {
+                        newState = 'defend';
+                        newCommand = CMD_DEFEND;
+                    } else {
+                        const attackCommitFrames = 600;
+                        const inAttackCommit = enemy.aiState === 'attack'
+                            && enemy.aiTimer - (enemy.attackStartTimer || 0) < attackCommitFrames
+                            && aiCombatUnits.length >= 1 && !tookHeavyLosses && !castleCritical;
+
+                        if (inAttackCommit) {
+                            newState = 'attack';
+                            newCommand = CMD_ATTACK;
+                        } else if (playerThreatVisible && knownPlayerCount > 0) {
+                            if (aiCombatUnits.length >= knownPlayerCount + 1 || aiCombatUnits.length >= armyGoal) {
+                                newState = 'attack';
+                                newCommand = CMD_ATTACK;
                             } else {
-                                this.isAttacking = true;
-                                this.attackTimer++;
-                                if (this.attackTimer === 50 && !this.didHitThisSwing) {
-                                    foe.hp -= this.damage;
-                                    if (foe.stunTimer !== undefined) foe.stunTimer = 40;
-                                    addFloatingText(foe.x, (foe.y || 320), '-' + this.damage, this.isPlayer ? '#e74c3c' : '#c0392b');
-                                    this.didHitThisSwing = true;
-                                }
-                                if (this.attackTimer >= this.attackCooldown) {
-                                    this.attackTimer = 0;
-                                    this.didHitThisSwing = false;
-                                    this.isAttacking = false;
-                                    this.attackRecover = 18;
-                                    this.combatTurn = false;
-                                    foe.combatTurn = true;
-                                    foe.attackTimer = 0;
-                                    foe.isAttacking = false;
-                                    foe.didHitThisSwing = false;
-                                }
+                                newState = 'defend';
+                                newCommand = CMD_DEFEND;
                             }
                         } else {
-                            this.combatTurn = undefined;
-                            this.isAttacking = true;
-                            this.attackTimer++;
-                            if (this.attackTimer === 50 && !this.didHitThisSwing) {
-                                foe.hp -= this.damage;
-                                if (foe.stunTimer !== undefined) foe.stunTimer = 40;
-                                addFloatingText(foe.x, (foe.y || 320), '-' + this.damage, this.isPlayer ? '#e74c3c' : '#c0392b');
-                                this.didHitThisSwing = true;
-                            }
-                            if (this.attackTimer >= this.attackCooldown) {
-                                this.attackTimer = 0;
-                                this.didHitThisSwing = false;
-                                this.isAttacking = false;
-                                this.attackRecover = 18;
+                            if (aiCombatUnits.length >= armyGoal) {
+                                newState = 'attack';
+                                newCommand = CMD_ATTACK;
+                            } else {
+                                newState = 'defend';
+                                newCommand = CMD_DEFEND;
                             }
                         }
-                    } else if (this.target) {
-                        this.combatTurn = undefined;
-                        let speedX = (cmd === CMD_ATTACK) ? 2.2 : 1.8;
-                        let speedY = (cmd === CMD_ATTACK) ? 1.6 : 1.3;
-                        let angle = Math.atan2(this.target.y - this.y, this.target.x - this.x);
-                        this.x += Math.cos(angle) * speedX * SPEED_MULT * slowMul;
-                        this.y += Math.sin(angle) * speedY * SPEED_MULT * slowMul;
-                        this.attackTimer = 0;
-                        actualMoved = true;
-                    } else {
-                        this.combatTurn = undefined;
-                        let distToFrontline = Math.hypot(this.x - targetFrontlineX, this.y - targetFrontlineY);
-                        if (distToFrontline > 10) {
-                            let speedX = (cmd === CMD_ATTACK) ? 2.2 : 1.7;
-                            let speedY = (cmd === CMD_ATTACK) ? 1.6 : 1.2;
-                            let angle = Math.atan2(targetFrontlineY - this.y, targetFrontlineX - this.x);
-                            this.x += Math.cos(angle) * speedX * SPEED_MULT * slowMul;
-                            this.y += Math.sin(angle) * speedY * SPEED_MULT * slowMul;
-                            actualMoved = true;
-                        } else if (cmd === CMD_DEFEND) {
-                            this.x = targetFrontlineX;
-                            this.y = targetFrontlineY;
+
+                        if (newState === 'attack' && enemy.aiState !== 'attack') {
+                            enemy.attackLossCount = 0;
+                            enemy.lastAttackUnits = aiCombatUnits.length;
+                            enemy.attackStartTimer = enemy.aiTimer;
                         }
-                        this.attackTimer = 0;
+                    }
+                }
+            }
+
+            enemy.aiState = newState;
+            enemy.command = newCommand;
+        }
+
+        function updateArchers() {
+            // Oyuncu 1 / 2: her biri geri çekilince kendi 1 okçusu
+            const ensurePlayerArcher = (ownerIndex, offsetX) => {
+                const st = getOwnerState(ownerIndex);
+                const retreating = st.command === CMD_RETREAT;
+                const has = retreatArchers.some(a => a.isPlayer && (a.ownerIndex || 0) === ownerIndex);
+                if (retreating && !has) {
+                    retreatArchers.push(new BaseArcherUnit(true, offsetX, ownerIndex === 1 ? 12 : -12, 1.2, ownerIndex));
+                }
+                if (!retreating) {
+                    retreatArchers = retreatArchers.filter(a => !(a.isPlayer && (a.ownerIndex || 0) === ownerIndex));
+                }
+            };
+            ensurePlayerArcher(0, -28);
+            if (isCoopActive()) ensurePlayerArcher(1, 28);
+
+            // Düşman: 2 okçu
+            {
+                const isRetreating = enemy.command === CMD_RETREAT;
+                const enemyArchers = retreatArchers.filter(a => !a.isPlayer);
+                if (isRetreating && enemyArchers.length === 0) {
+                    retreatArchers.push(
+                        new BaseArcherUnit(false, -25, -15, 1.2, 0),
+                        new BaseArcherUnit(false, 25, 15, 1.2, 0)
+                    );
+                }
+                if (!isRetreating) {
+                    retreatArchers = retreatArchers.filter(a => a.isPlayer);
+                }
+            }
+            retreatArchers.forEach(archer => archer.update());
+        }
+
+        function handleFormationAndCollisions() {
+            ['player', 'enemy'].forEach(team => {
+                let isPlayer = (team === 'player');
+                let fighters = units.filter(u => u.isPlayer === isPlayer && u instanceof Clubman && u.hp > 0);
+
+                fighters.sort((a, b) => a.formationIndex - b.formationIndex);
+
+                fighters.forEach((u, index) => {
+                    let cmd = u.isPlayer ? unitOwnerState(u).command : enemy.command;
+                    if (cmd === CMD_DEFEND) {
+                        let row = index % 5;
+                        let col = Math.floor(index / 5);
+                        let baseX = isPlayer ? player.base.x + 320 : enemy.base.x - 320;
+                        let direction = isPlayer ? 1 : -1;
+                        u.targetX = baseX + (col * 70 * direction);
+                        u.targetY = (canvas.height - GROUND_HEIGHT + 25) + (row * 35);
+                    }
+                });
+
+                for (let i = 0; i < fighters.length; i++) {
+                    for (let j = i + 1; j < fighters.length; j++) {
+                        let u1 = fighters[i];
+                        let u2 = fighters[j];
+                        let dx = u1.x - u2.x;
+                        let dy = u1.y - u2.y;
+                        let dist = Math.hypot(dx, dy);
+                        let minDist = 28;
+                        if (dist < minDist && dist > 0.01) {
+                            let push = (minDist - dist) * 0.08;
+                            let nx = dx / dist;
+                            let ny = dy / dist;
+                            u1.x += nx * push;
+                            u1.y += ny * push;
+                            u2.x -= nx * push;
+                            u2.y -= ny * push;
+                        }
                     }
                 }
 
-                this._isActuallyWalking = actualMoved && (Math.hypot(this.x - this.prevX, 0) > 0.4) && !this.isAttacking;
-            }
-
-            draw(ctx) {
-                if (this.x < -50 || this.x > worldWidth + 50) return;
-                let isFlipped = !this.isPlayer;
-                const dx = this.x - this.prevX;
-                if (Math.abs(dx) > 0.3) {
-                    isFlipped = dx < 0;
-                } else if (this.isAttacking && this.target) {
-                    isFlipped = (this.target.x < this.x);
-                } else {
-                    let cmd = this.isPlayer ? unitOwnerState(this).command : enemy.command;
-                    if (cmd === CMD_RETREAT) isFlipped = this.isPlayer;
-                    else if (cmd === CMD_ATTACK) isFlipped = !this.isPlayer;
-                    else isFlipped = !this.isPlayer;
+                let archers = units.filter(u => u.isPlayer === isPlayer && u instanceof Archer && u.hp > 0);
+                for (let i = 0; i < archers.length; i++) {
+                    for (let j = i + 1; j < archers.length; j++) {
+                        let u1 = archers[i];
+                        let u2 = archers[j];
+                        let dx = u1.x - u2.x;
+                        let dy = u1.y - u2.y;
+                        let dist = Math.hypot(dx, dy);
+                        let minDist = 24;
+                        if (dist < minDist && dist > 0.01) {
+                            let push = (minDist - dist) * 0.08;
+                            let nx = dx / dist;
+                            let ny = dy / dist;
+                            u1.x += nx * push;
+                            u1.y += ny * push;
+                            u2.x -= nx * push;
+                            u2.y -= ny * push;
+                        }
+                    }
                 }
-                const clubColor = unitTeamColor(this);
-                let clubAnim = 0;
-                if (this.isAttacking) {
-                    clubAnim = this.attackTimer;
-                } else if (this.attackRecover > 0) {
-                    clubAnim = Math.max(0, 100 - (18 - this.attackRecover) * 5);
-                    this.attackRecover--;
-                }
-                drawStickman(ctx, this.x, this.y, clubColor, 'club', clubAnim, this._isActuallyWalking && clubAnim === 0, isFlipped, 0);
-                drawStuckArrows(ctx, this);
+            });
+        }
 
-                ctx.fillStyle = 'red';
-                ctx.fillRect(this.x - 15, this.y - 65, 30, 4);
-                ctx.fillStyle = '#2ecc71';
-                ctx.fillRect(this.x - 15, this.y - 65, 30 * (this.hp / this.maxHp), 4);
+        function getUnitType(u) {
+            if (u instanceof Miner) return 'miner';
+            if (u instanceof Clubman) return 'clubman';
+            if (u instanceof Archer) return 'archer';
+            return 'other';
+        }
+
+        function setCircularCooldown(el, remaining, max) {
+            if (!el) return;
+            if (remaining > 0 && max > 0) {
+                const pct = Math.max(0, Math.min(100, (remaining / max) * 100));
+                el.style.setProperty('--cd-deg', (pct * 3.6) + 'deg');
+                el.classList.add('active');
+            } else {
+                el.style.setProperty('--cd-deg', '0deg');
+                el.classList.remove('active');
             }
         }
 
-        class Archer {
-            constructor(isPlayer, ownerIndex = 0) {
-                this.isPlayer = isPlayer;
-                this.ownerIndex = isPlayer ? (ownerIndex || 0) : 0;
-                this.baseX = isPlayer ? player.base.x : enemy.base.x;
-                this.baseY = isPlayer ? player.base.y : enemy.base.y;
+        function updateActionButtonsUI() {
+            // Yerel oyuncunun kuyruğu / altını
+            const oi = localOwnerIndex();
+            const st = getOwnerState(oi);
+            const head = st.spawnQueue && st.spawnQueue[0];
+            setCircularCooldown(minerCdFill, head === 'miner' ? st.spawnTimer : 0, head === 'miner' ? st.spawnTimerMax : 1);
+            setCircularCooldown(clubCdFill, head === 'club' ? st.spawnTimer : 0, head === 'club' ? st.spawnTimerMax : 1);
+            setCircularCooldown(archerCdFill, head === 'archer' ? st.spawnTimer : 0, head === 'archer' ? st.spawnTimerMax : 1);
 
-                this.x = this.baseX + (isPlayer ? -70 : 70);
-                this.y = this.baseY + (Math.random() * 40 - 20);
+            goldEl.innerText = Math.floor(st.gold);
+            levelEl.innerText = Math.min(level, 3) + "/3";
 
-                this.formationIndex = isPlayer
-                    ? (player.archerFormationCounter = (player.archerFormationCounter || 0) + 1)
-                    : (enemy.archerFormationCounter = (enemy.archerFormationCounter || 0) + 1);
+            const qLen = (st.spawnQueue || []).length;
+            const qAll = (t) => countQueuedFor(0, t) + countQueuedFor(1, t);
+            btnMiner.disabled = st.gold < 150 || qLen >= MAX_QUEUE ||
+                (countPlayerUnits('miner') + qAll('miner') >= MAX_MINERS_PER_TEAM);
+            btnClub.disabled = st.gold < 125 || qLen >= MAX_QUEUE ||
+                (countPlayerUnits('club') + qAll('club') >= MAX_CLUBMEN_PER_TEAM);
 
-                this.hp = 50;
-                this.maxHp = 50;
-                this.range = 520;
-                this.safeGap = 32;
-                this.tooClose = 240;
-                this.attackCooldown = 130;
-                this.attackTimer = 0;
-                this.drawAmount = 0;
-                this.target = null;
-                this.prevX = this.x;
-                this.isInvulnerable = false;
-                this._isActuallyWalking = false;
-                this.stunTimer = 0;
-                this.slowTimer = 0;
-                this.stuckArrows = [];
+            if (level >= 2) {
+                btnArcher.style.display = '';
+                btnArcher.disabled = st.gold < 140 || qLen >= MAX_QUEUE ||
+                    (countPlayerUnits('archer') + qAll('archer') >= MAX_ARCHERS_PER_TEAM);
+            } else {
+                btnArcher.style.display = 'none';
             }
 
-            update() {
-                let cmd = this.isPlayer ? unitOwnerState(this).command : enemy.command;
-                let enemies = units.filter(u => u.isPlayer !== this.isPlayer && u.hp > 0 && !u.isInvulnerable);
-                let enemyBase = this.isPlayer ? enemy.base : player.base;
-                let myBase = this.isPlayer ? player.base : enemy.base;
-                this.prevX = this.x;
-                this.baseX = this.isPlayer ? player.base.x : enemy.base.x;
-                this.baseY = this.isPlayer ? player.base.y : enemy.base.y;
+            // Komut butonları yerel oyuncunun komutuna göre
+            Object.values(cmdBtns).forEach(b => b.classList.remove('active'));
+            if (cmdBtns[st.command]) cmdBtns[st.command].classList.add('active');
+        }
 
-                if (this.stunTimer > 0) {
-                    this.stunTimer--;
-                    this._isActuallyWalking = false;
-                    return;
+        function update() {
+            if (isCoopGuestNow()) return;
+            frames++;
+
+            if (isCoopHostNow()) {
+                coopBroadcastCounter++;
+                if (coopBroadcastCounter >= 3) {
+                    coopBroadcastCounter = 0;
+                    broadcastHostState();
                 }
-                if (this.slowTimer > 0) this.slowTimer--;
-                const slowMul = this.slowTimer > 0 ? 0.4 : 1;
-
-                let grassTop = canvas.height - GROUND_HEIGHT;
-                let minY = grassTop + 15;
-                let maxY = canvas.height - 20;
-                if (this.y < minY) this.y = minY;
-                if (this.y > maxY) this.y = maxY;
-
-                if (cmd === CMD_RETREAT) {
-                    let targetX = this.isPlayer ? -150 : worldWidth + 150;
-                    if (Math.hypot(this.x - targetX, this.y - this.baseY) > 5) {
-                        let angle = Math.atan2(this.baseY - this.y, targetX - this.x);
-                        this.x += Math.cos(angle) * 1.7 * SPEED_MULT * slowMul;
-                        this.y += Math.sin(angle) * 1.3 * SPEED_MULT * slowMul;
-                        this._isActuallyWalking = true;
-                    } else {
-                        this.x = targetX;
-                        this.y = this.baseY;
-                        this._isActuallyWalking = false;
-                    }
-                    this.attackTimer = 0;
-                    this.drawAmount = 0;
-                    this.target = null;
-                    return;
-                }
-
-                const visibleEnemies = enemies.filter(e =>
-                    cmd === CMD_ATTACK || (cmd === CMD_DEFEND && Math.abs(e.x - myBase.x) < AI_VISION_RANGE)
-                );
-                let closest = null, minDist = Infinity;
-                for (let e of visibleEnemies) {
-                    let d = Math.hypot(e.x - this.x, e.y - this.y);
-                    if (d < minDist) { minDist = d; closest = e; }
-                }
-                this.target = (closest && minDist <= this.range) ? closest : null;
-
-                if (!this.target && cmd === CMD_ATTACK) {
-                    const distToBase = Math.hypot(enemyBase.x - this.x, enemyBase.y - this.y);
-                    if (distToBase <= this.range) this.target = enemyBase;
-                }
-
-                const onMap = this.x > -50 && this.x < worldWidth + 50;
-                if (!onMap) this.target = null;
-
-                const myClubmen = units.filter(u => u.isPlayer === this.isPlayer && u instanceof Clubman && u.hp > 0);
-                let frontClubman = null;
-                if (myClubmen.length > 0) {
-                    frontClubman = this.isPlayer
-                        ? myClubmen.reduce((a, b) => b.x > a.x ? b : a)
-                        : myClubmen.reduce((a, b) => b.x < a.x ? b : a);
-                }
-
-                let desiredX;
-                let desiredY = this.baseY;
-                if (cmd === CMD_ATTACK) {
-                    desiredX = enemyBase.x + (this.isPlayer ? -260 : 260);
-                } else {
-                    desiredX = myBase.x + (this.isPlayer ? 220 : -220);
-                }
-                if (frontClubman) {
-                    desiredX = this.isPlayer
-                        ? Math.min(desiredX, frontClubman.x - this.safeGap)
-                        : Math.max(desiredX, frontClubman.x + this.safeGap);
-                    desiredY = frontClubman.y;
-                }
-                if (this.target) {
-                    const distToTarget = Math.hypot(this.target.x - this.x, this.target.y - this.y);
-                    if (distToTarget < this.tooClose) {
-                        const back = this.tooClose - distToTarget;
-                        let adjX = this.isPlayer ? this.x - back : this.x + back;
-                        if (frontClubman) {
-                            adjX = this.isPlayer
-                                ? Math.min(adjX, frontClubman.x - this.safeGap)
-                                : Math.max(adjX, frontClubman.x + this.safeGap);
-                        }
-                        desiredX = adjX;
-                    }
-                }
-
-                let actualMoved = false;
-                const distToDesired = Math.hypot(desiredX - this.x, desiredY - this.y);
-                if (distToDesired > 8) {
-                    let angle = Math.atan2(desiredY - this.y, desiredX - this.x);
-                    this.x += Math.cos(angle) * 1.6 * SPEED_MULT * slowMul;
-                    this.y += Math.sin(angle) * 1.2 * SPEED_MULT * slowMul;
-                    actualMoved = true;
-                }
-
-                // Hedef canlı ve menzildeyse ateş animasyonu; yoksa animasyon yok
-                const canShoot = this.target && this.target.hp > 0 &&
-                    Math.hypot(this.target.x - this.x, this.target.y - this.y) < this.range + 40;
-                if (canShoot) {
-                    this.attackTimer++;
-                    const CYCLE = this.attackCooldown;
-                    const DRAW_START = Math.floor(CYCLE * 0.55);
-                    const SHOOT_AT = CYCLE - 6;
-                    if (this.attackTimer < DRAW_START) {
-                        this.drawAmount = 0;
-                    } else if (this.attackTimer < SHOOT_AT) {
-                        this.drawAmount = (this.attackTimer - DRAW_START) / (SHOOT_AT - DRAW_START);
-                    } else {
-                        this.drawAmount = 0;
-                    }
-                    if (this.attackTimer === SHOOT_AT) {
-                        projectiles.push(new Arrow(this.x, this.y - 30, this.target, this.isPlayer));
-                    }
-                    if (this.attackTimer >= CYCLE) this.attackTimer = 0;
-                } else {
-                    this.attackTimer = 0;
-                    this.drawAmount = Math.max(0, this.drawAmount - 0.15);
-                }
-
-                this._isActuallyWalking = actualMoved && !this.target;
             }
 
-            draw(ctx) {
-                if (this.x < -50 || this.x > worldWidth + 50) return;
-                let isFlipped = !this.isPlayer;
-                const dx = this.x - this.prevX;
-                if (this.target) {
-                    isFlipped = (this.target.x < this.x);
-                } else if (Math.abs(dx) > 0.3) {
-                    isFlipped = dx < 0;
-                }
-                const archerColor = unitTeamColor(this);
-                drawStickman(ctx, this.x, this.y, archerColor, 'bow', 0, this._isActuallyWalking, isFlipped, this.drawAmount);
-                drawStuckArrows(ctx, this);
+            if (frames % (player.command === CMD_RETREAT ? 150 : 300) === 0) {
+                player.gold += 15;
+                addFloatingText(player.base.x, player.base.y - 120, '+15', '#f1c40f');
+            }
 
-                ctx.fillStyle = 'red';
-                ctx.fillRect(this.x - 15, this.y - 65, 30, 4);
-                ctx.fillStyle = '#2ecc71';
-                ctx.fillRect(this.x - 15, this.y - 65, 30 * (this.hp / this.maxHp), 4);
+            [player, enemy].forEach(team => {
+                if (team.command !== CMD_RETREAT && team.lastCommand === CMD_RETREAT) {
+                    team.retreatGraceTimer = 180;
+                }
+                if (team.retreatGraceTimer > 0) team.retreatGraceTimer--;
+                team.lastCommand = team.command;
+            });
+
+            units.forEach(u => {
+                const team = u.isPlayer ? unitOwnerState(u) : enemy;
+                u.isInvulnerable = team.command === CMD_RETREAT || (team.retreatGraceTimer > 0);
+            });
+
+            updateAI();
+            updateArchers();
+
+            handleFormationAndCollisions();
+            units.forEach(u => u.update());
+            projectiles.forEach(p => p.update());
+
+            units.forEach(u => {
+                if (u.hp <= 0 && u instanceof Miner && typeof u.releaseSlot === 'function') {
+                    u.releaseSlot();
+                }
+            });
+            units = units.filter(u => u.hp > 0);
+            projectiles = projectiles.filter(p => p.active);
+
+            if (enemy.base.hp <= 0 && !coopVictoryHandled) {
+                isGameOver = true;
+                coopVictoryHandled = true;
+                const completedLevel = level;
+                if (isCoopHostNow()) {
+                    wsSend({
+                        type: 'room_relay',
+                        roomId: coopSession.roomId,
+                        payload: { kind: 'victory', level: completedLevel }
+                    });
+                }
+                level++;
+                if (typeof onLevelVictory === 'function') onLevelVictory();
+                if (level > 3) {
+                    modalTitle.innerText = "Tebrikler! Seferi Bitirdiniz!";
+                    modalBtn.innerText = "Sefer Haritasına Dön";
+                } else {
+                    modalTitle.innerText = (level - 1) + ". Bölüm Tamamlandı!";
+                    modalBtn.innerText = "Sonraki Bölüm";
+                }
+                modal.classList.remove('hidden');
+            } else if (player.base.hp <= 0) {
+                isGameOver = true;
+                modalTitle.innerText = "Kaybettiniz! Heykeliniz Yıkıldı.";
+                modalBtn.innerText = "Tekrar Dene";
+                modal.classList.remove('hidden');
+            }
+
+            // Spawn kuyruğu: sırayla birim üret
+            processSpawnQueue();
+
+            updateActionButtonsUI();
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.save();
+            ctx.translate(-cameraX, 0);
+
+            drawEnvironment(ctx);
+            drawBase(ctx, true);
+            drawBase(ctx, false);
+            drawMines(ctx);
+
+            retreatArchers.forEach(archer => archer.draw(ctx));
+
+            units.sort((a, b) => a.y - b.y);
+            units.forEach(u => u.draw(ctx));
+
+            projectiles.forEach(p => p.draw(ctx));
+            drawMiningSparks(ctx);
+
+            floatingTexts.forEach(ft => {
+                ctx.fillStyle = ft.color;
+                ctx.font = ft.isBig ? "bold 26px Arial" : "bold 20px Arial";
+                ctx.textAlign = "center";
+                ctx.strokeStyle = 'black';
+                ctx.lineWidth = 3;
+                ctx.strokeText(ft.text, ft.x, ft.y);
+                ctx.fillText(ft.text, ft.x, ft.y);
+            });
+            ctx.restore();
+        }
+
+        function updateFloatingTexts() {
+            for (let i = floatingTexts.length - 1; i >= 0; i--) {
+                const ft = floatingTexts[i];
+                ft.y -= 1.2;
+                ft.life--;
+                if (ft.life <= 0) floatingTexts.splice(i, 1);
             }
         }
 
-        class BaseArcherUnit {
-            constructor(isPlayer, offsetX, offsetY, climbSpeed, ownerIndex = 0) {
-                this.isPlayer = isPlayer;
-                this.ownerIndex = isPlayer ? (ownerIndex || 0) : 0;
-                const base = isPlayer ? player.base : enemy.base;
-                this.x = base.x + offsetX;
-                this.y = base.y + 100;
-                this.targetX = base.x + offsetX;
-                this.targetY = base.y - 140 + offsetY;
-                this.climbSpeed = climbSpeed * SPEED_MULT;
-                this.state = 'climbing';
-                this.attackTimer = 0;
-                this.drawAmount = 0;
-                this.active = true;
-                this.isWalking = false;
-                this.climbAnim = 0;
-            }
-
-            update() {
-                if (!this.active) return;
-
-                if (this.state === 'climbing') {
-                    let dx = this.targetX - this.x;
-                    let dy = this.targetY - this.y;
-                    let dist = Math.hypot(dx, dy);
-
-                    this.climbAnim++;
-
-                    if (dist > this.climbSpeed) {
-                        let angle = Math.atan2(dy, dx);
-                        this.x += Math.cos(angle) * this.climbSpeed;
-                        this.y += Math.sin(angle) * this.climbSpeed;
-                        this.isWalking = true;
-                    } else {
-                        this.x = this.targetX;
-                        this.y = this.targetY;
-                        this.state = 'active';
-                        this.attackTimer = 0;
-                        this.isWalking = false;
-                    }
-                } else if (this.state === 'active') {
-                    // Sadece menzilde hedef varken yay çek / ateş animasyonu
-                    let enemies = units.filter(u => u.isPlayer !== this.isPlayer && u.hp > 0 && !u.isInvulnerable);
-                    let target = null;
-                    if (enemies.length > 0) {
-                        target = enemies.reduce((prev, curr) =>
-                            Math.abs(curr.x - this.x) < Math.abs(prev.x - this.x) ? curr : prev);
-                        if (Math.abs(target.x - this.x) >= 700) target = null;
-                    }
-                    if (!target) {
-                        this.attackTimer = 0;
-                        this.drawAmount = Math.max(0, this.drawAmount - 0.12);
-                    } else {
-                        this.attackTimer++;
-                        const CYCLE = 120;
-                        const DRAW_START = 80;
-                        const SHOOT_AT = 116;
-                        if (this.attackTimer < DRAW_START) {
-                            this.drawAmount = 0;
-                        } else if (this.attackTimer < SHOOT_AT) {
-                            this.drawAmount = (this.attackTimer - DRAW_START) / (SHOOT_AT - DRAW_START);
-                        } else {
-                            this.drawAmount = 0;
-                        }
-                        if (this.attackTimer === SHOOT_AT) {
-                            projectiles.push(new Arrow(this.x, this.y - 30, target, this.isPlayer));
-                        }
-                        if (this.attackTimer >= CYCLE) this.attackTimer = 0;
-                    }
-                    this.isWalking = false;
-                }
-            }
-
-            draw(ctx) {
-                if (!this.active) return;
-                let isFlipped = false;
-                let currentWeapon = 'bow';
-
-                if (this.state === 'climbing') {
-                    isFlipped = (this.targetX < this.x);
-                    currentWeapon = 'climb';
-                } else {
-                    let enemies = units.filter(u => u.isPlayer !== this.isPlayer && u.hp > 0 && !u.isInvulnerable);
-                    if (enemies.length > 0) {
-                        let target = enemies.reduce((prev, curr) => Math.abs(curr.x - this.x) < Math.abs(prev.x - this.x) ? curr : prev);
-                        isFlipped = (target.x < this.x);
-                    }
-                }
-                drawStickman(ctx, this.x, this.y, unitTeamColor(this), currentWeapon, this.climbAnim, this.isWalking, isFlipped, this.state === 'active' ? this.drawAmount : 0);
-            }
+        function startGameLoop() {
+            if (animationFrameId !== null) return;
+            lastFrameTime = 0;
+            accumulatedTime = 0;
+            animationFrameId = requestAnimationFrame(loop);
         }
 
-        class Arrow {
-            constructor(startX, startY, targetUnit, isPlayer) {
-                this.x = startX;
-                this.y = startY;
-                this.isPlayer = isPlayer;
-                this.target = targetUnit;
-                this.active = true;
-                this.speed = 8 * SPEED_MULT;
-                this.angle = 0;
-                if (targetUnit) {
-                    this.angle = Math.atan2(targetUnit.y - startY, targetUnit.x - startX);
-                }
+        function loop(timestamp) {
+            animationFrameId = null;
+            if (isGameOver) return;
+
+            if (!lastFrameTime) lastFrameTime = timestamp;
+            accumulatedTime += Math.min(100, timestamp - lastFrameTime);
+            lastFrameTime = timestamp;
+            while (accumulatedTime >= FIXED_TIMESTEP && !isGameOver) {
+                update();
+                updateFloatingTexts();
+                updateMiningSparks();
+                accumulatedTime -= FIXED_TIMESTEP;
             }
-
-            update() {
-                if (!this.active) return;
-
-                if (this.target && this.target.hp > 0) {
-                    this.angle = Math.atan2(this.target.y - this.y, this.target.x - this.x);
-                    this.x += Math.cos(this.angle) * this.speed;
-                    this.y += Math.sin(this.angle) * this.speed;
-                    if (Math.hypot(this.target.x - this.x, this.target.y - this.y) < 15) {
-                        this.active = false;
-                        let isHeadshot = Math.random() < 0.2;
-                        let dmg = isHeadshot ? 25 : 12;
-                        this.target.hp -= dmg;
-                        if (this.target.slowTimer !== undefined) {
-                            this.target.slowTimer = Math.max(this.target.slowTimer || 0, 150);
-                        }
-                        if (!this.target.stuckArrows) this.target.stuckArrows = [];
-                        const ox = this.x - this.target.x;
-                        const oy = this.y - this.target.y + (isHeadshot ? -28 : -8);
-                        this.target.stuckArrows.push({
-                            ox: ox * 0.3 + (Math.random() * 8 - 4),
-                            oy: isHeadshot ? -32 - Math.random() * 6 : -12 + Math.random() * 10,
-                            angle: this.angle,
-                            life: 360
-                        });
-                        if (this.target.stuckArrows.length > 6) this.target.stuckArrows.shift();
-                        if (isHeadshot) {
-                            addFloatingText(this.target.x, this.target.y - 30, 'KAFADAN! -25', '#e67e22', true);
-                        } else {
-                            addFloatingText(this.target.x, this.target.y - 30, '-12', '#e74c3c');
-                        }
-                    }
-                } else {
-                    this.x += Math.cos(this.angle) * this.speed;
-                    this.y += Math.sin(this.angle) * this.speed;
-                }
-
-                if (this.x < 0 || this.x > worldWidth || this.y < 0 || this.y > canvas.height) {
-                    this.active = false;
-                }
-            }
-
-            draw(ctx) {
-                if (!this.active) return;
-                ctx.save();
-                ctx.translate(this.x, this.y);
-                ctx.rotate(this.angle);
-                ctx.strokeStyle = '#fff';
-                ctx.lineWidth = 2;
-                ctx.beginPath();
-                ctx.moveTo(-10, 0);
-                ctx.lineTo(10, 0);
-                ctx.stroke();
-                ctx.fillStyle = '#bdc3c7';
-                ctx.beginPath();
-                ctx.moveTo(10, 0);
-                ctx.lineTo(4, -3);
-                ctx.lineTo(4, 3);
-                ctx.fill();
-                ctx.restore();
-            }
+            draw();
+            if (!isGameOver) animationFrameId = requestAnimationFrame(loop);
         }
