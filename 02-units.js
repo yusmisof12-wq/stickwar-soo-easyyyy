@@ -436,15 +436,18 @@
         }
 
         class Clubman {
-            constructor(isPlayer) {
+            constructor(isPlayer, ownerIndex = 0) {
                 this.isPlayer = isPlayer;
+                this.ownerIndex = isPlayer ? (ownerIndex || 0) : 0;
                 this.baseX = isPlayer ? player.base.x : enemy.base.x;
                 this.baseY = isPlayer ? player.base.y : enemy.base.y;
 
                 this.x = this.baseX + (isPlayer ? -60 : 60);
                 this.y = this.baseY + (Math.random() * 40 - 20);
 
-                this.formationIndex = isPlayer ? player.clubFormationCounter++ : enemy.clubFormationCounter++;
+                const formOwner = isPlayer ? (this.ownerIndex === 1 ? player2 : player) : enemy;
+                if (typeof formOwner.clubFormationCounter !== 'number') formOwner.clubFormationCounter = 0;
+                this.formationIndex = formOwner.clubFormationCounter++;
 
                 this.hp = 100;
                 this.maxHp = 100;
