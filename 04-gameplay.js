@@ -1,4 +1,4 @@
-        function setPlayerCommand(cmd) {
+ function setPlayerCommand(cmd) {
             player.command = cmd;
             Object.values(cmdBtns).forEach(b => b.classList.remove('active'));
             cmdBtns[cmd].classList.add('active');
@@ -335,25 +335,23 @@
             return 'other';
         }
 
+        function setCircularCooldown(el, remaining, max) {
+            if (!el) return;
+            if (remaining > 0 && max > 0) {
+                const pct = Math.max(0, Math.min(100, (remaining / max) * 100));
+                el.style.setProperty('--cd-deg', (pct * 3.6) + 'deg');
+                el.classList.add('active');
+            } else {
+                el.style.setProperty('--cd-deg', '0deg');
+                el.classList.remove('active');
+            }
+        }
+
         function updateActionButtonsUI() {
-            if (player.minerCooldown > 0) {
-                let fillPercent = ((player.minerMaxCooldown - player.minerCooldown) / player.minerMaxCooldown) * 100;
-                minerCdFill.style.height = (100 - fillPercent) + '%';
-            } else {
-                minerCdFill.style.height = '0%';
-            }
-            if (player.clubCooldown > 0) {
-                let fillPercent = ((player.clubMaxCooldown - player.clubCooldown) / player.clubMaxCooldown) * 100;
-                clubCdFill.style.height = (100 - fillPercent) + '%';
-            } else {
-                clubCdFill.style.height = '0%';
-            }
-            if (player.archerCooldown > 0) {
-                let fillPercent = ((player.archerMaxCooldown - player.archerCooldown) / player.archerMaxCooldown) * 100;
-                archerCdFill.style.height = (100 - fillPercent) + '%';
-            } else {
-                archerCdFill.style.height = '0%';
-            }
+            // Yuvarlak cooldown (kalan süre conic-gradient)
+            setCircularCooldown(minerCdFill, player.minerCooldown, player.minerMaxCooldown);
+            setCircularCooldown(clubCdFill, player.clubCooldown, player.clubMaxCooldown);
+            setCircularCooldown(archerCdFill, player.archerCooldown, player.archerMaxCooldown);
 
             goldEl.innerText = Math.floor(player.gold);
             levelEl.innerText = Math.min(level, 3) + "/3";
@@ -446,6 +444,11 @@
                 modal.classList.remove('hidden');
             }
 
+            // Oyuncu cooldown sayacı (takılı kalmasın)
+            if (player.minerCooldown > 0) player.minerCooldown--;
+            if (player.clubCooldown > 0) player.clubCooldown--;
+            if (player.archerCooldown > 0) player.archerCooldown--;
+
             updateActionButtonsUI();
         }
 
@@ -511,4 +514,3 @@
             draw();
             if (!isGameOver) animationFrameId = requestAnimationFrame(loop);
         }
-
