@@ -1,24 +1,27 @@
 function setPlayerCommand(cmd) {
-            player.command = cmd;
+            const oi = localOwnerIndex();
+            getOwnerState(oi).command = cmd;
+            // Solo veya host: player.command senkron (AI tehdit hesabı için host tarafı)
+            if (oi === 0) player.command = cmd;
             Object.values(cmdBtns).forEach(b => b.classList.remove('active'));
-            cmdBtns[cmd].classList.add('active');
+            if (cmdBtns[cmd]) cmdBtns[cmd].classList.add('active');
         }
 
         cmdBtns[CMD_RETREAT].onclick = () => {
-            if (isCoopGuestNow()) { sendRoomInput('retreat'); return; }
+            if (isCoopGuestNow()) { sendRoomInput('retreat'); setPlayerCommand(CMD_RETREAT); return; }
             setPlayerCommand(CMD_RETREAT);
         };
         cmdBtns[CMD_DEFEND].onclick = () => {
-            if (isCoopGuestNow()) { sendRoomInput('defend'); return; }
+            if (isCoopGuestNow()) { sendRoomInput('defend'); setPlayerCommand(CMD_DEFEND); return; }
             setPlayerCommand(CMD_DEFEND);
         };
         cmdBtns[CMD_ATTACK].onclick = () => {
-            if (isCoopGuestNow()) { sendRoomInput('attack'); return; }
+            if (isCoopGuestNow()) { sendRoomInput('attack'); setPlayerCommand(CMD_ATTACK); return; }
             setPlayerCommand(CMD_ATTACK);
         };
 
         // Spawn süreleri (frame) — birim tipine göre
-        const SPAWN_TIME = { miner: 15 * 60, club: 10 * 60, archer: 11 * 60 };
+        const SPAWN_TIME = { miner: 8 * 60, club: 6 * 60, archer: 7 * 60 };
         const UNIT_COST = { miner: 150, club: 125, archer: 140 };
         const MAX_QUEUE = 8;
 
@@ -38,59 +41,93 @@ function setPlayerCommand(cmd) {
             return 0;
         }
 
-        function queueUnit(type) {
-            if (!player.spawnQueue) player.spawnQueue = [];
-            if (player.gold < UNIT_COST[type]) return false;
-            if (player.spawnQueue.length >= MAX_QUEUE) return false;
-            if (countPlayerUnits(type) + countQueued(type) >= maxForType(type)) return false;
+        function countQueuedFor(ownerIndex, type) {
+            const st = getOwnerState(ownerIndex);
+            return (st.spawnQueue || []).filter(t => t === type).length;
+        }
+        function countPlayerUnitsFor(ownerIndex, type) {
+            return units.filter(u => u.isPlayer && (u.ownerIndex || 0) === ownerIndex && (
+                (type === 'miner' && u instanceof Miner) ||
+                (type === 'club' && u instanceof Clubman) ||
+                (type === 'archer' && u instanceof Archer)
+            )).length;
+        }
 
-            player.gold -= UNIT_COST[type];
-            player.spawnQueue.push(type);
-            // İlk birim kuyruğa girdiyse spawn süresini başlat
-            if (player.spawnQueue.length === 1) {
-                player.spawnTimerMax = SPAWN_TIME[type];
-                player.spawnTimer = SPAWN_TIME[type];
+        function queueUnit(type, ownerIndex) {
+            if (ownerIndex === undefined) ownerIndex = localOwnerIndex();
+            const st = getOwnerState(ownerIndex);
+            if (!st.spawnQueue) st.spawnQueue = [];
+            if (st.gold < UNIT_COST[type]) return false;
+            if (st.spawnQueue.length >= MAX_QUEUE) return false;
+            // Takım limiti: tüm oyuncu birimleri + kuyruk
+            const teamCount = countPlayerUnits(type) + countQueued(type) + countQueuedFor(1, type) - countQueuedFor(0, type) + countQueuedFor(0, type);
+            // basit: toplam canlı + her iki kuyruk
+            const live = countPlayerUnits(type);
+            const q0 = countQueuedFor(0, type);
+            const q1 = countQueuedFor(1, type);
+            if (live + q0 + q1 >= maxForType(type)) return false;
+
+            st.gold -= UNIT_COST[type];
+            st.spawnQueue.push(type);
+            if (st.spawnQueue.length === 1) {
+                st.spawnTimerMax = SPAWN_TIME[type];
+                st.spawnTimer = SPAWN_TIME[type];
             }
             return true;
         }
 
-        function processSpawnQueue() {
-            if (!player.spawnQueue) player.spawnQueue = [];
-            if (player.spawnQueue.length === 0) {
-                player.spawnTimer = 0;
-                player.spawnTimerMax = 0;
+        function processSpawnQueueFor(ownerIndex) {
+            const st = getOwnerState(ownerIndex);
+            if (!st || !st.spawnQueue) {
+                if (st) { st.spawnQueue = []; st.spawnTimer = 0; st.spawnTimerMax = 0; }
                 return;
             }
-            if (player.spawnTimer > 0) {
-                player.spawnTimer--;
+            if (st.spawnQueue.length === 0) {
+                st.spawnTimer = 0;
+                st.spawnTimerMax = 0;
                 return;
             }
-            const type = player.spawnQueue.shift();
-            if (type === 'miner') units.push(new Miner(true));
-            else if (type === 'club') units.push(new Clubman(true));
-            else if (type === 'archer') units.push(new Archer(true));
-
-            if (player.spawnQueue.length > 0) {
-                const next = player.spawnQueue[0];
-                player.spawnTimerMax = SPAWN_TIME[next];
-                player.spawnTimer = SPAWN_TIME[next];
+            // Süre sayacı
+            if (st.spawnTimer > 0) {
+                st.spawnTimer--;
+                if (st.spawnTimer > 0) return;
+            }
+            // Süre bitti → birim oluştur
+            const type = st.spawnQueue.shift();
+            try {
+                if (type === 'miner') units.push(new Miner(true, ownerIndex));
+                else if (type === 'club') units.push(new Clubman(true, ownerIndex));
+                else if (type === 'archer') units.push(new Archer(true, ownerIndex));
+            } catch (err) {
+                console.error('Spawn hatası:', type, err);
+            }
+            // Sıradakinin süresini başlat
+            if (st.spawnQueue.length > 0) {
+                const next = st.spawnQueue[0];
+                st.spawnTimerMax = SPAWN_TIME[next] || 600;
+                st.spawnTimer = st.spawnTimerMax;
             } else {
-                player.spawnTimer = 0;
-                player.spawnTimerMax = 0;
+                st.spawnTimer = 0;
+                st.spawnTimerMax = 0;
             }
+        }
+
+        function processSpawnQueue() {
+            processSpawnQueueFor(0);
+            if (isCoopActive()) processSpawnQueueFor(1);
         }
 
         btnMiner.onclick = () => {
             if (isCoopGuestNow()) { sendRoomInput('buyMiner'); return; }
-            queueUnit('miner');
+            queueUnit('miner', 0);
         };
         btnClub.onclick = () => {
             if (isCoopGuestNow()) { sendRoomInput('buyClub'); return; }
-            queueUnit('club');
+            queueUnit('club', 0);
         };
         btnArcher.onclick = () => {
             if (isCoopGuestNow()) { sendRoomInput('buyArcher'); return; }
-            queueUnit('archer');
+            queueUnit('archer', 0);
         };
 
         function resetLevel() {
@@ -111,6 +148,13 @@ function setPlayerCommand(cmd) {
             player.spawnQueue = [];
             player.spawnTimer = 0;
             player.spawnTimerMax = 0;
+            player2.gold = 300;
+            player2.command = CMD_DEFEND;
+            player2.spawnQueue = [];
+            player2.spawnTimer = 0;
+            player2.spawnTimerMax = 0;
+            player2.clubFormationCounter = 0;
+            player2.archerFormationCounter = 0;
             player.clubFormationCounter = 0;
             player.archerFormationCounter = 0;
             player.lastCommand = CMD_DEFEND;
@@ -156,7 +200,7 @@ function setPlayerCommand(cmd) {
             if (enemy.aiTimer % passiveGoldInterval === 0) {
                 const goldAmount = Math.floor(15 * diff.passiveGoldMult);
                 if (goldAmount > 0) {
-                    enemy.gold += goldAmount;
+                    enemy.gold += Math.floor(goldAmount * coopEnemyGoldMult());
                     if (enemy.aiState === 'retreat') enemy.retreatGoldSaved += goldAmount;
                 }
             }
@@ -296,24 +340,35 @@ function setPlayerCommand(cmd) {
         }
 
         function updateArchers() {
-            const setRetreatArchers = isPlayer => {
-                const isRetreating = isPlayer ? player.command === CMD_RETREAT : enemy.command === CMD_RETREAT;
-                const hasArchers = retreatArchers.some(archer => archer.isPlayer === isPlayer);
-                if (isRetreating && !hasArchers) {
-                    const base = isPlayer ? player.base : enemy.base;
-                    const climbSpeed = 1.2;
+            // Oyuncu 1 / 2: her biri geri çekilince kendi 1 okçusu
+            const ensurePlayerArcher = (ownerIndex, offsetX) => {
+                const st = getOwnerState(ownerIndex);
+                const retreating = st.command === CMD_RETREAT;
+                const has = retreatArchers.some(a => a.isPlayer && (a.ownerIndex || 0) === ownerIndex);
+                if (retreating && !has) {
+                    retreatArchers.push(new BaseArcherUnit(true, offsetX, ownerIndex === 1 ? 12 : -12, 1.2, ownerIndex));
+                }
+                if (!retreating) {
+                    retreatArchers = retreatArchers.filter(a => !(a.isPlayer && (a.ownerIndex || 0) === ownerIndex));
+                }
+            };
+            ensurePlayerArcher(0, -28);
+            if (isCoopActive()) ensurePlayerArcher(1, 28);
+
+            // Düşman: 2 okçu
+            {
+                const isRetreating = enemy.command === CMD_RETREAT;
+                const enemyArchers = retreatArchers.filter(a => !a.isPlayer);
+                if (isRetreating && enemyArchers.length === 0) {
                     retreatArchers.push(
-                        new BaseArcherUnit(isPlayer, -25, -15, climbSpeed),
-                        new BaseArcherUnit(isPlayer, 25, 15, climbSpeed)
+                        new BaseArcherUnit(false, -25, -15, 1.2, 0),
+                        new BaseArcherUnit(false, 25, 15, 1.2, 0)
                     );
                 }
                 if (!isRetreating) {
-                    retreatArchers = retreatArchers.filter(archer => archer.isPlayer !== isPlayer);
+                    retreatArchers = retreatArchers.filter(a => a.isPlayer);
                 }
-            };
-
-            setRetreatArchers(true);
-            setRetreatArchers(false);
+            }
             retreatArchers.forEach(archer => archer.update());
         }
 
@@ -325,7 +380,7 @@ function setPlayerCommand(cmd) {
                 fighters.sort((a, b) => a.formationIndex - b.formationIndex);
 
                 fighters.forEach((u, index) => {
-                    let cmd = u.isPlayer ? player.command : enemy.command;
+                    let cmd = u.isPlayer ? unitOwnerState(u).command : enemy.command;
                     if (cmd === CMD_DEFEND) {
                         let row = index % 5;
                         let col = Math.floor(index / 5);
@@ -399,29 +454,35 @@ function setPlayerCommand(cmd) {
         }
 
         function updateActionButtonsUI() {
-            // Yuvarlak spawn süresi: sadece kuyruğun başındaki birim tipinde göster
-            const head = player.spawnQueue && player.spawnQueue[0];
-            setCircularCooldown(minerCdFill, head === 'miner' ? player.spawnTimer : 0, head === 'miner' ? player.spawnTimerMax : 1);
-            setCircularCooldown(clubCdFill, head === 'club' ? player.spawnTimer : 0, head === 'club' ? player.spawnTimerMax : 1);
-            setCircularCooldown(archerCdFill, head === 'archer' ? player.spawnTimer : 0, head === 'archer' ? player.spawnTimerMax : 1);
+            // Yerel oyuncunun kuyruğu / altını
+            const oi = localOwnerIndex();
+            const st = getOwnerState(oi);
+            const head = st.spawnQueue && st.spawnQueue[0];
+            setCircularCooldown(minerCdFill, head === 'miner' ? st.spawnTimer : 0, head === 'miner' ? st.spawnTimerMax : 1);
+            setCircularCooldown(clubCdFill, head === 'club' ? st.spawnTimer : 0, head === 'club' ? st.spawnTimerMax : 1);
+            setCircularCooldown(archerCdFill, head === 'archer' ? st.spawnTimer : 0, head === 'archer' ? st.spawnTimerMax : 1);
 
-            goldEl.innerText = Math.floor(player.gold);
+            goldEl.innerText = Math.floor(st.gold);
             levelEl.innerText = Math.min(level, 3) + "/3";
 
-            const qLen = (player.spawnQueue || []).length;
-            // Spawn sürerken de sıraya eklenebilir (altın + limit yeterse)
-            btnMiner.disabled = player.gold < 150 || qLen >= MAX_QUEUE ||
-                (countPlayerUnits('miner') + countQueued('miner') >= MAX_MINERS_PER_TEAM);
-            btnClub.disabled = player.gold < 125 || qLen >= MAX_QUEUE ||
-                (countPlayerUnits('club') + countQueued('club') >= MAX_CLUBMEN_PER_TEAM);
+            const qLen = (st.spawnQueue || []).length;
+            const qAll = (t) => countQueuedFor(0, t) + countQueuedFor(1, t);
+            btnMiner.disabled = st.gold < 150 || qLen >= MAX_QUEUE ||
+                (countPlayerUnits('miner') + qAll('miner') >= MAX_MINERS_PER_TEAM);
+            btnClub.disabled = st.gold < 125 || qLen >= MAX_QUEUE ||
+                (countPlayerUnits('club') + qAll('club') >= MAX_CLUBMEN_PER_TEAM);
 
             if (level >= 2) {
                 btnArcher.style.display = '';
-                btnArcher.disabled = player.gold < 140 || qLen >= MAX_QUEUE ||
-                    (countPlayerUnits('archer') + countQueued('archer') >= MAX_ARCHERS_PER_TEAM);
+                btnArcher.disabled = st.gold < 140 || qLen >= MAX_QUEUE ||
+                    (countPlayerUnits('archer') + qAll('archer') >= MAX_ARCHERS_PER_TEAM);
             } else {
                 btnArcher.style.display = 'none';
             }
+
+            // Komut butonları yerel oyuncunun komutuna göre
+            Object.values(cmdBtns).forEach(b => b.classList.remove('active'));
+            if (cmdBtns[st.command]) cmdBtns[st.command].classList.add('active');
         }
 
         function update() {
@@ -450,15 +511,17 @@ function setPlayerCommand(cmd) {
             });
 
             units.forEach(u => {
-                const team = u.isPlayer ? player : enemy;
-                u.isInvulnerable = team.command === CMD_RETREAT || team.retreatGraceTimer > 0;
+                const team = u.isPlayer ? unitOwnerState(u) : enemy;
+                u.isInvulnerable = team.command === CMD_RETREAT || (team.retreatGraceTimer > 0);
             });
 
             updateAI();
             updateArchers();
 
             handleFormationAndCollisions();
-            units.forEach(u => u.update());
+            units.forEach(u => {
+                try { u.update(); } catch (err) { console.error('Unit update hatası', err); }
+            });
             projectiles.forEach(p => p.update());
 
             units.forEach(u => {
