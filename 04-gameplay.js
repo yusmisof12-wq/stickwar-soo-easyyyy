@@ -1,4 +1,4 @@
- function setPlayerCommand(cmd) {
+        function setPlayerCommand(cmd) {
             const oi = localOwnerIndex();
             getOwnerState(oi).command = cmd;
             // Solo veya host: player.command senkron (AI tehdit hesabı için host tarafı)
@@ -8,15 +8,21 @@
         }
 
         cmdBtns[CMD_RETREAT].onclick = () => {
-            if (typeof isCoopGuestNow === 'function' && isCoopGuestNow()) { sendRoomInput('retreat'); setPlayerCommand(CMD_RETREAT); return; }
+            if (typeof isCoopPlayNow === 'function' && isCoopPlayNow()) {
+                setPlayerCommand(CMD_RETREAT); sendRoomInput('retreat'); return;
+            }
             setPlayerCommand(CMD_RETREAT);
         };
         cmdBtns[CMD_DEFEND].onclick = () => {
-            if (typeof isCoopGuestNow === 'function' && isCoopGuestNow()) { sendRoomInput('defend'); setPlayerCommand(CMD_DEFEND); return; }
+            if (typeof isCoopPlayNow === 'function' && isCoopPlayNow()) {
+                setPlayerCommand(CMD_DEFEND); sendRoomInput('defend'); return;
+            }
             setPlayerCommand(CMD_DEFEND);
         };
         cmdBtns[CMD_ATTACK].onclick = () => {
-            if (typeof isCoopGuestNow === 'function' && isCoopGuestNow()) { sendRoomInput('attack'); setPlayerCommand(CMD_ATTACK); return; }
+            if (typeof isCoopPlayNow === 'function' && isCoopPlayNow()) {
+                setPlayerCommand(CMD_ATTACK); sendRoomInput('attack'); return;
+            }
             setPlayerCommand(CMD_ATTACK);
         };
 
@@ -126,21 +132,21 @@
         }
 
         btnMiner.onclick = () => {
-            if (typeof isCoopGuestNow === 'function' && isCoopGuestNow()) {
+            if (typeof isCoopPlayNow === 'function' && isCoopPlayNow()) {
                 if (player.gold >= 150) { player.gold -= 150; updateActionButtonsUI(); }
                 sendRoomInput('buyMiner'); return;
             }
             queueUnit('miner', 0);
         };
         btnClub.onclick = () => {
-            if (typeof isCoopGuestNow === 'function' && isCoopGuestNow()) {
+            if (typeof isCoopPlayNow === 'function' && isCoopPlayNow()) {
                 if (player.gold >= 125) { player.gold -= 125; updateActionButtonsUI(); }
                 sendRoomInput('buyClub'); return;
             }
             queueUnit('club', 0);
         };
         btnArcher.onclick = () => {
-            if (typeof isCoopGuestNow === 'function' && isCoopGuestNow()) {
+            if (typeof isCoopPlayNow === 'function' && isCoopPlayNow()) {
                 if (player.gold >= 140) { player.gold -= 140; updateActionButtonsUI(); }
                 sendRoomInput('buyArcher'); return;
             }
@@ -518,8 +524,8 @@
         }
 
         function update() {
-            // Co-op slot 1: fizik yok (state alır). Slot 0 solo ile aynı fizik.
-            if (typeof isCoopGuestNow === 'function' && isCoopGuestNow()) return;
+            // Co-op: fizik sunucuda
+            if (typeof isCoopPlayNow === 'function' && isCoopPlayNow()) return;
             frames++;
 
             if (isCoopHostNow()) {
