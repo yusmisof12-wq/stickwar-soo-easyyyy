@@ -1,4 +1,4 @@
-v<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
@@ -281,10 +281,10 @@ v<!DOCTYPE html>
         const GROUND_HEIGHT = 220;
         const MIN_WORLD_WIDTH = 2600;
         const AI_VISION_RANGE = 620;
-        const MAX_MINERS_PER_TEAM = 99; // limit yok
+        const MAX_MINERS_PER_TEAM = 99;
         const MAX_CLUBMEN_PER_TEAM = 28;
         const MAX_ARCHERS_PER_TEAM = 14;
-        const SPEED_MULT = 1.8; // %80 hız artışı
+        const SPEED_MULT = 1.8;
 
         let worldWidth = MIN_WORLD_WIDTH;
         let cameraX = 0;
@@ -305,47 +305,13 @@ v<!DOCTYPE html>
         const CMD_DEFEND = 2;
         const CMD_RETREAT = 3;
 
-        // ==================== YAPAY ZEKA ZORLUK AYARLARI ====================
         const AI_DIFFICULTY = {
-            1: { 
-                // ~1.5x daha kolay
-                cooldownMult: 3.5,
-                mistakeChance: 0.55,
-                badReaction: true,
-                attackThreshold: 7,
-                maxMiners: 2,
-                maxClubmen: 4,
-                maxArchers: 0,
-                retreatHpThreshold: 0.35,
-                passiveGoldMult: 0.45
-            },
-            2: { 
-                cooldownMult: 1.5,
-                mistakeChance: 0.15,
-                badReaction: false,
-                attackThreshold: 3,
-                maxMiners: 6,
-                maxClubmen: 0,   // 2. sefer: düşman sadece okçu + madenci kullanır
-                maxArchers: 8,
-                retreatHpThreshold: 0.35,
-                passiveGoldMult: 0.85
-            },
-            3: { 
-                cooldownMult: 1.0,
-                mistakeChance: 0.0,
-                badReaction: false,
-                attackThreshold: 2,
-                maxMiners: 999,
-                maxClubmen: 999,
-                maxArchers: 10,
-                retreatHpThreshold: 0.4,
-                passiveGoldMult: 1.0
-            }
+            1: { cooldownMult: 3.5, mistakeChance: 0.55, badReaction: true, attackThreshold: 7, maxMiners: 2, maxClubmen: 4, maxArchers: 0, retreatHpThreshold: 0.35, passiveGoldMult: 0.45 },
+            2: { cooldownMult: 1.5, mistakeChance: 0.15, badReaction: false, attackThreshold: 3, maxMiners: 6, maxClubmen: 0, maxArchers: 8, retreatHpThreshold: 0.35, passiveGoldMult: 0.85 },
+            3: { cooldownMult: 1.0, mistakeChance: 0.0, badReaction: false, attackThreshold: 2, maxMiners: 999, maxClubmen: 999, maxArchers: 10, retreatHpThreshold: 0.4, passiveGoldMult: 1.0 }
         };
         
-        function getAiDifficulty() {
-            return AI_DIFFICULTY[level] || AI_DIFFICULTY[3];
-        }
+        function getAiDifficulty() { return AI_DIFFICULTY[level] || AI_DIFFICULTY[3]; }
 
         let frames = 0;
         let level = 1;
@@ -394,29 +360,15 @@ v<!DOCTYPE html>
         let eMineOffsets = [];
 
         const clubSpawnOffsets = [
-            { dx: 80, dy: 0 },
-            { dx: 140, dy: 45 },
-            { dx: 50, dy: -45 },
-            { dx: 170, dy: 70 },
-            { dx: 110, dy: -70 },
-            { dx: 60, dy: 55 },
-            { dx: 150, dy: -25 },
-            { dx: 90, dy: 30 },
-            { dx: 180, dy: -55 },
-            { dx: 120, dy: 80 },
-            { dx: 40, dy: -80 },
-            { dx: 160, dy: 60 }
+            { dx: 80, dy: 0 }, { dx: 140, dy: 45 }, { dx: 50, dy: -45 },
+            { dx: 170, dy: 70 }, { dx: 110, dy: -70 }, { dx: 60, dy: 55 },
+            { dx: 150, dy: -25 }, { dx: 90, dy: 30 }, { dx: 180, dy: -55 },
+            { dx: 120, dy: 80 }, { dx: 40, dy: -80 }, { dx: 160, dy: 60 }
         ];
         const minerSpawnOffsets = [
-            { dx: 70, dy: 0 },
-            { dx: 120, dy: 30 },
-            { dx: 30, dy: -30 },
-            { dx: 150, dy: 50 },
-            { dx: 80, dy: -50 },
-            { dx: 100, dy: 40 },
-            { dx: 50, dy: 45 },
-            { dx: 130, dy: -40 },
-            { dx: 90, dy: -60 }
+            { dx: 70, dy: 0 }, { dx: 120, dy: 30 }, { dx: 30, dy: -30 },
+            { dx: 150, dy: 50 }, { dx: 80, dy: -50 }, { dx: 100, dy: 40 },
+            { dx: 50, dy: 45 }, { dx: 130, dy: -40 }, { dx: 90, dy: -60 }
         ];
 
         function initMines() {
@@ -485,7 +437,7 @@ v<!DOCTYPE html>
         let projectiles = [];
         let floatingTexts = [];
         let retreatArchers = [];
-        let miningSparks = []; // Madenci vuruş kıvılcımları
+        let miningSparks = [];
 
         const goldEl = document.getElementById('goldText');
         const levelEl = document.getElementById('levelText');
@@ -535,19 +487,19 @@ v<!DOCTYPE html>
                 this.damage = 8;
                 this.target = null;
                 this.isInvulnerable = false;
-                this.combatMode = false; // true = maden yok, sürekli zayıf saldırı
+                this.combatMode = false;
                 this.wanderTimer = 0;
                 this.wanderTargetX = this.x;
                 this.wanderTargetY = this.y;
                 this.isWandering = false;
                 this.miningSwing = 0;
-                this.miningPhase = 0; // 0: kaldır, 1: vur, 2: eğil/sepete at
-                this.bodyLean = 0;     // Gövde eğilme (0 = dik, 1 = tam eğik)
-                this.armRaise = 0;     // Kol kaldırma oranı
-                this.holdingRock = false; // Sepete taş taşıyor mu
-                this.bagGold = 0;      // Sırt çantasındaki altın (görsel + sayım)
-                this.deliverTimer = 0; // Üsse teslim animasyonu
-                this.bagHold = false;  // Çantayı elinde tutuyor mu
+                this.miningPhase = 0;
+                this.bodyLean = 0;
+                this.armRaise = 0;
+                this.holdingRock = false;
+                this.bagGold = 0;
+                this.deliverTimer = 0;
+                this.bagHold = false;
                 this.bagOffsetX = 0;
                 this.bagOffsetY = 0;
                 this.stunTimer = 0;
@@ -574,10 +526,9 @@ v<!DOCTYPE html>
                 if (available) {
                     this.targetSlot = available;
                     available.miners.push(this);
-                    // Fotoğraf: biri sol, biri sağ
                     const offsets = [
-                        { dx: -32, dy: 4 },  // sol
-                        { dx: 32, dy: 4 },   // sağ
+                        { dx: -32, dy: 4 },
+                        { dx: 32, dy: 4 },
                         { dx: -32, dy: -12 },
                         { dx: 32, dy: -12 }
                     ];
@@ -593,10 +544,9 @@ v<!DOCTYPE html>
                     this.isWandering = false;
                     this.combatMode = false;
                 } else {
-                    // Maden yok → zayıf saldırı modu
                     this.state = 'attacking';
                     this.combatMode = true;
-                    this.damage = 4; // güçsüz
+                    this.damage = 4;
                     this.isWandering = false;
                     this.findTarget();
                 }
@@ -687,11 +637,10 @@ v<!DOCTYPE html>
                 }
 
                 if (this.state === 'attacking') {
-                    this.damage = 4; // madenci zayıf
-                if (!this.target || this.target.hp <= 0 || this.target.isInvulnerable) {
-                    this.findTarget();
-                }
-                    // Tehdit yoksa ve combatMode değilse (sadece savunma) madene dön
+                    this.damage = 4;
+                    if (!this.target || this.target.hp <= 0 || this.target.isInvulnerable) {
+                        this.findTarget();
+                    }
                     const nearbyThreat = units.some(u =>
                         u.isPlayer !== this.isPlayer && u.hp > 0 && !u.isInvulnerable &&
                         Math.hypot(u.x - this.x, u.y - this.y) < 180
@@ -702,7 +651,6 @@ v<!DOCTYPE html>
                         let dist = Math.hypot(this.target.x - this.x, this.target.y - this.y);
                         if (dist <= this.range) {
                             this.attackTimer++;
-                            // Hasar animasyonun sonuna yakın
                             if (this.attackTimer === 45) {
                                 this.target.hp -= this.damage;
                                 if (this.target.stunTimer !== undefined) this.target.stunTimer = 40;
@@ -718,7 +666,6 @@ v<!DOCTYPE html>
                             this.attackTimer = 0;
                         }
                     } else if (this.combatMode) {
-                        // Maden yok, hedef yok → üsse yakın dolaş / bekle
                         this.assignSlot();
                     }
                     let grassTop = canvas.height - GROUND_HEIGHT;
@@ -749,76 +696,73 @@ v<!DOCTYPE html>
                         this.bagGold = 0;
                     }
                 } else if (this.state === 'mining') {
-                    // Yakında düşman varsa savunmaya geç
                     const attacker = units.find(u =>
                         u.isPlayer !== this.isPlayer && u.hp > 0 && !u.isInvulnerable &&
                         Math.hypot(u.x - this.x, u.y - this.y) < 90
                     );
                     if (attacker) {
-                        // Saldırıya uğradı → zayıf savaş
                         this.releaseSlot();
                         this.state = 'attacking';
-                        this.combatMode = false; // geçici savunma, sonra madene döner
+                        this.combatMode = false;
                         this.damage = 4;
                         this.target = attacker;
                         this.attackTimer = 0;
                         this.bodyLean = 0;
                         this.armRaise = 0;
                     } else {
-                    this.actionTimer++;
-                    // Pürüzsüz döngü (süre aynı ~70 frame)
-                    const CYCLE = 70;
-                    const cycle = this.actionTimer % CYCLE;
-                    this.holdingRock = false;
-                    const easeInOut = (t) => t * t * (3 - 2 * t);
+                        this.actionTimer++;
+                        const CYCLE = 70;
+                        const cycle = this.actionTimer % CYCLE;
+                        this.holdingRock = false;
+                        const easeInOut = (t) => t * t * (3 - 2 * t);
 
-                    if (cycle < 28) {
-                        const t = easeInOut(cycle / 28);
-                        this.miningPhase = 0;
-                        this.bodyLean = 0.28 + t * 0.08;
-                        this.armRaise = 0.3 + t * 0.7;
-                        this.miningSwing = -0.85 + t * 0.25;
-                    } else if (cycle < 48) {
-                        const t = easeInOut((cycle - 28) / 20);
-                        this.miningPhase = 1;
-                        this.bodyLean = 0.36 + t * 0.12;
-                        this.armRaise = 1 - t;
-                        this.miningSwing = -0.6 + t * 2.0;
-                        if (cycle === 40) {
-                            const side = (this.localOffset && this.localOffset.dx > 0) ? -14 : 14;
-                            spawnMiningSparks(this.x + side, this.y - 8);
-                        }
-                    } else {
-                        const t = easeInOut((cycle - 48) / 22);
-                        this.miningPhase = 2;
-                        this.bodyLean = 0.48 - t * 0.18;
-                        this.armRaise = 0.15 + t * 0.2;
-                        this.miningSwing = 1.4 - t * 0.5;
-                    }
-
-                    if (cycle === 40) {
-                        this.bagGold = Math.min(6, this.bagGold + 1);
-                        this.hits++;
-                        if (this.isPlayer) {
-                            addFloatingText(this.x + 10, this.y - 40, '+1', '#f1c40f');
-                        }
-                    }
-                    if (this.hits >= 6 && cycle >= 55) {
-                        const t = easeInOut((cycle - 55) / 15);
-                        this.bodyLean = 0.3 * (1 - t);
-                        this.armRaise = 0.3 * (1 - t);
-                        this.miningSwing = 0.5 * (1 - t);
-                        if (cycle >= 69) {
-                            this.releaseSlot();
-                            this.state = 'going_base';
-                            this.miningSwing = 0;
+                        if (cycle < 28) {
+                            const t = easeInOut(cycle / 28);
                             this.miningPhase = 0;
-                            this.bodyLean = 0;
-                            this.armRaise = 0;
-                            this.holdingRock = false;
+                            this.bodyLean = 0.28 + t * 0.08;
+                            this.armRaise = 0.3 + t * 0.7;
+                            this.miningSwing = -0.85 + t * 0.25;
+                        } else if (cycle < 48) {
+                            const t = easeInOut((cycle - 28) / 20);
+                            this.miningPhase = 1;
+                            this.bodyLean = 0.36 + t * 0.12;
+                            this.armRaise = 1 - t;
+                            this.miningSwing = -0.6 + t * 2.0;
+                            if (cycle === 40) {
+                                const side = (this.localOffset && this.localOffset.dx > 0) ? -14 : 14;
+                                spawnMiningSparks(this.x + side, this.y - 8);
+                            }
+                        } else {
+                            const t = easeInOut((cycle - 48) / 22);
+                            this.miningPhase = 2;
+                            this.bodyLean = 0.48 - t * 0.18;
+                            this.armRaise = 0.15 + t * 0.2;
+                            this.miningSwing = 1.4 - t * 0.5;
+                        }
+
+                        if (cycle === 40) {
+                            this.bagGold = Math.min(6, this.bagGold + 1);
+                            this.hits++;
+                            if (this.isPlayer) {
+                                addFloatingText(this.x + 10, this.y - 40, '+1', '#f1c40f');
+                            }
+                        }
+                        if (this.hits >= 6 && cycle >= 55) {
+                            const t = easeInOut((cycle - 55) / 15);
+                            this.bodyLean = 0.3 * (1 - t);
+                            this.armRaise = 0.3 * (1 - t);
+                            this.miningSwing = 0.5 * (1 - t);
+                            if (cycle >= 69) {
+                                this.releaseSlot();
+                                this.state = 'going_base';
+                                this.miningSwing = 0;
+                                this.miningPhase = 0;
+                                this.bodyLean = 0;
+                                this.armRaise = 0;
+                                this.holdingRock = false;
+                            }
                         }
                     }
-                    } // saldırı yoksa kazma devam
                 } else if (this.state === 'going_base') {
                     let dist = Math.hypot(this.baseX - this.x, this.baseY - this.y);
                     if (dist > 35) {
@@ -826,7 +770,6 @@ v<!DOCTYPE html>
                         this.x += Math.cos(angle) * 1.5 * SPEED_MULT;
                         this.y += Math.sin(angle) * 1.5 * SPEED_MULT;
                     } else {
-                        // Üsse vardı → 3-4 sn çanta boşaltma animasyonu
                         this.state = 'delivering';
                         this.deliverTimer = 0;
                         this.bagHold = false;
@@ -838,14 +781,10 @@ v<!DOCTYPE html>
                 } else if (this.state === 'delivering') {
                     this.deliverTimer++;
                     const t = this.deliverTimer;
-                    // 0-45  : çantayı eline al
-                    // 46-160: boşalt (altınlar üsse uçar)
-                    // 161-200: çantayı tekrar sırtına koy
-                    // 201-210: bitir
                     if (t <= 45) {
                         const p = t / 45;
                         this.bagHold = true;
-                        this.bagOffsetX = -18 + p * 28;  // arkadan öne
+                        this.bagOffsetX = -18 + p * 28;
                         this.bagOffsetY = -18 + p * 12;
                         this.bodyLean = p * 0.25;
                         this.armRaise = p * 0.6;
@@ -855,7 +794,6 @@ v<!DOCTYPE html>
                         this.bagOffsetY = -6;
                         this.bodyLean = 0.25;
                         this.armRaise = 0.5;
-                        // Her ~18 frame'de 1 altın boşalt
                         if ((t - 46) % 18 === 0 && this.bagGold > 0) {
                             this.bagGold--;
                             const gx = this.x + (this.isPlayer ? 20 : -20);
@@ -877,7 +815,6 @@ v<!DOCTYPE html>
                         this.armRaise = 0.5 * (1 - p);
                         this.bagGold = 0;
                     } else {
-                        // Kalan altını tamamla ve bitir
                         if (this.bagGold > 0) {
                             const leftover = this.bagGold * 13;
                             if (this.isPlayer) {
@@ -909,13 +846,10 @@ v<!DOCTYPE html>
 
             draw(ctx) {
                 if (this.state === 'outside') return;
-                // Yön
                 let isFlipped = false;
                 if (this.state === 'mining' || this.state === 'going_mine') {
-                    // Slot tarafına göre: sol offset → sağa bak, sağ offset → sola bak (madene)
-                    // this.x == mineX olduğu için offset kullanılır
                     if (this.localOffset && this.localOffset.dx !== 0) {
-                        isFlipped = this.localOffset.dx > 0; // sağda duran sola döner
+                        isFlipped = this.localOffset.dx > 0;
                     } else if (this.targetSlot) {
                         isFlipped = this.x > this.targetSlot.x;
                     } else {
@@ -937,7 +871,6 @@ v<!DOCTYPE html>
                 const isDeliver = this.state === 'delivering';
                 const isAtk = this.state === 'attacking';
                 const moved = Math.hypot(this.x - this.prevX, 0) > 0.35;
-                // Yürürken yürüme; menzilde durunca saldırı animasyonu
                 let isWalking = moved && this.state !== 'mining' && !isDeliver;
                 let swingAngle = this.state === 'mining' ? this.miningSwing : 0;
                 let lean = (this.state === 'mining' || isDeliver) ? this.bodyLean : 0;
@@ -1001,7 +934,6 @@ v<!DOCTYPE html>
                 this.baseX = this.isPlayer ? player.base.x : enemy.base.x;
                 this.baseY = this.isPlayer ? player.base.y : enemy.base.y;
 
-                // Sersemleme (yakın dövüş): 1 sn yürüyemez
                 if (this.stunTimer > 0) {
                     this.stunTimer--;
                     this.isAttacking = false;
@@ -1085,7 +1017,6 @@ v<!DOCTYPE html>
                             Math.hypot(foe.x - this.x, foe.y - this.y) <= (foe.range || this.range) + 8;
 
                         if (mutual) {
-                            // Sıra sıra: sadece vuran animasyon oynar
                             if (this.combatTurn === undefined && foe.combatTurn === undefined) {
                                 const iGoFirst = (this.isPlayer !== foe.isPlayer)
                                     ? this.isPlayer
@@ -1100,7 +1031,6 @@ v<!DOCTYPE html>
                             } else {
                                 this.isAttacking = true;
                                 this.attackTimer++;
-                                // Hasar vuruşun sonuna yakın (frame 50)
                                 if (this.attackTimer === 50 && !this.didHitThisSwing) {
                                     foe.hp -= this.damage;
                                     if (foe.stunTimer !== undefined) foe.stunTimer = 40;
@@ -1138,7 +1068,6 @@ v<!DOCTYPE html>
                         }
                     } else if (this.target) {
                         this.combatTurn = undefined;
-                        // Sopalılar koşar (daha hızlı)
                         let speedX = (cmd === CMD_ATTACK) ? 2.2 : 1.8;
                         let speedY = (cmd === CMD_ATTACK) ? 1.6 : 1.3;
                         let angle = Math.atan2(this.target.y - this.y, this.target.x - this.x);
@@ -1169,7 +1098,6 @@ v<!DOCTYPE html>
 
             draw(ctx) {
                 if (this.x < -50 || this.x > worldWidth + 50) return;
-                // Hareket yönüne bak
                 let isFlipped = !this.isPlayer;
                 const dx = this.x - this.prevX;
                 if (Math.abs(dx) > 0.3) {
@@ -1182,14 +1110,11 @@ v<!DOCTYPE html>
                     else if (cmd === CMD_ATTACK) isFlipped = !this.isPlayer;
                     else isFlipped = !this.isPlayer;
                 }
-                // Oyuncu siyah, düşman kırmızı
                 const clubColor = this.isPlayer ? '#1a1a1a' : '#c0392b';
-                // Vuruş sonrası yumuşak dönüş: recover animasyonu
                 let clubAnim = 0;
                 if (this.isAttacking) {
                     clubAnim = this.attackTimer;
                 } else if (this.attackRecover > 0) {
-                    // Animasyonu idle'a yumuşak indir
                     clubAnim = Math.max(0, 100 - (18 - this.attackRecover) * 5);
                     this.attackRecover--;
                 }
@@ -1203,7 +1128,7 @@ v<!DOCTYPE html>
             }
         }
 
-        // Gerçek okçu savaş birimi (Miner/Clubman gibi savaşa katılır — BaseArcherUnit sadece geri çekilme görseli için ayrı kalır)
+        // Gerçek okçu savaş birimi
         class Archer {
             constructor(isPlayer) {
                 this.isPlayer = isPlayer;
@@ -1219,9 +1144,9 @@ v<!DOCTYPE html>
 
                 this.hp = 50;
                 this.maxHp = 50;
-                this.range = 520;      // çok uzun menzil
-                this.safeGap = 32;     // sopalının tam gerisinde/solunda, bitişik dur
-                this.tooClose = 240;   // bu mesafeden yakınsa geri kaçar (uzaktan atış için)
+                this.range = 520;
+                this.safeGap = 32;
+                this.tooClose = 240;
                 this.attackCooldown = 130;
                 this.attackTimer = 0;
                 this.drawAmount = 0;
@@ -1275,7 +1200,6 @@ v<!DOCTYPE html>
                     return;
                 }
 
-                // Hedef: menzildeki en yakın düşman (görüş kısıtı sopalıyla aynı mantık)
                 const visibleEnemies = enemies.filter(e =>
                     cmd === CMD_ATTACK || (cmd === CMD_DEFEND && Math.abs(e.x - myBase.x) < AI_VISION_RANGE)
                 );
@@ -1285,17 +1209,15 @@ v<!DOCTYPE html>
                     if (d < minDist) { minDist = d; closest = e; }
                 }
                 this.target = (closest && minDist <= this.range) ? closest : null;
-                // Harita dışındaysa (henüz geri çekilmeden dönüyor/görünmüyor) ateş etmesin
                 const onMap = this.x > -50 && this.x < worldWidth + 50;
                 if (!onMap) this.target = null;
 
-                // Kendi takımının en ileri (en önde savaşan) sopalısı: okçu her zaman onun tam gerisinde/hizasında durur
                 const myClubmen = units.filter(u => u.isPlayer === this.isPlayer && u instanceof Clubman && u.hp > 0);
                 let frontClubman = null;
                 if (myClubmen.length > 0) {
                     frontClubman = this.isPlayer
-                        ? myClubmen.reduce((a, b) => b.x > a.x ? b : a)  // oyuncu sağa ilerler → en ileri = en büyük x
-                        : myClubmen.reduce((a, b) => b.x < a.x ? b : a); // düşman sola ilerler → en ileri = en küçük x
+                        ? myClubmen.reduce((a, b) => b.x > a.x ? b : a)
+                        : myClubmen.reduce((a, b) => b.x < a.x ? b : a);
                 }
 
                 let desiredX;
@@ -1307,11 +1229,10 @@ v<!DOCTYPE html>
                 }
                 if (frontClubman) {
                     desiredX = this.isPlayer
-                        ? Math.min(desiredX, frontClubman.x - this.safeGap)  // oyuncu: sopalının tam solunda (gerisinde) kal
-                        : Math.max(desiredX, frontClubman.x + this.safeGap); // düşman: sopalının tam sağında (gerisinde) kal
-                    desiredY = frontClubman.y; // aynı hizada dur (tam yanında görünsün)
+                        ? Math.min(desiredX, frontClubman.x - this.safeGap)
+                        : Math.max(desiredX, frontClubman.x + this.safeGap);
+                    desiredY = frontClubman.y;
                 }
-                // Düşman çok yakınsa mesafeyi korumak için birazcık geri kayar
                 if (this.target) {
                     const distToTarget = Math.hypot(this.target.x - this.x, this.target.y - this.y);
                     if (distToTarget < this.tooClose) {
@@ -1329,7 +1250,6 @@ v<!DOCTYPE html>
                     actualMoved = true;
                 }
 
-                // Ateş etme / kiriş çekme animasyonu
                 if (this.target) {
                     this.attackTimer++;
                     const CYCLE = this.attackCooldown;
@@ -1415,7 +1335,7 @@ v<!DOCTYPE html>
                     }
                 } else if (this.state === 'active') {
                     this.attackTimer++;
-                    const CYCLE = 120; // %20 daha yavaş ateş (eski değer: 100)
+                    const CYCLE = 120;
                     const DRAW_START = 80;
                     const SHOOT_AT = 116;
                     if (this.attackTimer < DRAW_START) {
@@ -1423,7 +1343,7 @@ v<!DOCTYPE html>
                     } else if (this.attackTimer < SHOOT_AT) {
                         this.drawAmount = (this.attackTimer - DRAW_START) / (SHOOT_AT - DRAW_START);
                     } else {
-                        this.drawAmount = 0; // fırlattı, kiriş serbest
+                        this.drawAmount = 0;
                     }
                     if (this.attackTimer === SHOOT_AT) {
                         let enemies = units.filter(u => u.isPlayer !== this.isPlayer && u.hp > 0 && !u.isInvulnerable);
@@ -1486,11 +1406,9 @@ v<!DOCTYPE html>
                         let isHeadshot = Math.random() < 0.2;
                         let dmg = isHeadshot ? 25 : 12;
                         this.target.hp -= dmg;
-                        // Ok durdurmaz — birkaç saniye yavaşlatır
                         if (this.target.slowTimer !== undefined) {
-                            this.target.slowTimer = Math.max(this.target.slowTimer || 0, 150); // ~2.5 sn
+                            this.target.slowTimer = Math.max(this.target.slowTimer || 0, 150);
                         }
-                        // Oku isabet noktasına sapla
                         if (!this.target.stuckArrows) this.target.stuckArrows = [];
                         const ox = this.x - this.target.x;
                         const oy = this.y - this.target.y + (isHeadshot ? -28 : -8);
@@ -1600,12 +1518,10 @@ v<!DOCTYPE html>
                 const alpha = Math.max(0, s.life / s.maxLife);
                 ctx.save();
                 ctx.globalAlpha = alpha;
-                // Parlak sarı-beyaz kıvılcım
                 ctx.fillStyle = alpha > 0.6 ? '#fff9c4' : '#f1c40f';
                 ctx.beginPath();
                 ctx.arc(s.x, s.y, s.size * alpha, 0, Math.PI * 2);
                 ctx.fill();
-                // Işık halesi
                 if (alpha > 0.4) {
                     ctx.globalAlpha = alpha * 0.35;
                     ctx.fillStyle = '#f39c12';
@@ -1618,16 +1534,13 @@ v<!DOCTYPE html>
         }
 
         function drawMinerBackpack(ctx, x, y, isFlipped, bagGold, inHand = false) {
-            // Fotoğraftaki sırt çantası: koyu torba + sap + içinden çıkan kristaller
             ctx.save();
             ctx.translate(x, y);
             if (isFlipped) ctx.scale(-1, 1);
 
-            // inHand ise önde, değilse sırtta
             const cx = inHand ? 0 : -18;
             const cy = inHand ? 0 : -18;
 
-            // Çanta gövdesi
             ctx.fillStyle = '#2c2c2c';
             ctx.beginPath();
             ctx.moveTo(cx - 10, cy + 8);
@@ -1638,18 +1551,15 @@ v<!DOCTYPE html>
             ctx.closePath();
             ctx.fill();
 
-            // Kenar çizgi
             ctx.strokeStyle = '#1a1a1a';
             ctx.lineWidth = 1.5;
             ctx.stroke();
 
-            // Üst kapak / ağız
             ctx.fillStyle = '#1f1f1f';
             ctx.beginPath();
             ctx.ellipse(cx + 1, cy - 12, 9, 4, -0.15, 0, Math.PI * 2);
             ctx.fill();
 
-            // Kahverengi sap (fotoğraftaki gibi)
             ctx.strokeStyle = '#6d4c2b';
             ctx.lineWidth = 3;
             ctx.lineCap = 'round';
@@ -1658,7 +1568,6 @@ v<!DOCTYPE html>
             ctx.quadraticCurveTo(cx - 2, cy - 22, cx + 8, cy - 12);
             ctx.stroke();
 
-            // Çantadaki altın/kristaller (bagGold kadar)
             const crystalCount = Math.min(6, Math.max(0, bagGold | 0));
             const crystalColors = ['#5dade2', '#f1c40f', '#85c1e9', '#f39c12', '#3498db', '#e67e22'];
             for (let i = 0; i < crystalCount; i++) {
@@ -1666,7 +1575,6 @@ v<!DOCTYPE html>
                 const oy = -14 - Math.floor(i / 3) * 7 - (i % 2) * 2;
                 ctx.fillStyle = crystalColors[i % crystalColors.length];
                 ctx.beginPath();
-                // Basit kristal şekli
                 ctx.moveTo(cx + ox, cy + oy - 6);
                 ctx.lineTo(cx + ox + 3, cy + oy);
                 ctx.lineTo(cx + ox, cy + oy + 3);
@@ -1678,562 +1586,43 @@ v<!DOCTYPE html>
             ctx.restore();
         }
 
-       // ==================== ÇİZİM FONKSİYONLARI ====================
-function drawStickman(ctx, x, y, color, weapon, animFrame, isWalking, isFlipped = false, swingAngle = 0, bodyLean = 0, armRaise = 0, holdingRock = false, isMinerStyle = false, isPlayerFace = true) {
-    ctx.save();
-    ctx.translate(x, y);
-    if (isFlipped) ctx.scale(-1, 1);
-    ctx.strokeStyle = color;
-    ctx.lineWidth = isMinerStyle ? 4 : 3.2;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-
-    const isMining = (weapon === 'pickaxe' && animFrame > 0);
-    const isClimbing = (weapon === 'climb');
-
-    const leanX = isMining ? bodyLean * 10 : 0;
-    const leanY = isMining ? bodyLean * 4 : 0;
-    const isClub = (weapon === 'club');
-
-    const hipX = 0;
-    const hipY = -12;
-    const shoulderX = leanX * 0.85;
-    const shoulderY = isClub ? (-36 + leanY * 0.4) : (-32 + leanY * 0.55);
-
-    let headR = isMinerStyle ? 11 : (isClub ? 9 : 7.5);
-    let hx = isMining ? leanX + bodyLean * 2 : shoulderX;
-    let hy = shoulderY - headR + 1;
-    if (isMining && bodyLean > 0.6) {
-        hx = leanX + 6;
-        hy = shoulderY - headR + 4;
-    }
-
-    const faceImg = isPlayerFace ? minerFaceImg : minerFaceEnemyImg;
-    if (isMinerStyle && faceImg && faceImg.complete && faceImg.naturalWidth > 0) {
-        const faceSize = 24;
-        ctx.drawImage(faceImg, hx - faceSize / 2, hy - faceSize / 2, faceSize, faceSize);
-    } else {
-        ctx.beginPath();
-        ctx.arc(hx, hy, headR, 0, Math.PI * 2);
-        ctx.fillStyle = color;
-        ctx.fill();
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 2;
-        ctx.stroke();
-    }
-            // Gövde (kalçadan omza) — kafaya değecek şekilde
+        // ======== drawStickman (BASİT – ÇALIŞAN) ========
+        function drawStickman(ctx, x, y, color, weapon, animFrame, isWalking, isFlipped = false, swingAngle = 0, bodyLean = 0, armRaise = 0, holdingRock = false, isMinerStyle = false, isPlayerFace = true) {
+            ctx.save();
+            ctx.translate(x, y);
+            if (isFlipped) ctx.scale(-1, 1);
             ctx.strokeStyle = color;
-            ctx.lineWidth = isClub ? 6.5 : (isMinerStyle ? 5 : 3.2);
-            ctx.beginPath();
-            ctx.moveTo(hipX, hipY);
-            ctx.lineTo(shoulderX, shoulderY);
-            // Boyun: omuzdan kafanın altına
-            ctx.lineTo(hx, hy + headR - 1);
-            ctx.stroke();
-
-            // Bacaklar — gerçekçi yürüme (sarkaç)
-            // Adım hızı: sopalı daha hızlı adım (koşu), madenci normal
-            const walkPhase = frames * (isClub ? 0.32 : 0.20);
-            const stride = isClub ? 14 : 10;
-            const legSwing = isWalking ? Math.sin(walkPhase) * stride : 0;
-            const legSwing2 = isWalking ? Math.sin(walkPhase + Math.PI) * stride : 0;
-            const legSpread = isMining ? 3 + bodyLean * 5 : 0;
-            ctx.lineWidth = isClub ? 5.5 : (isMinerStyle ? 4.5 : 3.2);
+            ctx.lineWidth = 3.2;
             ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+
             ctx.beginPath();
-            if (isClimbing) {
-                let climbLeg = Math.sin(animFrame * 0.2) * 8;
-                ctx.moveTo(hipX, hipY);
-                ctx.lineTo(-8, -5 + climbLeg);
-                ctx.moveTo(hipX, hipY);
-                ctx.lineTo(8, -5 - climbLeg);
-            } else if (isWalking) {
-                // Net adım: bir bacak önde, diğeri arkada, sonra tersine
-                // Sol bacak (kalça → diz → ayak)
-                const L = legSwing;   // + önde, - arkada
-                const R = legSwing2;
-                ctx.moveTo(hipX, hipY);
-                ctx.lineTo(-3 + L * 0.4, -5);
-                ctx.lineTo(-4 + L, 2);
-                // Sağ bacak
-                ctx.moveTo(hipX, hipY);
-                ctx.lineTo(3 + R * 0.4, -5);
-                ctx.lineTo(4 + R, 2);
-            } else {
-                // Idle: hafif açık
-                ctx.moveTo(hipX, hipY);
-                ctx.lineTo(-7 - legSpread, 2);
-                ctx.moveTo(hipX, hipY);
-                ctx.lineTo(7 + legSpread * 0.5, 2);
-            }
+            ctx.arc(0, -32, 9, 0, Math.PI * 2);
+            ctx.fillStyle = color;
+            ctx.fill();
             ctx.stroke();
 
-            // Kollar
-            if (isClimbing) {
-                let climbArm = Math.sin(animFrame * 0.2) * 12;
-                ctx.beginPath();
-                ctx.moveTo(0, -28);
-                ctx.lineTo(-12, -48 + climbArm);
-                ctx.moveTo(0, -28);
-                ctx.lineTo(12, -48 - climbArm);
-                ctx.stroke();
-            } else {
-                let armRot = 0;
-                let backArmRot = 0;
-
-                if (isMining) {
-                    // armRaise 1 = yukarı, 0 = vuruş (aşağı/ileri)
-                    armRot = -50 + (1 - armRaise) * 100 + swingAngle * 25;
-                    backArmRot = 5; // arka kol yanlarda, kazmayı tutmuyor
-                } else if (weapon === 'club') {
-                    if (animFrame > 0) {
-                        // Geri çek → ileri sert vuruş (rakibe değsin)
-                        if (animFrame < 30) {
-                            const t = animFrame / 30;
-                            armRot = -40 - t * 50; // geri
-                        } else if (animFrame < 55) {
-                            const t = (animFrame - 30) / 25;
-                            armRot = -90 + t * 140; // ileri vuruş
-                        } else {
-                            const t = Math.min(1, (animFrame - 55) / 45);
-                            armRot = 50 - t * 85;
-                        }
-                        backArmRot = 25;
-                    } else {
-                        armRot = -35 + (isWalking ? Math.sin(frames * 0.22) * 8 : 0);
-                        backArmRot = 20 + (isWalking ? Math.sin(frames * 0.22 + Math.PI) * 10 : 0);
-                    }
-                } else if (weapon === 'bow') {
-                    // Ön kol yayı sabit tutar, arka kol kirişi geriye çeker (swingAngle = çekiliş oranı 0..1)
-                    armRot = -78;
-                    backArmRot = -15 - swingAngle * 45;
-                } else if (isWalking) {
-                    // Silahsız yürümede kol sallanması
-                    armRot = Math.sin(frames * 0.22) * 25;
-                    backArmRot = Math.sin(frames * 0.22 + Math.PI) * 25;
-                }
-
-                // Kollar
-                let backHandX, backHandY, handX, handY;
-                if (weapon === 'club') {
-                    backHandX = shoulderX - 8;
-                    backHandY = shoulderY + 12;
-                    // Vuruşta kol ileri uzasın
-                    const swingT = animFrame > 30 && animFrame < 55 ? (animFrame - 30) / 25 : 0;
-                    const reach = 12 + swingT * 14;
-                    const rad = armRot * Math.PI / 180;
-                    handX = shoulderX + 4 + Math.sin(rad) * reach * 0.4 + swingT * 10;
-                    handY = shoulderY + 6 - Math.cos(rad) * 8;
-                } else if (isMining) {
-                    // Tek el: vuruşta kol madene uzansın
-                    backHandX = shoulderX - 8;
-                    backHandY = shoulderY + 14;
-                    const reach = 18 + (1 - armRaise) * 16; // vuruşta madene değecek kadar ileri
-                    handX = shoulderX + reach * Math.sin((armRot + 30) * Math.PI / 180) + 6;
-                    handY = shoulderY + 2 - reach * 0.45 * Math.cos(armRot * Math.PI / 180) - armRaise * 6;
-                } else if (weapon === 'bow') {
-                    // Ön el: yayı öne doğru sabit tutar
-                    handX = shoulderX + 15;
-                    handY = shoulderY - 3;
-                    // Arka el: kirişi/oku geriye çeker (germe oranına göre)
-                    backHandX = shoulderX - 4 - swingAngle * 11;
-                    backHandY = shoulderY + 5;
-                } else {
-                    backHandX = shoulderX - 10 + backArmRot / 5;
-                    backHandY = shoulderY + 6 + bodyLean * 10;
-                    const reach = 10;
-                    handX = shoulderX + reach * Math.sin((armRot + 20) * Math.PI / 180);
-                    handY = shoulderY + 8 - reach * 0.7 * Math.cos((armRot) * Math.PI / 180) - armRaise * 10;
-                }
-                // Arka kol (kazarken yanda, tutmuyor)
-                ctx.beginPath();
-                ctx.moveTo(shoulderX, shoulderY);
-                ctx.lineTo(backHandX, backHandY);
-                ctx.stroke();
-
-                // Ön kol (tek el kazma)
-                ctx.beginPath();
-                ctx.moveTo(shoulderX, shoulderY);
-                ctx.lineTo(handX, handY);
-                ctx.stroke();
-
-                // Silah
-                if (weapon === 'pickaxe') {
-                    {
-                        // Kazma – kahverengi sap + metal uç, daha ileri
-                        ctx.save();
-                        ctx.translate(handX, handY);
-                        const pickAngle = (-1.0 + (1 - armRaise) * 1.4) + swingAngle * 0.25;
-                        ctx.rotate(pickAngle);
-
-                        // Daha uzun sap (ileri atsın)
-                        ctx.strokeStyle = '#a0522d';
-                        ctx.lineWidth = 3.2;
-                        ctx.beginPath();
-                        ctx.moveTo(0, 0);
-                        ctx.lineTo(0, -28);
-                        ctx.stroke();
-
-                        // Metal kafa
-                        ctx.strokeStyle = '#4a4a4a';
-                        ctx.lineWidth = 4;
-                        ctx.beginPath();
-                        ctx.moveTo(-13, -26);
-                        ctx.lineTo(13, -26);
-                        ctx.stroke();
-                        ctx.lineWidth = 3;
-                        ctx.beginPath();
-                        ctx.moveTo(-13, -26);
-                        ctx.lineTo(-16, -18);
-                        ctx.moveTo(13, -26);
-                        ctx.lineTo(16, -18);
-                        ctx.stroke();
-                        ctx.restore();
-                    }
-                } else if (weapon === 'club') {
-                    // Dikenli sopa — vuruşta daha uzun / ileri
-                    const swingT = animFrame > 30 && animFrame < 55 ? (animFrame - 30) / 25 : 0;
-                    const clubLen = 30 + swingT * 12;
-                    ctx.save();
-                    ctx.translate(handX, handY);
-                    const clubAngle = (-0.5 + armRot * 0.014) + swingT * 0.3;
-                    ctx.rotate(clubAngle);
-
-                    ctx.strokeStyle = color;
-                    ctx.lineWidth = 6;
-                    ctx.lineCap = 'round';
-                    ctx.beginPath();
-                    ctx.moveTo(0, 0);
-                    ctx.lineTo(0, -clubLen);
-                    ctx.stroke();
-
-                    ctx.fillStyle = color;
-                    ctx.beginPath();
-                    ctx.ellipse(0, -clubLen - 2, 5, 7, 0, 0, Math.PI * 2);
-                    ctx.fill();
-
-                    ctx.fillStyle = '#ecf0f1';
-                    const tip = -clubLen;
-                    const spikes = [
-                        [-6, tip + 2], [6, tip + 2], [-7, tip - 4], [7, tip - 4],
-                        [-5, tip - 8], [5, tip - 8], [0, tip - 12]
-                    ];
-                    spikes.forEach(([sx, sy]) => {
-                        ctx.beginPath();
-                        ctx.moveTo(sx, sy);
-                        ctx.lineTo(sx * 0.3, sy + 5);
-                        ctx.lineTo(sx + (sx > 0 ? 2 : -2), sy + 2);
-                        ctx.closePath();
-                        ctx.fill();
-                    });
-                    ctx.restore();
-                } else if (weapon === 'bow') {
-                    ctx.save();
-                    ctx.translate(handX, handY);
-                    const bowHalf = 15; // yayın yarım yüksekliği
-                    const drawT = Math.max(0, Math.min(1, swingAngle)); // 0=serbest, 1=tam gerilmiş
-                    const pullX = -5 - drawT * 11; // kiriş + ok germe ile geri gider
-
-                    // Yay gövdesi (dikey kavis, öne bakar)
-                    ctx.strokeStyle = '#8b5a2b';
-                    ctx.lineWidth = 2.6;
-                    ctx.beginPath();
-                    ctx.arc(0, 0, bowHalf, -Math.PI / 2, Math.PI / 2);
-                    ctx.stroke();
-
-                    // Kiriş: üst uçtan germe noktasına, oradan alt uca
-                    ctx.strokeStyle = '#ecf0f1';
-                    ctx.lineWidth = 1.3;
-                    ctx.beginPath();
-                    ctx.moveTo(0, -bowHalf);
-                    ctx.lineTo(pullX, 0);
-                    ctx.lineTo(0, bowHalf);
-                    ctx.stroke();
-
-                    // Ok: elde tam tutuluyor, temreni öne bakar
-                    ctx.strokeStyle = '#6d4c2f';
-                    ctx.lineWidth = 1.8;
-                    ctx.beginPath();
-                    ctx.moveTo(pullX - 4, 0);
-                    ctx.lineTo(pullX + 20, 0);
-                    ctx.stroke();
-                    // Ok temreni (uç)
-                    ctx.fillStyle = '#95a5a6';
-                    ctx.beginPath();
-                    ctx.moveTo(pullX + 20, 0);
-                    ctx.lineTo(pullX + 14, -3);
-                    ctx.lineTo(pullX + 14, 3);
-                    ctx.closePath();
-                    ctx.fill();
-                    // Ok tüyü (arka)
-                    ctx.strokeStyle = '#e74c3c';
-                    ctx.lineWidth = 1.6;
-                    ctx.beginPath();
-                    ctx.moveTo(pullX - 4, -3);
-                    ctx.lineTo(pullX + 1, 0);
-                    ctx.lineTo(pullX - 4, 3);
-                    ctx.stroke();
-                    ctx.restore();
-                }
-            }
-            ctx.restore();
-        }
-
-               // Gövde (kalçadan omza) — kafaya değecek şekilde
-            ctx.strokeStyle = color;
-            ctx.lineWidth = isClub ? 6.5 : (isMinerStyle ? 5 : 3.2);
             ctx.beginPath();
-            ctx.moveTo(hipX, hipY);
-            ctx.lineTo(shoulderX, shoulderY);
-            // Boyun: omuzdan kafanın altına
-            ctx.lineTo(hx, hy + headR - 1);
+            ctx.moveTo(0, -23);
+            ctx.lineTo(0, -5);
             ctx.stroke();
 
-            // Bacaklar — gerçekçi yürüme (sarkaç)
-            // Adım hızı: sopalı daha hızlı adım (koşu), madenci normal
-            const walkPhase = frames * (isClub ? 0.32 : 0.20);
-            const stride = isClub ? 14 : 10;
-            const legSwing = isWalking ? Math.sin(walkPhase) * stride : 0;
-            const legSwing2 = isWalking ? Math.sin(walkPhase + Math.PI) * stride : 0;
-            const legSpread = isMining ? 3 + bodyLean * 5 : 0;
-            ctx.lineWidth = isClub ? 5.5 : (isMinerStyle ? 4.5 : 3.2);
-            ctx.lineCap = 'round';
+            const legSwing = isWalking ? Math.sin(frames * 0.2) * 10 : 0;
             ctx.beginPath();
-            if (isClimbing) {
-                let climbLeg = Math.sin(animFrame * 0.2) * 8;
-                ctx.moveTo(hipX, hipY);
-                ctx.lineTo(-8, -5 + climbLeg);
-                ctx.moveTo(hipX, hipY);
-                ctx.lineTo(8, -5 - climbLeg);
-            } else if (isWalking) {
-                // Net adım: bir bacak önde, diğeri arkada, sonra tersine
-                // Sol bacak (kalça → diz → ayak)
-                const L = legSwing;   // + önde, - arkada
-                const R = legSwing2;
-                ctx.moveTo(hipX, hipY);
-                ctx.lineTo(-3 + L * 0.4, -5);
-                ctx.lineTo(-4 + L, 2);
-                // Sağ bacak
-                ctx.moveTo(hipX, hipY);
-                ctx.lineTo(3 + R * 0.4, -5);
-                ctx.lineTo(4 + R, 2);
-            } else {
-                // Idle: hafif açık
-                ctx.moveTo(hipX, hipY);
-                ctx.lineTo(-7 - legSpread, 2);
-                ctx.moveTo(hipX, hipY);
-                ctx.lineTo(7 + legSpread * 0.5, 2);
-            }
+            ctx.moveTo(0, -5);
+            ctx.lineTo(-6 + legSwing, 5);
+            ctx.moveTo(0, -5);
+            ctx.lineTo(6 - legSwing, 5);
             ctx.stroke();
 
-            // Kollar
-            if (isClimbing) {
-                let climbArm = Math.sin(animFrame * 0.2) * 12;
-                ctx.beginPath();
-                ctx.moveTo(0, -28);
-                ctx.lineTo(-12, -48 + climbArm);
-                ctx.moveTo(0, -28);
-                ctx.lineTo(12, -48 - climbArm);
-                ctx.stroke();
-            } else {
-                let armRot = 0;
-                let backArmRot = 0;
+            let armSwing = isWalking ? Math.sin(frames * 0.2 + Math.PI) * 12 : 0;
+            ctx.beginPath();
+            ctx.moveTo(0, -18);
+            ctx.lineTo(-8 + armSwing, -8);
+            ctx.moveTo(0, -18);
+            ctx.lineTo(8 - armSwing, -8);
+            ctx.stroke();
 
-                if (isMining) {
-                    // armRaise 1 = yukarı, 0 = vuruş (aşağı/ileri)
-                    armRot = -50 + (1 - armRaise) * 100 + swingAngle * 25;
-                    backArmRot = 5; // arka kol yanlarda, kazmayı tutmuyor
-                } else if (weapon === 'club') {
-                    if (animFrame > 0) {
-                        // Geri çek → ileri sert vuruş (rakibe değsin)
-                        if (animFrame < 30) {
-                            const t = animFrame / 30;
-                            armRot = -40 - t * 50; // geri
-                        } else if (animFrame < 55) {
-                            const t = (animFrame - 30) / 25;
-                            armRot = -90 + t * 140; // ileri vuruş
-                        } else {
-                            const t = Math.min(1, (animFrame - 55) / 45);
-                            armRot = 50 - t * 85;
-                        }
-                        backArmRot = 25;
-                    } else {
-                        armRot = -35 + (isWalking ? Math.sin(frames * 0.22) * 8 : 0);
-                        backArmRot = 20 + (isWalking ? Math.sin(frames * 0.22 + Math.PI) * 10 : 0);
-                    }
-                } else if (weapon === 'bow') {
-                    // Ön kol yayı sabit tutar, arka kol kirişi geriye çeker (swingAngle = çekiliş oranı 0..1)
-                    armRot = -78;
-                    backArmRot = -15 - swingAngle * 45;
-                } else if (isWalking) {
-                    // Silahsız yürümede kol sallanması
-                    armRot = Math.sin(frames * 0.22) * 25;
-                    backArmRot = Math.sin(frames * 0.22 + Math.PI) * 25;
-                }
-
-                // Kollar
-                let backHandX, backHandY, handX, handY;
-                if (weapon === 'club') {
-                    backHandX = shoulderX - 8;
-                    backHandY = shoulderY + 12;
-                    // Vuruşta kol ileri uzasın
-                    const swingT = animFrame > 30 && animFrame < 55 ? (animFrame - 30) / 25 : 0;
-                    const reach = 12 + swingT * 14;
-                    const rad = armRot * Math.PI / 180;
-                    handX = shoulderX + 4 + Math.sin(rad) * reach * 0.4 + swingT * 10;
-                    handY = shoulderY + 6 - Math.cos(rad) * 8;
-                } else if (isMining) {
-                    // Tek el: vuruşta kol madene uzansın
-                    backHandX = shoulderX - 8;
-                    backHandY = shoulderY + 14;
-                    const reach = 18 + (1 - armRaise) * 16; // vuruşta madene değecek kadar ileri
-                    handX = shoulderX + reach * Math.sin((armRot + 30) * Math.PI / 180) + 6;
-                    handY = shoulderY + 2 - reach * 0.45 * Math.cos(armRot * Math.PI / 180) - armRaise * 6;
-                } else if (weapon === 'bow') {
-                    // Ön el: yayı öne doğru sabit tutar
-                    handX = shoulderX + 15;
-                    handY = shoulderY - 3;
-                    // Arka el: kirişi/oku geriye çeker (germe oranına göre)
-                    backHandX = shoulderX - 4 - swingAngle * 11;
-                    backHandY = shoulderY + 5;
-                } else {
-                    backHandX = shoulderX - 10 + backArmRot / 5;
-                    backHandY = shoulderY + 6 + bodyLean * 10;
-                    const reach = 10;
-                    handX = shoulderX + reach * Math.sin((armRot + 20) * Math.PI / 180);
-                    handY = shoulderY + 8 - reach * 0.7 * Math.cos((armRot) * Math.PI / 180) - armRaise * 10;
-                }
-                // Arka kol (kazarken yanda, tutmuyor)
-                ctx.beginPath();
-                ctx.moveTo(shoulderX, shoulderY);
-                ctx.lineTo(backHandX, backHandY);
-                ctx.stroke();
-
-                // Ön kol (tek el kazma)
-                ctx.beginPath();
-                ctx.moveTo(shoulderX, shoulderY);
-                ctx.lineTo(handX, handY);
-                ctx.stroke();
-
-                // Silah
-                if (weapon === 'pickaxe') {
-                    {
-                        // Kazma – kahverengi sap + metal uç, daha ileri
-                        ctx.save();
-                        ctx.translate(handX, handY);
-                        const pickAngle = (-1.0 + (1 - armRaise) * 1.4) + swingAngle * 0.25;
-                        ctx.rotate(pickAngle);
-
-                        // Daha uzun sap (ileri atsın)
-                        ctx.strokeStyle = '#a0522d';
-                        ctx.lineWidth = 3.2;
-                        ctx.beginPath();
-                        ctx.moveTo(0, 0);
-                        ctx.lineTo(0, -28);
-                        ctx.stroke();
-
-                        // Metal kafa
-                        ctx.strokeStyle = '#4a4a4a';
-                        ctx.lineWidth = 4;
-                        ctx.beginPath();
-                        ctx.moveTo(-13, -26);
-                        ctx.lineTo(13, -26);
-                        ctx.stroke();
-                        ctx.lineWidth = 3;
-                        ctx.beginPath();
-                        ctx.moveTo(-13, -26);
-                        ctx.lineTo(-16, -18);
-                        ctx.moveTo(13, -26);
-                        ctx.lineTo(16, -18);
-                        ctx.stroke();
-                        ctx.restore();
-                    }
-                } else if (weapon === 'club') {
-                    // Dikenli sopa — vuruşta daha uzun / ileri
-                    const swingT = animFrame > 30 && animFrame < 55 ? (animFrame - 30) / 25 : 0;
-                    const clubLen = 30 + swingT * 12;
-                    ctx.save();
-                    ctx.translate(handX, handY);
-                    const clubAngle = (-0.5 + armRot * 0.014) + swingT * 0.3;
-                    ctx.rotate(clubAngle);
-
-                    ctx.strokeStyle = color;
-                    ctx.lineWidth = 6;
-                    ctx.lineCap = 'round';
-                    ctx.beginPath();
-                    ctx.moveTo(0, 0);
-                    ctx.lineTo(0, -clubLen);
-                    ctx.stroke();
-
-                    ctx.fillStyle = color;
-                    ctx.beginPath();
-                    ctx.ellipse(0, -clubLen - 2, 5, 7, 0, 0, Math.PI * 2);
-                    ctx.fill();
-
-                    ctx.fillStyle = '#ecf0f1';
-                    const tip = -clubLen;
-                    const spikes = [
-                        [-6, tip + 2], [6, tip + 2], [-7, tip - 4], [7, tip - 4],
-                        [-5, tip - 8], [5, tip - 8], [0, tip - 12]
-                    ];
-                    spikes.forEach(([sx, sy]) => {
-                        ctx.beginPath();
-                        ctx.moveTo(sx, sy);
-                        ctx.lineTo(sx * 0.3, sy + 5);
-                        ctx.lineTo(sx + (sx > 0 ? 2 : -2), sy + 2);
-                        ctx.closePath();
-                        ctx.fill();
-                    });
-                    ctx.restore();
-                } else if (weapon === 'bow') {
-                    ctx.save();
-                    ctx.translate(handX, handY);
-                    const bowHalf = 15; // yayın yarım yüksekliği
-                    const drawT = Math.max(0, Math.min(1, swingAngle)); // 0=serbest, 1=tam gerilmiş
-                    const pullX = -5 - drawT * 11; // kiriş + ok germe ile geri gider
-
-                    // Yay gövdesi (dikey kavis, öne bakar)
-                    ctx.strokeStyle = '#8b5a2b';
-                    ctx.lineWidth = 2.6;
-                    ctx.beginPath();
-                    ctx.arc(0, 0, bowHalf, -Math.PI / 2, Math.PI / 2);
-                    ctx.stroke();
-
-                    // Kiriş: üst uçtan germe noktasına, oradan alt uca
-                    ctx.strokeStyle = '#ecf0f1';
-                    ctx.lineWidth = 1.3;
-                    ctx.beginPath();
-                    ctx.moveTo(0, -bowHalf);
-                    ctx.lineTo(pullX, 0);
-                    ctx.lineTo(0, bowHalf);
-                    ctx.stroke();
-
-                    // Ok: elde tam tutuluyor, temreni öne bakar
-                    ctx.strokeStyle = '#6d4c2f';
-                    ctx.lineWidth = 1.8;
-                    ctx.beginPath();
-                    ctx.moveTo(pullX - 4, 0);
-                    ctx.lineTo(pullX + 20, 0);
-                    ctx.stroke();
-                    // Ok temreni (uç)
-                    ctx.fillStyle = '#95a5a6';
-                    ctx.beginPath();
-                    ctx.moveTo(pullX + 20, 0);
-                    ctx.lineTo(pullX + 14, -3);
-                    ctx.lineTo(pullX + 14, 3);
-                    ctx.closePath();
-                    ctx.fill();
-                    // Ok tüyü (arka)
-                    ctx.strokeStyle = '#e74c3c';
-                    ctx.lineWidth = 1.6;
-                    ctx.beginPath();
-                    ctx.moveTo(pullX - 4, -3);
-                    ctx.lineTo(pullX + 1, 0);
-                    ctx.lineTo(pullX - 4, 3);
-                    ctx.stroke();
-                    ctx.restore();
-                }
-            }
             ctx.restore();
         }
 
@@ -2295,13 +1684,11 @@ function drawStickman(ctx, x, y, color, weapon, animFrame, isWalking, isFlipped 
                 let mx = slot.x;
                 let my = slot.y;
 
-                // Gölge
                 ctx.fillStyle = 'rgba(0,0,0,0.25)';
                 ctx.beginPath();
                 ctx.ellipse(mx, my + 12, 28, 9, 0, 0, Math.PI * 2);
                 ctx.fill();
 
-                // Yuvarlak kaya (fotoğraf)
                 ctx.fillStyle = '#6b7280';
                 ctx.beginPath();
                 ctx.ellipse(mx, my + 2, 26, 16, 0, 0, Math.PI * 2);
@@ -2311,7 +1698,6 @@ function drawStickman(ctx, x, y, color, weapon, animFrame, isWalking, isFlipped 
                 ctx.ellipse(mx - 4, my + 4, 14, 10, -0.2, 0, Math.PI * 2);
                 ctx.fill();
 
-                // Üstte altın kristaller
                 let crystals = [
                     { x: -10, y: -6, w: 7, h: 16, rot: -0.25 },
                     { x: -1, y: -10, w: 8, h: 20, rot: 0.05 },
@@ -2372,9 +1758,6 @@ function drawStickman(ctx, x, y, color, weapon, animFrame, isWalking, isFlipped 
             }
         };
 
-        // modalBtn menü sisteminde tanımlı
-
-
         function resetLevel() {
             units.forEach(u => { if (u instanceof Miner) u.releaseSlot(); });
             units = [];
@@ -2416,7 +1799,7 @@ function drawStickman(ctx, x, y, color, weapon, animFrame, isWalking, isFlipped 
 
             if (typeof initMines === 'function') initMines();
 
-            if (level === 1) enemy.base.maxHp = 280; // 1. bölüm daha kolay
+            if (level === 1) enemy.base.maxHp = 280;
             else if (level === 2) enemy.base.maxHp = 900;
             else if (level === 3) enemy.base.maxHp = 1800;
 
@@ -2443,20 +1826,15 @@ function drawStickman(ctx, x, y, color, weapon, animFrame, isWalking, isFlipped 
             const aiMiners = units.filter(u => !u.isPlayer && u instanceof Miner);
             const aiFighters = units.filter(u => !u.isPlayer && u instanceof Clubman && u.hp > 0);
             const aiArchers = units.filter(u => !u.isPlayer && u instanceof Archer && u.hp > 0);
-            // Toplam savaş gücü (sopalı + okçu) — 2. seferde düşman sadece okçu kullanır
             const aiCombatUnits = aiFighters.concat(aiArchers);
-            // Görüş: sadece üs yakını VEYA AI birimlerine yakın oyuncu birimleri görünür
             const visiblePlayerFighters = units.filter(u => {
                 if (!(u.isPlayer && (u instanceof Clubman || u instanceof Archer) && u.hp > 0)) return false;
-                // Üs görüş alanı
                 if (Math.abs(u.x - enemy.base.x) < AI_VISION_RANGE) return true;
-                // AI birimlerine yakınsa görünür
                 for (const af of aiCombatUnits) {
                     if (Math.hypot(u.x - af.x, u.y - af.y) < 350) return true;
                 }
                 return false;
             });
-            // AI haritada uzak oyuncu ordusunu bilmez
             const knownPlayerCount = visiblePlayerFighters.length;
 
             if (enemy.minerCooldown > 0) enemy.minerCooldown--;
@@ -2491,7 +1869,6 @@ function drawStickman(ctx, x, y, color, weapon, animFrame, isWalking, isFlipped 
 
             const playerThreatVisible = knownPlayerCount > 0;
             const defenseTarget = 1;
-            // Büyük ordu eşiği (görünen rakibe göre veya sabit)
             const armyGoal = Math.max(diff.attackThreshold + 2, knownPlayerCount + 2, 5);
 
             if (enemy.aiState === 'attack') {
@@ -2532,14 +1909,12 @@ function drawStickman(ctx, x, y, color, weapon, animFrame, isWalking, isFlipped 
                     enemy.retreatGoldSaved = 0;
                     enemy.recoveryUnitsPurchased = 0;
                 } else {
-                    // Kale %35 altındaysa ve üstün ordu kuramıyorsa savun
                     const castleCritical = enemy.base.hp < enemy.base.maxHp * 0.35;
                     const hasAdvantage = aiCombatUnits.length >= knownPlayerCount + 1;
                     const combatCap = Math.min(diff.maxClubmen, MAX_CLUBMEN_PER_TEAM) + Math.min(diff.maxArchers || 0, MAX_ARCHERS_PER_TEAM);
                     const canOutproduce = aiCombatUnits.length < combatCap;
 
                     if (castleCritical && !hasAdvantage) {
-                        // Can kritik + üstün değil → savun / biriktir
                         newState = 'defend';
                         newCommand = CMD_DEFEND;
                     } else {
@@ -2552,17 +1927,14 @@ function drawStickman(ctx, x, y, color, weapon, animFrame, isWalking, isFlipped 
                             newState = 'attack';
                             newCommand = CMD_ATTACK;
                         } else if (playerThreatVisible && knownPlayerCount > 0) {
-                            // 1-2 fazla birim biriktirince sal; yoksa savun
                             if (aiCombatUnits.length >= knownPlayerCount + 1 || aiCombatUnits.length >= armyGoal) {
                                 newState = 'attack';
                                 newCommand = CMD_ATTACK;
                             } else {
-                                // Takviye biriktir, savunmada kal
                                 newState = 'defend';
                                 newCommand = CMD_DEFEND;
                             }
                         } else {
-                            // Rakip görünmüyor: ordu biriktir, hedefe ulaşınca sal
                             if (aiCombatUnits.length >= armyGoal) {
                                 newState = 'attack';
                                 newCommand = CMD_ATTACK;
@@ -2591,7 +1963,6 @@ function drawStickman(ctx, x, y, color, weapon, animFrame, isWalking, isFlipped 
                 const hasArchers = retreatArchers.some(archer => archer.isPlayer === isPlayer);
                 if (isRetreating && !hasArchers) {
                     const base = isPlayer ? player.base : enemy.base;
-                    // Herkes aynı tırmanma süresi (düşmana hızlı kule avantajı yok)
                     const climbSpeed = 1.2;
                     retreatArchers.push(
                         new BaseArcherUnit(isPlayer, -25, -15, climbSpeed),
@@ -2608,7 +1979,6 @@ function drawStickman(ctx, x, y, color, weapon, animFrame, isWalking, isFlipped 
             retreatArchers.forEach(archer => archer.update());
         }
 
-        // ==================== FORMASYON VE ÇARPIŞMA ====================
         function handleFormationAndCollisions() {
             ['player', 'enemy'].forEach(team => {
                 let isPlayer = (team === 'player');
@@ -2648,7 +2018,6 @@ function drawStickman(ctx, x, y, color, weapon, animFrame, isWalking, isFlipped 
                     }
                 }
 
-                // Okçular birbirinin üstüne binmesin (yerleşim asıl Archer.update() içinde belirlenir)
                 let archers = units.filter(u => u.isPlayer === isPlayer && u instanceof Archer && u.hp > 0);
                 for (let i = 0; i < archers.length; i++) {
                     for (let j = i + 1; j < archers.length; j++) {
@@ -2702,7 +2071,6 @@ function drawStickman(ctx, x, y, color, weapon, animFrame, isWalking, isFlipped 
                 addFloatingText(player.base.x, player.base.y - 120, '+15', '#f1c40f');
             }
 
-            // Geri çekilmeden savunmaya geçince 3 saniye (180 kare) dokunulmazlık ver
             [player, enemy].forEach(team => {
                 if (team.command !== CMD_RETREAT && team.lastCommand === CMD_RETREAT) {
                     team.retreatGraceTimer = 180;
@@ -2758,7 +2126,6 @@ function drawStickman(ctx, x, y, color, weapon, animFrame, isWalking, isFlipped 
             btnMiner.disabled = player.gold < 150 || player.minerCooldown > 0 || playerMiners >= MAX_MINERS_PER_TEAM;
             btnClub.disabled = player.gold < 125 || player.clubCooldown > 0 || playerClubmen >= MAX_CLUBMEN_PER_TEAM;
 
-            // Okçu birimi: 2. seferi bitirince (yani 3. sefer ve sonrasında) kullanılabilir
             if (level >= 3) {
                 btnArcher.style.display = '';
                 btnArcher.disabled = player.gold < 140 || player.archerCooldown > 0 || playerArchers >= MAX_ARCHERS_PER_TEAM;
@@ -2830,15 +2197,10 @@ function drawStickman(ctx, x, y, color, weapon, animFrame, isWalking, isFlipped 
             if (!isGameOver) animationFrameId = requestAnimationFrame(loop);
         }
 
-
-                // ==================== HESAP + MENÜ + SEFER ====================
+        // ==================== HESAP + MENÜ + SEFER ====================
         const TOKEN_KEY = 'copAdamToken_v1';
         const LOCAL_USERS_KEY = 'copAdamUsersHashed_v1';
         const LOCAL_SESSION_KEY = 'copAdamLocalSession_v1';
-        // Sunucu aynı origin'de çalışıyorsa kullanılır; yoksa yerel (hash'li) moda düşer
-        // Sayfa http/https ile sunuluyorsa (Render dahil, port olsun olmasın) her zaman
-        // aynı sunucudaki API'yi kullan. Sadece dosyayı doğrudan file:// ile açarsan
-        // yerel geliştirme sunucusuna (127.0.0.1:3847) düşer.
         const API_BASE = (typeof location !== 'undefined' && location.protocol.startsWith('http'))
             ? ''
             : 'http://127.0.0.1:3847';
@@ -2869,7 +2231,6 @@ function drawStickman(ctx, x, y, color, weapon, animFrame, isWalking, isFlipped 
             localStorage.setItem(LOCAL_USERS_KEY, JSON.stringify(db));
         }
 
-        // Tarayıcıda da düz metin şifre tutulmaz — Web Crypto ile SHA-256
         async function hashPass(password, salt) {
             const enc = new TextEncoder();
             const data = enc.encode(salt + '::' + password);
@@ -2960,7 +2321,7 @@ function drawStickman(ctx, x, y, color, weapon, animFrame, isWalking, isFlipped 
             }
         }
 
-function showScreen(which) {
+        function showScreen(which) {
             authScreen.classList.add('hidden');
             mainMenu.classList.add('hidden');
             campaignScreen.classList.add('hidden');
@@ -3027,7 +2388,6 @@ function showScreen(which) {
                         localStorage.setItem(TOKEN_KEY, data.token);
                         localStorage.removeItem(LOCAL_SESSION_KEY);
                     } catch (e) {
-                        // Sunucu yoksa yerel hash'li moda düş
                         if (e.status && e.status >= 400 && e.status < 500) throw e;
                         useServer = false;
                     }
@@ -3164,7 +2524,6 @@ function showScreen(which) {
         };
 
         (async function bootMenu() {
-            // Sunucu ayakta mı dene
             try {
                 await api('/api/me');
                 useServer = true;
@@ -3189,7 +2548,7 @@ function showScreen(which) {
                 }
             }
 
-                  const localName = localStorage.getItem(LOCAL_SESSION_KEY);
+            const localName = localStorage.getItem(LOCAL_SESSION_KEY);
             if (localName) {
                 const db = loadLocalUsers();
                 if (db[localName]) {
