@@ -89,6 +89,9 @@
             minerCooldown: 0, minerMaxCooldown: 15 * 60,
             clubCooldown: 0, clubMaxCooldown: 10 * 60,
             archerCooldown: 0, archerMaxCooldown: 11 * 60,
+            spawnQueue: [],
+            spawnTimer: 0,
+            spawnTimerMax: 0,
             clubFormationCounter: 0,
             archerFormationCounter: 0
         };
@@ -234,4 +237,3 @@
         function addFloatingText(x, y, text, color, isBig = false) {
             floatingTexts.push({ x, y, text, color, life: isBig ? 90 : 60, isBig });
         }
-
