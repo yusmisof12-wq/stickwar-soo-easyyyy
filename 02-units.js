@@ -176,7 +176,7 @@
                 }
 
                 if (this.state === 'attacking') {
-                    this.damage = 4;
+                    this.damage = 1;
                     if (!this.target || this.target.hp <= 0 || this.target.isInvulnerable) {
                         this.findTarget();
                     }
