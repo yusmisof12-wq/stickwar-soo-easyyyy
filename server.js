@@ -56,6 +56,7 @@ app.use(express.static(publicRoot, {
     setHeaders(res, filePath) {
         if (filePath.endsWith('.js')) res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
         if (filePath.endsWith('.css')) res.setHeader('Content-Type', 'text/css; charset=utf-8');
+        if (filePath.endsWith('.mp3')) res.setHeader('Content-Type', 'audio/mpeg');
     }
 }));
 
@@ -72,12 +73,29 @@ app.get('/', (req, res) => {
 app.get('/healthz', (req, res) => {
     const cssOk = fs.existsSync(path.join(publicRoot, 'style.css'));
     const jsOk = fs.existsSync(path.join(publicRoot, '01-core.js'));
+
+    const musicDir = path.join(publicRoot, 'music');
+    const musicDirExists = fs.existsSync(musicDir) && fs.statSync(musicDir).isDirectory();
+    let musicFiles = [];
+    if (musicDirExists) {
+        try { musicFiles = fs.readdirSync(musicDir); } catch (e) { musicFiles = ['okuma hatası: ' + e.message]; }
+    }
+    const menuMp3 = fs.existsSync(path.join(musicDir, 'menu.mp3'));
+    const battleMp3 = fs.existsSync(path.join(musicDir, 'battle.mp3'));
+
     res.json({
         ok: true,
         html: fs.existsSync(path.join(publicRoot, HTML_FILE)),
         css: cssOk,
         js: jsOk,
+        publicRoot,
         files: fs.readdirSync(publicRoot),
+        music: {
+            klasorVar: musicDirExists,
+            klasorIcerigi: musicFiles,
+            'menu.mp3': menuMp3,
+            'battle.mp3': battleMp3
+        }
     });
 });
 
@@ -86,6 +104,13 @@ app.use((req, res, next) => {
     if (req.path.endsWith('.css') || req.path.endsWith('.js')) {
         return res.status(404).type('text/plain').send('Dosya yok: ' + req.path +
             '\nRender\'da css/ ve js/ klasörlerinin de yüklendiğinden emin ol.');
+    }
+    if (req.path.endsWith('.mp3')) {
+        return res.status(404).type('text/plain').send(
+            'Ses dosyası bulunamadı: ' + req.path +
+            '\nBeklenen tam yol: ' + path.join(publicRoot, req.path) +
+            '\n/healthz adresine bakarak music/ klasörünün deploy edilip edilmediğini kontrol edebilirsin.'
+        );
     }
     next();
 });
@@ -387,6 +412,11 @@ server.listen(PORT, () => {
         '05-menu-network.js',
     ];
     need.forEach(f => {
+        const full = path.join(__dirname, f);
+        console.log(fs.existsSync(full) ? `  ✓ ${f}` : `  ✗ EKSİK: ${f}`);
+    });
+    const musicNeed = ['music/menu.mp3', 'music/battle.mp3'];
+    musicNeed.forEach(f => {
         const full = path.join(__dirname, f);
         console.log(fs.existsSync(full) ? `  ✓ ${f}` : `  ✗ EKSİK: ${f}`);
     });
