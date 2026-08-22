@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+v<!DOCTYPE html>
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
@@ -1678,93 +1678,308 @@
             ctx.restore();
         }
 
- function drawStickman(ctx, x, y, color, weapon, animFrame, isWalking, isFlipped = false, swingAngle = 0, bodyLean = 0, armRaise = 0, holdingRock = false, isMinerStyle = false, isPlayerFace = true) {
+       // ==================== ÇİZİM FONKSİYONLARI ====================
+function drawStickman(ctx, x, y, color, weapon, animFrame, isWalking, isFlipped = false, swingAngle = 0, bodyLean = 0, armRaise = 0, holdingRock = false, isMinerStyle = false, isPlayerFace = true) {
     ctx.save();
     ctx.translate(x, y);
     if (isFlipped) ctx.scale(-1, 1);
     ctx.strokeStyle = color;
-    ctx.lineWidth = 3.2;
+    ctx.lineWidth = isMinerStyle ? 4 : 3.2;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
-    // Kafa
-    ctx.beginPath();
-    ctx.arc(0, -32, 9, 0, Math.PI * 2);
-    ctx.fillStyle = color;
-    ctx.fill();
-    ctx.stroke();
+    const isMining = (weapon === 'pickaxe' && animFrame > 0);
+    const isClimbing = (weapon === 'climb');
 
-    // Gövde
-    ctx.beginPath();
-    ctx.moveTo(0, -23);
-    ctx.lineTo(0, -5);
-    ctx.stroke();
+    const leanX = isMining ? bodyLean * 10 : 0;
+    const leanY = isMining ? bodyLean * 4 : 0;
+    const isClub = (weapon === 'club');
 
-    // Bacaklar
-    const legSwing = isWalking ? Math.sin(frames * 0.2) * 10 : 0;
-    ctx.beginPath();
-    ctx.moveTo(0, -5);
-    ctx.lineTo(-6 + legSwing, 5);
-    ctx.moveTo(0, -5);
-    ctx.lineTo(6 - legSwing, 5);
-    ctx.stroke();
+    const hipX = 0;
+    const hipY = -12;
+    const shoulderX = leanX * 0.85;
+    const shoulderY = isClub ? (-36 + leanY * 0.4) : (-32 + leanY * 0.55);
 
-    // Kollar
-    let armSwing = isWalking ? Math.sin(frames * 0.2 + Math.PI) * 12 : 0;
-    ctx.beginPath();
-    ctx.moveTo(0, -18);
-    ctx.lineTo(-8 + armSwing, -8);
-    ctx.moveTo(0, -18);
-    ctx.lineTo(8 - armSwing, -8);
-    ctx.stroke();
-
-    ctx.restore();
-}
-
-    ctx.strokeStyle = color;
-    ctx.lineWidth = isClub ? 6.5 : (isMinerStyle ? 5 : 3.2);
-    ctx.beginPath();
-    ctx.moveTo(hipX, hipY);
-    ctx.lineTo(shoulderX, shoulderY);
-    ctx.lineTo(hx, hy + headR - 1);
-    ctx.stroke();
-
-    const walkPhase = frames * (isClub ? 0.32 : 0.20);
-    const stride = isClub ? 14 : 10;
-    const legSwing = isWalking ? Math.sin(walkPhase) * stride : 0;
-    const legSwing2 = isWalking ? Math.sin(walkPhase + Math.PI) * stride : 0;
-    const legSpread = isMining ? 3 + bodyLean * 5 : 0;
-    ctx.lineWidth = isClub ? 5.5 : (isMinerStyle ? 4.5 : 3.2);
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    if (isClimbing) {
-        let climbLeg = Math.sin(animFrame * 0.2) * 8;
-        ctx.moveTo(hipX, hipY);
-        ctx.lineTo(-8, -5 + climbLeg);
-        ctx.moveTo(hipX, hipY);
-        ctx.lineTo(8, -5 - climbLeg);
-    } else if (isWalking) {
-        const L = legSwing;
-        const R = legSwing2;
-        ctx.moveTo(hipX, hipY);
-        ctx.lineTo(-3 + L * 0.4, -5);
-        ctx.lineTo(-4 + L, 2);
-        ctx.moveTo(hipX, hipY);
-        ctx.lineTo(3 + R * 0.4, -5);
-        ctx.lineTo(4 + R, 2);
-    } else {
-        ctx.moveTo(hipX, hipY);
-        ctx.lineTo(-7 - legSpread, 2);
-        ctx.moveTo(hipX, hipY);
-        ctx.lineTo(7 + legSpread * 0.5, 2);
+    let headR = isMinerStyle ? 11 : (isClub ? 9 : 7.5);
+    let hx = isMining ? leanX + bodyLean * 2 : shoulderX;
+    let hy = shoulderY - headR + 1;
+    if (isMining && bodyLean > 0.6) {
+        hx = leanX + 6;
+        hy = shoulderY - headR + 4;
     }
-    ctx.stroke();
 
-    // Kollar, silah çizimleri (tam hali burada - Madenci, Clubman, Archer, Bow vs. hepsi var)
-    // ... (tam kod çok uzun olduğu için burada kestiğim yer, ama session.js ile birlikte HTML'de çalışacak)
-    // (Tam kodu istersen söyle, 2 saniyede yaparım)
-}
+    const faceImg = isPlayerFace ? minerFaceImg : minerFaceEnemyImg;
+    if (isMinerStyle && faceImg && faceImg.complete && faceImg.naturalWidth > 0) {
+        const faceSize = 24;
+        ctx.drawImage(faceImg, hx - faceSize / 2, hy - faceSize / 2, faceSize, faceSize);
+    } else {
+        ctx.beginPath();
+        ctx.arc(hx, hy, headR, 0, Math.PI * 2);
+        ctx.fillStyle = color;
+        ctx.fill();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+    }
             // Gövde (kalçadan omza) — kafaya değecek şekilde
+            ctx.strokeStyle = color;
+            ctx.lineWidth = isClub ? 6.5 : (isMinerStyle ? 5 : 3.2);
+            ctx.beginPath();
+            ctx.moveTo(hipX, hipY);
+            ctx.lineTo(shoulderX, shoulderY);
+            // Boyun: omuzdan kafanın altına
+            ctx.lineTo(hx, hy + headR - 1);
+            ctx.stroke();
+
+            // Bacaklar — gerçekçi yürüme (sarkaç)
+            // Adım hızı: sopalı daha hızlı adım (koşu), madenci normal
+            const walkPhase = frames * (isClub ? 0.32 : 0.20);
+            const stride = isClub ? 14 : 10;
+            const legSwing = isWalking ? Math.sin(walkPhase) * stride : 0;
+            const legSwing2 = isWalking ? Math.sin(walkPhase + Math.PI) * stride : 0;
+            const legSpread = isMining ? 3 + bodyLean * 5 : 0;
+            ctx.lineWidth = isClub ? 5.5 : (isMinerStyle ? 4.5 : 3.2);
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            if (isClimbing) {
+                let climbLeg = Math.sin(animFrame * 0.2) * 8;
+                ctx.moveTo(hipX, hipY);
+                ctx.lineTo(-8, -5 + climbLeg);
+                ctx.moveTo(hipX, hipY);
+                ctx.lineTo(8, -5 - climbLeg);
+            } else if (isWalking) {
+                // Net adım: bir bacak önde, diğeri arkada, sonra tersine
+                // Sol bacak (kalça → diz → ayak)
+                const L = legSwing;   // + önde, - arkada
+                const R = legSwing2;
+                ctx.moveTo(hipX, hipY);
+                ctx.lineTo(-3 + L * 0.4, -5);
+                ctx.lineTo(-4 + L, 2);
+                // Sağ bacak
+                ctx.moveTo(hipX, hipY);
+                ctx.lineTo(3 + R * 0.4, -5);
+                ctx.lineTo(4 + R, 2);
+            } else {
+                // Idle: hafif açık
+                ctx.moveTo(hipX, hipY);
+                ctx.lineTo(-7 - legSpread, 2);
+                ctx.moveTo(hipX, hipY);
+                ctx.lineTo(7 + legSpread * 0.5, 2);
+            }
+            ctx.stroke();
+
+            // Kollar
+            if (isClimbing) {
+                let climbArm = Math.sin(animFrame * 0.2) * 12;
+                ctx.beginPath();
+                ctx.moveTo(0, -28);
+                ctx.lineTo(-12, -48 + climbArm);
+                ctx.moveTo(0, -28);
+                ctx.lineTo(12, -48 - climbArm);
+                ctx.stroke();
+            } else {
+                let armRot = 0;
+                let backArmRot = 0;
+
+                if (isMining) {
+                    // armRaise 1 = yukarı, 0 = vuruş (aşağı/ileri)
+                    armRot = -50 + (1 - armRaise) * 100 + swingAngle * 25;
+                    backArmRot = 5; // arka kol yanlarda, kazmayı tutmuyor
+                } else if (weapon === 'club') {
+                    if (animFrame > 0) {
+                        // Geri çek → ileri sert vuruş (rakibe değsin)
+                        if (animFrame < 30) {
+                            const t = animFrame / 30;
+                            armRot = -40 - t * 50; // geri
+                        } else if (animFrame < 55) {
+                            const t = (animFrame - 30) / 25;
+                            armRot = -90 + t * 140; // ileri vuruş
+                        } else {
+                            const t = Math.min(1, (animFrame - 55) / 45);
+                            armRot = 50 - t * 85;
+                        }
+                        backArmRot = 25;
+                    } else {
+                        armRot = -35 + (isWalking ? Math.sin(frames * 0.22) * 8 : 0);
+                        backArmRot = 20 + (isWalking ? Math.sin(frames * 0.22 + Math.PI) * 10 : 0);
+                    }
+                } else if (weapon === 'bow') {
+                    // Ön kol yayı sabit tutar, arka kol kirişi geriye çeker (swingAngle = çekiliş oranı 0..1)
+                    armRot = -78;
+                    backArmRot = -15 - swingAngle * 45;
+                } else if (isWalking) {
+                    // Silahsız yürümede kol sallanması
+                    armRot = Math.sin(frames * 0.22) * 25;
+                    backArmRot = Math.sin(frames * 0.22 + Math.PI) * 25;
+                }
+
+                // Kollar
+                let backHandX, backHandY, handX, handY;
+                if (weapon === 'club') {
+                    backHandX = shoulderX - 8;
+                    backHandY = shoulderY + 12;
+                    // Vuruşta kol ileri uzasın
+                    const swingT = animFrame > 30 && animFrame < 55 ? (animFrame - 30) / 25 : 0;
+                    const reach = 12 + swingT * 14;
+                    const rad = armRot * Math.PI / 180;
+                    handX = shoulderX + 4 + Math.sin(rad) * reach * 0.4 + swingT * 10;
+                    handY = shoulderY + 6 - Math.cos(rad) * 8;
+                } else if (isMining) {
+                    // Tek el: vuruşta kol madene uzansın
+                    backHandX = shoulderX - 8;
+                    backHandY = shoulderY + 14;
+                    const reach = 18 + (1 - armRaise) * 16; // vuruşta madene değecek kadar ileri
+                    handX = shoulderX + reach * Math.sin((armRot + 30) * Math.PI / 180) + 6;
+                    handY = shoulderY + 2 - reach * 0.45 * Math.cos(armRot * Math.PI / 180) - armRaise * 6;
+                } else if (weapon === 'bow') {
+                    // Ön el: yayı öne doğru sabit tutar
+                    handX = shoulderX + 15;
+                    handY = shoulderY - 3;
+                    // Arka el: kirişi/oku geriye çeker (germe oranına göre)
+                    backHandX = shoulderX - 4 - swingAngle * 11;
+                    backHandY = shoulderY + 5;
+                } else {
+                    backHandX = shoulderX - 10 + backArmRot / 5;
+                    backHandY = shoulderY + 6 + bodyLean * 10;
+                    const reach = 10;
+                    handX = shoulderX + reach * Math.sin((armRot + 20) * Math.PI / 180);
+                    handY = shoulderY + 8 - reach * 0.7 * Math.cos((armRot) * Math.PI / 180) - armRaise * 10;
+                }
+                // Arka kol (kazarken yanda, tutmuyor)
+                ctx.beginPath();
+                ctx.moveTo(shoulderX, shoulderY);
+                ctx.lineTo(backHandX, backHandY);
+                ctx.stroke();
+
+                // Ön kol (tek el kazma)
+                ctx.beginPath();
+                ctx.moveTo(shoulderX, shoulderY);
+                ctx.lineTo(handX, handY);
+                ctx.stroke();
+
+                // Silah
+                if (weapon === 'pickaxe') {
+                    {
+                        // Kazma – kahverengi sap + metal uç, daha ileri
+                        ctx.save();
+                        ctx.translate(handX, handY);
+                        const pickAngle = (-1.0 + (1 - armRaise) * 1.4) + swingAngle * 0.25;
+                        ctx.rotate(pickAngle);
+
+                        // Daha uzun sap (ileri atsın)
+                        ctx.strokeStyle = '#a0522d';
+                        ctx.lineWidth = 3.2;
+                        ctx.beginPath();
+                        ctx.moveTo(0, 0);
+                        ctx.lineTo(0, -28);
+                        ctx.stroke();
+
+                        // Metal kafa
+                        ctx.strokeStyle = '#4a4a4a';
+                        ctx.lineWidth = 4;
+                        ctx.beginPath();
+                        ctx.moveTo(-13, -26);
+                        ctx.lineTo(13, -26);
+                        ctx.stroke();
+                        ctx.lineWidth = 3;
+                        ctx.beginPath();
+                        ctx.moveTo(-13, -26);
+                        ctx.lineTo(-16, -18);
+                        ctx.moveTo(13, -26);
+                        ctx.lineTo(16, -18);
+                        ctx.stroke();
+                        ctx.restore();
+                    }
+                } else if (weapon === 'club') {
+                    // Dikenli sopa — vuruşta daha uzun / ileri
+                    const swingT = animFrame > 30 && animFrame < 55 ? (animFrame - 30) / 25 : 0;
+                    const clubLen = 30 + swingT * 12;
+                    ctx.save();
+                    ctx.translate(handX, handY);
+                    const clubAngle = (-0.5 + armRot * 0.014) + swingT * 0.3;
+                    ctx.rotate(clubAngle);
+
+                    ctx.strokeStyle = color;
+                    ctx.lineWidth = 6;
+                    ctx.lineCap = 'round';
+                    ctx.beginPath();
+                    ctx.moveTo(0, 0);
+                    ctx.lineTo(0, -clubLen);
+                    ctx.stroke();
+
+                    ctx.fillStyle = color;
+                    ctx.beginPath();
+                    ctx.ellipse(0, -clubLen - 2, 5, 7, 0, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    ctx.fillStyle = '#ecf0f1';
+                    const tip = -clubLen;
+                    const spikes = [
+                        [-6, tip + 2], [6, tip + 2], [-7, tip - 4], [7, tip - 4],
+                        [-5, tip - 8], [5, tip - 8], [0, tip - 12]
+                    ];
+                    spikes.forEach(([sx, sy]) => {
+                        ctx.beginPath();
+                        ctx.moveTo(sx, sy);
+                        ctx.lineTo(sx * 0.3, sy + 5);
+                        ctx.lineTo(sx + (sx > 0 ? 2 : -2), sy + 2);
+                        ctx.closePath();
+                        ctx.fill();
+                    });
+                    ctx.restore();
+                } else if (weapon === 'bow') {
+                    ctx.save();
+                    ctx.translate(handX, handY);
+                    const bowHalf = 15; // yayın yarım yüksekliği
+                    const drawT = Math.max(0, Math.min(1, swingAngle)); // 0=serbest, 1=tam gerilmiş
+                    const pullX = -5 - drawT * 11; // kiriş + ok germe ile geri gider
+
+                    // Yay gövdesi (dikey kavis, öne bakar)
+                    ctx.strokeStyle = '#8b5a2b';
+                    ctx.lineWidth = 2.6;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, bowHalf, -Math.PI / 2, Math.PI / 2);
+                    ctx.stroke();
+
+                    // Kiriş: üst uçtan germe noktasına, oradan alt uca
+                    ctx.strokeStyle = '#ecf0f1';
+                    ctx.lineWidth = 1.3;
+                    ctx.beginPath();
+                    ctx.moveTo(0, -bowHalf);
+                    ctx.lineTo(pullX, 0);
+                    ctx.lineTo(0, bowHalf);
+                    ctx.stroke();
+
+                    // Ok: elde tam tutuluyor, temreni öne bakar
+                    ctx.strokeStyle = '#6d4c2f';
+                    ctx.lineWidth = 1.8;
+                    ctx.beginPath();
+                    ctx.moveTo(pullX - 4, 0);
+                    ctx.lineTo(pullX + 20, 0);
+                    ctx.stroke();
+                    // Ok temreni (uç)
+                    ctx.fillStyle = '#95a5a6';
+                    ctx.beginPath();
+                    ctx.moveTo(pullX + 20, 0);
+                    ctx.lineTo(pullX + 14, -3);
+                    ctx.lineTo(pullX + 14, 3);
+                    ctx.closePath();
+                    ctx.fill();
+                    // Ok tüyü (arka)
+                    ctx.strokeStyle = '#e74c3c';
+                    ctx.lineWidth = 1.6;
+                    ctx.beginPath();
+                    ctx.moveTo(pullX - 4, -3);
+                    ctx.lineTo(pullX + 1, 0);
+                    ctx.lineTo(pullX - 4, 3);
+                    ctx.stroke();
+                    ctx.restore();
+                }
+            }
+            ctx.restore();
+        }
+
+               // Gövde (kalçadan omza) — kafaya değecek şekilde
             ctx.strokeStyle = color;
             ctx.lineWidth = isClub ? 6.5 : (isMinerStyle ? 5 : 3.2);
             ctx.beginPath();
