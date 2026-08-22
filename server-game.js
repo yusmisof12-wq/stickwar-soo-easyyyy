@@ -116,7 +116,7 @@ class GameRoom {
       const baseX = 130;
       const u = {
         id: this.nextId++, type, owner: slot, isPlayer: true,
-        x: baseX + 40 + Math.random() * 30, y: this.groundY + (Math.random() * 20 - 10),
+        x: baseX + 40 + Math.random() * 30, y: this.groundY,
         hp: type === 'miner' ? 100 : (type === 'club' ? 120 : 80),
         maxHp: type === 'miner' ? 100 : (type === 'club' ? 120 : 80),
         state: type === 'miner' ? 'mine' : 'idle',
@@ -306,13 +306,12 @@ class GameRoom {
   }
 
   _moveToward(u, tx, ty, spd) {
-    const dx = tx - u.x, dy = ty - u.y;
-    const d = hypot(dx, dy) || 1;
-    u.x += (dx / d) * spd * SPEED * 0.55;
-    u.y += (dy / d) * spd * SPEED * 0.35;
+    const dx = tx - u.x;
+    const d = Math.abs(dx) || 1;
+    u.x += Math.sign(dx) * Math.min(Math.abs(dx), spd * SPEED * 0.7);
+    u.y = this.groundY; // hep zeminde
     u.flip = dx < 0;
     u.walk = 1;
-    u.y = clamp(u.y, this.groundY - 30, this.groundY + 40);
   }
 
   _updateProjectiles() {
@@ -387,24 +386,29 @@ class GameRoom {
         name: this.names[1],
         rtt: this.rtt[1],
       },
-      units: this.units.map(u => ({
-        id: u.id, t: u.type, p: u.isPlayer, oi: u.owner < 0 ? 0 : u.owner,
-        x: Math.round(u.x), y: Math.round(u.y),
-        hp: Math.round(u.hp), mhp: u.maxHp,
-        w: !!u.walk, fl: !!u.flip,
-        bg: u.bag || 0, dl: u.state === 'deliver',
-        bl: Math.round((u.lean || 0) * 100) / 100,
-        ar: Math.round((u.raise || 0) * 100) / 100,
-        sw: Math.round((u.swing || 0) * 100) / 100,
-        d: u.draw || 0,
-        an: u.atkT || 0,
-        st: u.state || '',
-      })),
+      units: this.units.map(u => {
+        const typeMap = { miner: 'miner', club: 'clubman', archer: 'archer' };
+        const yOff = Math.round(u.y - this.groundY);
+        return {
+          id: u.id, t: typeMap[u.type] || u.type, p: u.isPlayer, oi: u.owner < 0 ? 0 : u.owner,
+          x: Math.round(u.x), yOff,
+          hp: Math.round(u.hp), mhp: u.maxHp,
+          w: !!u.walk, fl: !!u.flip,
+          bg: u.bag || 0, dl: u.state === 'deliver',
+          bl: Math.round((u.lean || 0) * 100) / 100,
+          ar: Math.round((u.raise || 0) * 100) / 100,
+          sw: Math.round((u.swing || 0) * 100) / 100,
+          d: u.draw || 0,
+          an: u.type === 'club' ? (u.atkT || 0) : (u.atkT || 0),
+          st: u.state || '',
+          atk: u.type === 'club' && u.atkT > 0 && u.atkT % 25 > 5,
+        };
+      }),
       floats: this.floats.slice(0, 30).map(f => ({
-        x: Math.round(f.x), y: Math.round(f.y), text: f.text, color: f.color, life: f.life, isBig: !!f.isBig,
+        x: Math.round(f.x), yOff: Math.round(f.y - this.groundY), text: f.text, color: f.color, life: f.life, isBig: !!f.isBig,
       })),
       arrows: this.projectiles.slice(0, 20).map(p => ({
-        x: Math.round(p.x), y: Math.round(p.y), a: Math.atan2(p.ty - p.y, p.tx - p.x),
+        x: Math.round(p.x), yOff: Math.round(p.y - this.groundY), a: Math.atan2(p.ty - p.y, p.tx - p.x),
       })),
     };
   }
