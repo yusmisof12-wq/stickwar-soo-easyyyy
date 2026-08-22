@@ -1,495 +1,432 @@
-// ==================== HESAP + MENÜ + SEFER ====================
-        const TOKEN_KEY = 'copAdamToken_v1';
-        const LOCAL_USERS_KEY = 'copAdamUsersHashed_v1';
-        const LOCAL_SESSION_KEY = 'copAdamLocalSession_v1';
-        const API_BASE = (typeof location !== 'undefined' && location.protocol.startsWith('http'))
-            ? ''
-            : 'http://127.0.0.1:3847';
+ // ==================== SINIFLAR ====================
+        class Miner {
+            constructor(isPlayer, ownerIndex = 0) {
+                this.isPlayer = isPlayer;
+                this.ownerIndex = isPlayer ? (ownerIndex || 0) : 0;
+                this.baseX = isPlayer ? player.base.x : enemy.base.x;
+                this.baseY = isPlayer ? player.base.y : enemy.base.y;
+                const myTeam = units.filter(u => u.isPlayer === isPlayer && u instanceof Miner);
+                const index = myTeam.length % minerSpawnOffsets.length;
+                const offset = minerSpawnOffsets[index];
+                this.x = this.baseX + (isPlayer ? offset.dx : -offset.dx);
+                this.y = this.baseY + offset.dy;
+                this.hp = 100;
+                this.maxHp = 100;
+                this.state = 'assigning_slot';
+                this.targetSlot = null;
+                this.mineX = 0;
+                this.mineY = 0;
+                this.hits = 0;
+                this.actionTimer = 0;
+                this.prevX = this.x;
+                this.localOffset = { dx: 0, dy: 0 };
+                this.attackCooldown = 60;
+                this.attackTimer = 0;
+                this.range = 30;
+                this.damage = 8;
+                this.target = null;
+                this.isInvulnerable = false;
+                this.combatMode = false;
+                this.wanderTimer = 0;
+                this.wanderTargetX = this.x;
+                this.wanderTargetY = this.y;
+                this.isWandering = false;
+                this.miningSwing = 0;
+                this.miningPhase = 0;
+                this.bodyLean = 0;
+                this.armRaise = 0;
+                this.holdingRock = false;
+                this.bagGold = 0;
+                this.deliverTimer = 0;
+                this.bagHold = false;
+                this.bagOffsetX = 0;
+                this.bagOffsetY = 0;
+                this.stunTimer = 0;
+                this.slowTimer = 0;
+                this.stuckArrows = [];
+                this._isActuallyWalking = false;
+            }
 
-        let currentUser = null;
-        let authMode = 'login';
-        let gameStarted = false;
-        let useServer = true;
-
-        const authScreen = document.getElementById('authScreen');
-        const mainMenu = document.getElementById('mainMenu');
-        const campaignScreen = document.getElementById('campaignScreen');
-        const gameContainer = document.getElementById('game-container');
-        const friendsScreen = document.getElementById('friendsScreen');
-        const friendsIncomingList = document.getElementById('friendsIncomingList');
-        const friendsList = document.getElementById('friendsList');
-        const friendAddInput = document.getElementById('friendAddInput');
-        const friendAddError = document.getElementById('friendAddError');
-        const levelChoiceModal = document.getElementById('levelChoiceModal');
-        const levelChoiceTitle = document.getElementById('levelChoiceTitle');
-        const friendPickerModal = document.getElementById('friendPickerModal');
-        const friendPickerList = document.getElementById('friendPickerList');
-        const coopWaitingModal = document.getElementById('coopWaitingModal');
-        const coopWaitingText = document.getElementById('coopWaitingText');
-        const coopInviteModal = document.getElementById('coopInviteModal');
-        const coopInviteText = document.getElementById('coopInviteText');
-        const toastContainer = document.getElementById('toastContainer');
-        const authUser = document.getElementById('authUser');
-        const authPass = document.getElementById('authPass');
-        const authError = document.getElementById('authError');
-        const authSubmit = document.getElementById('authSubmit');
-        const tabLogin = document.getElementById('tabLogin');
-        const tabRegister = document.getElementById('tabRegister');
-        const userChip = document.getElementById('userChip');
-        const campaignFlag = document.getElementById('campaignFlag');
-
-        function loadLocalUsers() {
-            try { return JSON.parse(localStorage.getItem(LOCAL_USERS_KEY) || '{}'); }
-            catch (e) { return {}; }
-        }
-        function saveLocalUsers(db) {
-            localStorage.setItem(LOCAL_USERS_KEY, JSON.stringify(db));
-        }
-
-        async function hashPass(password, salt) {
-            const enc = new TextEncoder();
-            const data = enc.encode(salt + '::' + password);
-            const buf = await crypto.subtle.digest('SHA-256', data);
-            return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
-        }
-        function randomSalt() {
-            const a = new Uint8Array(16);
-            crypto.getRandomValues(a);
-            return Array.from(a).map(b => b.toString(16).padStart(2, '0')).join('');
-        }
-
-        async function api(path, options = {}) {
-            const headers = Object.assign({ 'Content-Type': 'application/json' }, options.headers || {});
-            const token = localStorage.getItem(TOKEN_KEY);
-            if (token) headers['Authorization'] = 'Bearer ' + token;
-            const ctrl = new AbortController();
-            const timer = setTimeout(() => ctrl.abort(), 4000);
-            try {
-                const res = await fetch(API_BASE + path, {
-                    method: options.method || 'GET',
-                    headers,
-                    body: options.body ? JSON.stringify(options.body) : undefined,
-                    signal: ctrl.signal,
-                });
-                let data = null;
-                try { data = await res.json(); } catch (_) { data = {}; }
-                if (!res.ok) {
-                    const err = new Error((data && data.error) || ('HTTP ' + res.status));
-                    err.status = res.status;
-                    err.data = data;
-                    throw err;
+            releaseSlot() {
+                if (this.targetSlot) {
+                    this.targetSlot.miners = this.targetSlot.miners.filter(m => m !== this);
+                    this.targetSlot = null;
                 }
-                return data;
-            } finally {
-                clearTimeout(timer);
             }
-        }
 
-        // ==================== WEBSOCKET / ARKADAŞ / CO-OP SİSTEMİ ====================
-        let ws = null;
-        let coopSession = null;
-        let pendingCoopInvite = null;
-        let pendingLevelChoice = null;
-        let latestHostSnapshot = null;
-        let coopGuestLoopId = null;
-        let coopBroadcastCounter = 0;
-        let coopVictoryHandled = false;
-        let coopNextLevelRequested = false;
+            assignSlot() {
+                this.releaseSlot();
+                this.baseX = this.isPlayer ? player.base.x : enemy.base.x;
+                this.baseY = this.isPlayer ? player.base.y : enemy.base.y;
 
-        function isCoopGuestNow() { return !!(coopSession && coopSession.role === 'guest'); }
-        function isCoopHostNow() { return !!(coopSession && coopSession.role === 'host'); }
+                let mySlots = this.isPlayer ? playerMineSlots : enemyMineSlots;
+                let available = mySlots.find(slot => slot.miners.length < 2);
 
-        function wsUrl() {
-            const loc = window.location;
-            if (loc.protocol === 'http:' || loc.protocol === 'https:') {
-                const proto = loc.protocol === 'https:' ? 'wss:' : 'ws:';
-                return proto + '//' + loc.host + '/ws';
-            }
-            return 'ws://127.0.0.1:3847/ws';
-        }
-
-        let wsReconnectTimer = null;
-        let wsAuthOk = false;
-
-        function scheduleWSReconnect() {
-            if (wsReconnectTimer || !useServer || !currentUser) return;
-            wsReconnectTimer = setTimeout(() => {
-                wsReconnectTimer = null;
-                connectWS();
-            }, 1000);
-        }
-
-        function connectWS() {
-            if (!useServer || !currentUser) return;
-            const token = localStorage.getItem(TOKEN_KEY);
-            if (!token) return;
-            if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
-            wsAuthOk = false;
-            try {
-                ws = new WebSocket(wsUrl());
-            } catch (e) {
-                scheduleWSReconnect();
-                return;
-            }
-            ws.onopen = () => {
-                ws.send(JSON.stringify({ type: 'auth', token }));
-            };
-            ws.onmessage = (ev) => {
-                let msg;
-                try { msg = JSON.parse(ev.data); } catch (e) { return; }
-                if (msg.type === 'auth_ok') {
-                    wsAuthOk = true;
-                    return;
-                }
-                if (msg.type === 'auth_error') {
-                    wsAuthOk = false;
-                    try { ws.close(); } catch (e) {}
-                    return;
-                }
-                handleWsMessage(msg);
-            };
-            ws.onclose = () => {
-                ws = null;
-                wsAuthOk = false;
-                scheduleWSReconnect();
-            };
-            ws.onerror = () => {
-                wsAuthOk = false;
-            };
-        }
-
-        function wsSend(obj) {
-            if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
-        }
-
-        function showToast(text) {
-            const el = document.createElement('div');
-            el.className = 'toast';
-            el.textContent = text;
-            toastContainer.appendChild(el);
-            setTimeout(() => el.remove(), 4000);
-        }
-
-        function escapeHtml(s) {
-            return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-        }
-
-        function handleWsMessage(msg) {
-            if (msg.type === 'friend_request') {
-                showToast('👤 ' + msg.username + ' sana arkadaşlık isteği gönderdi');
-                if (!friendsScreen.classList.contains('hidden')) refreshFriendsPanel();
-                return;
-            }
-            if (msg.type === 'friend_accepted') {
-                showToast('👤 ' + msg.username + ' arkadaşlık isteğini kabul etti');
-                if (!friendsScreen.classList.contains('hidden')) refreshFriendsPanel();
-                return;
-            }
-            if (msg.type === 'coop_invite') {
-                pendingCoopInvite = { from: msg.from, level: msg.level };
-                coopInviteText.textContent = msg.from + ' seni ' + msg.level + '. bölüme davet ediyor';
-                coopInviteModal.classList.remove('hidden');
-                return;
-            }
-            if (msg.type === 'coop_declined') {
-                coopWaitingModal.classList.add('hidden');
-                showToast(msg.from + ' daveti reddetti');
-                return;
-            }
-            if (msg.type === 'invite_sent') {
-                coopWaitingText.textContent = 'Arkadaşına davet gönderildi, bekleniyor...';
-                return;
-            }
-            if (msg.type === 'coop_start') {
-                coopWaitingModal.classList.add('hidden');
-                coopInviteModal.classList.add('hidden');
-                coopSession = { roomId: msg.roomId, role: msg.role, partner: msg.partner };
-                coopVictoryHandled = false;
-                coopNextLevelRequested = false;
-                beginCoopLevel(msg.level);
-                return;
-            }
-            if (msg.type === 'partner_left') {
-                if (coopSession) {
-                    showToast('Arkadaşın oyundan ayrıldı.');
-                    leaveCoopSession();
-                }
-                return;
-            }
-            if (msg.type === 'room_relay') {
-                handleRoomRelay(msg.payload);
-                return;
-            }
-            if (msg.type === 'error') {
-                showToast(msg.error);
-                return;
-            }
-        }
-
-        async function refreshFriendsPanel() {
-            if (!useServer) {
-                friendsIncomingList.innerHTML = '';
-                friendsList.innerHTML = '<div class="friend-empty">Arkadaş sistemi için sunucu bağlantısı gerekli.</div>';
-                return;
-            }
-            try {
-                const data = await api('/api/friends');
-                renderFriendsPanel(data);
-            } catch (e) {
-                friendsList.innerHTML = '<div class="friend-empty">Arkadaşlar yüklenemedi.</div>';
-            }
-        }
-
-        function renderFriendsPanel(data) {
-            friendsIncomingList.innerHTML = '';
-            const incoming = data.incoming || [];
-            if (incoming.length === 0) {
-                friendsIncomingList.innerHTML = '<div class="friend-empty">Bekleyen istek yok.</div>';
-            }
-            incoming.forEach(name => {
-                const row = document.createElement('div');
-                row.className = 'friend-row';
-                const label = document.createElement('span');
-                label.textContent = name;
-                row.appendChild(label);
-                const acceptBtn = document.createElement('button');
-                acceptBtn.className = 'menu-btn primary small';
-                acceptBtn.textContent = 'Kabul Et';
-                acceptBtn.onclick = async () => {
-                    await api('/api/friends/accept', { method: 'POST', body: { username: name } });
-                    refreshFriendsPanel();
-                };
-                const declineBtn = document.createElement('button');
-                declineBtn.className = 'menu-btn danger small';
-                declineBtn.textContent = 'Reddet';
-                declineBtn.onclick = async () => {
-                    await api('/api/friends/decline', { method: 'POST', body: { username: name } });
-                    refreshFriendsPanel();
-                };
-                row.appendChild(acceptBtn);
-                row.appendChild(declineBtn);
-                friendsIncomingList.appendChild(row);
-            });
-
-            friendsList.innerHTML = '';
-            const friendsArr = data.friends || [];
-            if (friendsArr.length === 0) {
-                friendsList.innerHTML = '<div class="friend-empty">Henüz arkadaşın yok. Yukarıdan kullanıcı adıyla istek gönder.</div>';
-            }
-            friendsArr.forEach(f => {
-                const row = document.createElement('div');
-                row.className = 'friend-row';
-                row.innerHTML = '<span class="dot ' + (f.online ? 'dot-online' : 'dot-offline') + '"></span>';
-                const label = document.createElement('span');
-                label.textContent = f.username;
-                row.appendChild(label);
-                const removeBtn = document.createElement('button');
-                removeBtn.className = 'menu-btn danger small';
-                removeBtn.textContent = 'Çıkar';
-                removeBtn.onclick = async () => {
-                    await api('/api/friends/remove', { method: 'POST', body: { username: f.username } });
-                    refreshFriendsPanel();
-                };
-                row.appendChild(removeBtn);
-                friendsList.appendChild(row);
-            });
-
-            if ((data.outgoing || []).length) {
-                const pend = document.createElement('div');
-                pend.className = 'friend-empty';
-                pend.textContent = 'Gönderdiğin bekleyen istekler: ' + data.outgoing.join(', ');
-                friendsList.appendChild(pend);
-            }
-        }
-
-        document.getElementById('btnFriends').onclick = () => {
-            showScreen('friends');
-            refreshFriendsPanel();
-        };
-        document.getElementById('btnFriendsBack').onclick = () => showScreen('menu');
-
-        document.getElementById('btnAddFriend').onclick = async () => {
-            const name = friendAddInput.value.trim();
-            friendAddError.textContent = '';
-            if (!name) return;
-            if (!useServer) {
-                friendAddError.textContent = 'Arkadaş sistemi için sunucu bağlantısı gerekli.';
-                return;
-            }
-            try {
-                await api('/api/friends/request', { method: 'POST', body: { username: name } });
-                friendAddInput.value = '';
-                refreshFriendsPanel();
-            } catch (e) {
-                friendAddError.textContent = e.message || 'İstek gönderilemedi';
-            }
-        };
-
-        document.querySelectorAll('.campaign-node').forEach(node => {
-            node.onclick = () => {
-                const lv = parseInt(node.dataset.level, 10);
-                if (lv > (currentUser.maxUnlocked || 1)) {
-                    alert('Bu bölüm henüz kilitli!');
-                    return;
-                }
-                pendingLevelChoice = lv;
-                levelChoiceTitle.textContent = 'Bölüm ' + lv;
-                document.getElementById('btnPlayWithFriend').style.display = '';
-                levelChoiceModal.classList.remove('hidden');
-            };
-        });
-
-        document.getElementById('btnPlaySolo').onclick = () => {
-            const lv = Number(pendingLevelChoice);
-            levelChoiceModal.classList.add('hidden');
-            if (lv >= 1 && lv <= 3) startCampaignLevel(lv);
-        };
-
-        document.getElementById('btnLevelChoiceCancel').onclick = () => {
-            levelChoiceModal.classList.add('hidden');
-        };
-
-        document.getElementById('btnPlayWithFriend').onclick = async () => {
-            levelChoiceModal.classList.add('hidden');
-            try {
-                const data = await api('/api/friends');
-                const onlineFriends = (data.friends || []).filter(f => f.online);
-                if (onlineFriends.length === 0) {
-                    alert('Şu an çevrimiçi arkadaşın yok. Arkadaşının da oyunu açık tutması gerekiyor.');
-                    return;
-                }
-                friendPickerList.innerHTML = '';
-                onlineFriends.forEach(f => {
-                    const btn = document.createElement('button');
-                    btn.className = 'menu-btn primary friend-picker-btn';
-                    btn.textContent = f.username;
-                    btn.onclick = () => {
-                        friendPickerModal.classList.add('hidden');
-                        coopWaitingText.textContent = f.username + ' bekleniyor...';
-                        coopWaitingModal.classList.remove('hidden');
-                        wsSend({ type: 'coop_invite', to: f.username, level: pendingLevelChoice });
-                    };
-                    friendPickerList.appendChild(btn);
-                });
-                friendPickerModal.classList.remove('hidden');
-            } catch (e) {
-                alert('Arkadaş listesi alınamadı.');
-            }
-        };
-
-        document.getElementById('btnFriendPickerCancel').onclick = () => {
-            friendPickerModal.classList.add('hidden');
-        };
-
-        document.getElementById('btnCoopWaitingCancel').onclick = () => {
-            coopWaitingModal.classList.add('hidden');
-            if (coopSession) wsSend({ type: 'leave_room', roomId: coopSession.roomId });
-            coopSession = null;
-        };
-
-        document.getElementById('btnCoopInviteAccept').onclick = () => {
-            coopInviteModal.classList.add('hidden');
-            if (pendingCoopInvite) {
-                wsSend({ type: 'coop_response', to: pendingCoopInvite.from, accept: true, level: pendingCoopInvite.level });
-            }
-            pendingCoopInvite = null;
-        };
-        document.getElementById('btnCoopInviteDecline').onclick = () => {
-            coopInviteModal.classList.add('hidden');
-            if (pendingCoopInvite) {
-                wsSend({ type: 'coop_response', to: pendingCoopInvite.from, accept: false });
-            }
-            pendingCoopInvite = null;
-        };
-
-        function beginCoopLevel(lv) {
-            level = Number(lv);
-            coopVictoryHandled = false;
-            coopNextLevelRequested = false;
-            modal.classList.add('hidden');
-            levelChoiceModal.classList.add('hidden');
-            friendPickerModal.classList.add('hidden');
-            coopWaitingModal.classList.add('hidden');
-            coopInviteModal.classList.add('hidden');
-            stopCoopGuestRenderLoop();
-            if (typeof stopGameLoop === 'function') stopGameLoop();
-            isGameOver = false;
-            showScreen('game');
-            resizeCanvas();
-            if (coopSession.role === 'host') {
-                resetLevel();
-            if (typeof player2 !== "undefined") {
-                player2.gold = 300;
-                player2.command = CMD_DEFEND;
-                player2.spawnQueue = [];
-                player2.spawnTimer = 0;
-            }
-                gameStarted = true;
-                updateActionButtonsUI();
-                draw();
-                startGameLoop();
-            } else {
-                latestHostSnapshot = null;
-                units.length = 0;
-                projectiles.length = 0;
-                player.gold = 300;
-                player.base.hp = 1000;
-                player.base.maxHp = 1000;
-                enemy.base.maxHp = level === 1 ? 280 : (level === 2 ? 900 : 1800);
-                enemy.base.hp = enemy.base.maxHp;
-                setPlayerCommand(CMD_DEFEND);
-                if (typeof initMines === 'function') initMines();
-                gameStarted = true;
-                updateActionButtonsUI();
-                draw();
-                startCoopGuestRenderLoop();
-            }
-        }
-
-        function showCoopVictory(lv) {
-            if (!isCoopGuestNow() || coopVictoryHandled) return;
-            coopVictoryHandled = true;
-            isGameOver = true;
-            stopCoopGuestRenderLoop();
-            modalTitle.innerText = Number(lv) >= 3 ? 'Tebrikler! Seferi Bitirdiniz!' : 'Bölüm Tamamlandı!';
-            modalBtn.innerText = Number(lv) >= 3 ? 'Sefer Haritası' : 'Sonraki Bölüm';
-            modal.classList.remove('hidden');
-        }
-
-        function leaveCoopSession() {
-            stopCoopGuestRenderLoop();
-            if (coopSession) {
-                wsSend({ type: 'leave_room', roomId: coopSession.roomId });
-            }
-            coopSession = null;
-            stopGameLoop();
-            showScreen('menu');
-        }
-
-        class GhostUnit {
-            constructor(d) {
-                this.x = d.x; this.y = d.y; this.hp = d.hp; this.maxHp = d.mhp || 1;
-                this.isPlayer = d.p; this.type = d.t; this.walking = d.w; this.drawAmt = d.d || 0;
-                this.deliver = !!d.dl; this.bagGold = d.bg || 0;
-                this.bodyLean = d.bl || 0; this.armRaise = d.ar || 0; this.swingAngle = d.sw || 0;
-                this.ownerIndex = d.oi || 0;
-            }
-            draw(ctx) {
-                const isFlipped = !this.isPlayer;
-                const color = !this.isPlayer ? '#c0392b' : (this.ownerIndex === 1 ? '#2980b9' : '#1a1a1a');
-
-                if (this.type === 'miner') {
-                    drawMinerBackpack(ctx, this.x, this.y, isFlipped, this.bagGold, this.deliver);
-                    drawStickman(ctx, this.x, this.y, color, this.deliver ? 'none' : 'pickaxe',
-                        this.deliver ? 0 : (this.swingAngle !== 0 ? 40 : 0),
-                        this.walking, isFlipped, this.swingAngle, this.bodyLean, this.armRaise,
-                        false, false, this.isPlayer);
+                if (available) {
+                    this.targetSlot = available;
+                    available.miners.push(this);
+                    const offsets = [
+                        { dx: -32, dy: 4 },
+                        { dx: 32, dy: 4 },
+                        { dx: -32, dy: -12 },
+                        { dx: 32, dy: -12 }
+                    ];
+                    let usedOffsets = available.miners.slice(0, -1).map(m => m.localOffset);
+                    let freeOffset = offsets.find(o => !usedOffsets.some(u => u.dx === o.dx && u.dy === o.dy));
+                    if (!freeOffset) {
+                        freeOffset = offsets[available.miners.length % offsets.length];
+                    }
+                    this.localOffset = freeOffset;
+                    this.mineX = available.x + freeOffset.dx;
+                    this.mineY = available.y + freeOffset.dy;
+                    this.state = 'going_mine';
+                    this.isWandering = false;
+                    this.combatMode = false;
                 } else {
-                    let weapon = 'pickaxe';
-                    if (this.type === 'clubman') weapon = 'club';
-                    else if (this.type === 'archer') weapon = 'bow';
-                    drawStickman(ctx, this.x, this.y, color, weapon, 0, this.walking, isFlipped, this.drawAmt);
+                    this.state = 'attacking';
+                    this.combatMode = true;
+                    this.damage = 4;
+                    this.isWandering = false;
+                    this.findTarget();
                 }
+            }
+
+            findTarget() {
+                let enemies = units.filter(u => u.isPlayer !== this.isPlayer && u.hp > 0 && !u.isInvulnerable);
+                if (enemies.length > 0) {
+                    let closest = null;
+                    let minDist = Infinity;
+                    for (let e of enemies) {
+                        let dist = Math.hypot(e.x - this.x, e.y - this.y);
+                        if (dist < minDist) {
+                            minDist = dist;
+                            closest = e;
+                        }
+                    }
+                    this.target = closest;
+                } else {
+                    let enemyBase = this.isPlayer ? enemy.base : player.base;
+                    this.target = enemyBase;
+                }
+            }
+
+            updateWander() {
+                this.wanderTimer++;
+                if (this.wanderTimer > 180 + Math.random() * 120) {
+                    this.wanderTimer = 0;
+                    let range = 80;
+                    this.wanderTargetX = this.baseX + (this.isPlayer ? 1 : -1) * (Math.random() * range - range/2);
+                    this.wanderTargetY = this.baseY + (Math.random() * range - range/2);
+                    this.isWandering = true;
+                }
+
+                if (this.isWandering) {
+                    let dx = this.wanderTargetX - this.x;
+                    let dy = this.wanderTargetY - this.y;
+                    let dist = Math.hypot(dx, dy);
+                    if (dist > 5) {
+                        let angle = Math.atan2(dy, dx);
+                        this.x += Math.cos(angle) * 0.8 * SPEED_MULT;
+                        this.y += Math.sin(angle) * 0.8 * SPEED_MULT;
+                    } else {
+                        this.isWandering = false;
+                        this.wanderTimer = 0;
+                    }
+                }
+            }
+
+            update() {
+                let cmd = this.isPlayer ? unitOwnerState(this).command : enemy.command;
+                this.prevX = this.x;
+                this.baseX = this.isPlayer ? player.base.x : enemy.base.x;
+                this.baseY = this.isPlayer ? player.base.y : enemy.base.y;
+
+                if (this.stunTimer > 0) {
+                    this.stunTimer--;
+                    this._isActuallyWalking = false;
+                    return;
+                }
+                if (this.slowTimer > 0) this.slowTimer--;
+                const slowMul = this.slowTimer > 0 ? 0.4 : 1;
+
+                if (cmd === CMD_RETREAT) {
+                    this.releaseSlot();
+                    this.isWandering = false;
+                    let targetX = this.isPlayer ? -150 : worldWidth + 150;
+                    let targetY = this.baseY;
+                    if (Math.hypot(this.x - targetX, this.y - targetY) > 3) {
+                        let angle = Math.atan2(targetY - this.y, targetX - this.x);
+                        this.x += Math.cos(angle) * 1.5 * SPEED_MULT * slowMul;
+                        this.y += Math.sin(angle) * 1.2 * SPEED_MULT * slowMul;
+                        this.state = 'retreating';
+                        this._isActuallyWalking = true;
+                    } else {
+                        this.state = 'outside';
+                        this._isActuallyWalking = false;
+                    }
+                    return;
+                }
+
+                if (this.state === 'outside') {
+                    this.assignSlot();
+                }
+
+                if (this.state === 'retreating' || this.state === 'idle' || this.state === 'assigning_slot') {
+                    this.assignSlot();
+                }
+
+                if (this.state === 'attacking') {
+                    this.damage = 4;
+                    if (!this.target || this.target.hp <= 0 || this.target.isInvulnerable) {
+                        this.findTarget();
+                    }
+                    const nearbyThreat = units.some(u =>
+                        u.isPlayer !== this.isPlayer && u.hp > 0 && !u.isInvulnerable &&
+                        Math.hypot(u.x - this.x, u.y - this.y) < 180
+                    );
+                    if (!nearbyThreat && !this.combatMode && (!this.target || this.target.hp <= 0 || this.target.maxHp > 200)) {
+                        this.assignSlot();
+                    } else if (this.target) {
+                        let dist = Math.hypot(this.target.x - this.x, this.target.y - this.y);
+                        if (dist <= this.range) {
+                            this.attackTimer++;
+                            if (this.attackTimer === 45) {
+                                this.target.hp -= this.damage;
+                                if (this.target.stunTimer !== undefined) this.target.stunTimer = 40;
+                                addFloatingText(this.target.x, this.target.y, '-' + this.damage, '#e74c3c');
+                            }
+                            if (this.attackTimer >= this.attackCooldown) {
+                                this.attackTimer = 0;
+                            }
+                        } else {
+                            let angle = Math.atan2(this.target.y - this.y, this.target.x - this.x);
+                            this.x += Math.cos(angle) * 1.3 * SPEED_MULT * slowMul;
+                            this.y += Math.sin(angle) * 1.1 * SPEED_MULT * slowMul;
+                            this.attackTimer = 0;
+                        }
+                    } else if (this.combatMode) {
+                        this.assignSlot();
+                    }
+                    let grassTop = canvas.height - GROUND_HEIGHT;
+                    let minY = grassTop + 20;
+                    let maxY = canvas.height - 20;
+                    if (this.y < minY) this.y = minY;
+                    if (this.y > maxY) this.y = maxY;
+                    return;
+                }
+
+                if (this.state === 'going_mine') {
+                    let dist = Math.hypot(this.mineX - this.x, this.mineY - this.y);
+                    if (dist > 4) {
+                        let angle = Math.atan2(this.mineY - this.y, this.mineX - this.x);
+                        this.x += Math.cos(angle) * 1.5 * SPEED_MULT;
+                        this.y += Math.sin(angle) * 1.5 * SPEED_MULT;
+                    } else {
+                        this.x = this.mineX;
+                        this.y = this.mineY;
+                        this.state = 'mining';
+                        this.hits = 0;
+                        this.actionTimer = 0;
+                        this.miningSwing = 0;
+                        this.miningPhase = 0;
+                        this.bodyLean = 0.1;
+                        this.armRaise = 0;
+                        this.holdingRock = false;
+                        this.bagGold = 0;
+                    }
+                } else if (this.state === 'mining') {
+                    const attacker = units.find(u =>
+                        u.isPlayer !== this.isPlayer && u.hp > 0 && !u.isInvulnerable &&
+                        Math.hypot(u.x - this.x, u.y - this.y) < 90
+                    );
+                    if (attacker) {
+                        this.releaseSlot();
+                        this.state = 'attacking';
+                        this.combatMode = false;
+                        this.damage = 4;
+                        this.target = attacker;
+                        this.attackTimer = 0;
+                        this.bodyLean = 0;
+                        this.armRaise = 0;
+                    } else {
+                    this.actionTimer++;
+                    const CYCLE = 70;
+                    const cycle = this.actionTimer % CYCLE;
+                    this.holdingRock = false;
+                    const easeInOut = (t) => t * t * (3 - 2 * t);
+
+                    if (cycle < 28) {
+                        const t = easeInOut(cycle / 28);
+                        this.miningPhase = 0;
+                        this.bodyLean = 0.28 + t * 0.08;
+                        this.armRaise = 0.3 + t * 0.7;
+                        this.miningSwing = -0.85 + t * 0.25;
+                    } else if (cycle < 48) {
+                        const t = easeInOut((cycle - 28) / 20);
+                        this.miningPhase = 1;
+                        this.bodyLean = 0.36 + t * 0.12;
+                        this.armRaise = 1 - t;
+                        this.miningSwing = -0.6 + t * 2.0;
+                        if (cycle === 40) {
+                            const side = (this.localOffset && this.localOffset.dx > 0) ? -14 : 14;
+                            spawnMiningSparks(this.x + side, this.y - 8);
+                        }
+                    } else {
+                        const t = easeInOut((cycle - 48) / 22);
+                        this.miningPhase = 2;
+                        this.bodyLean = 0.48 - t * 0.18;
+                        this.armRaise = 0.15 + t * 0.2;
+                        this.miningSwing = 1.4 - t * 0.5;
+                    }
+
+                    if (cycle === 40) {
+                        this.bagGold = Math.min(6, this.bagGold + 1);
+                        this.hits++;
+                        if (this.isPlayer) {
+                            addFloatingText(this.x + 10, this.y - 40, '+1', '#f1c40f');
+                        }
+                    }
+                    if (this.hits >= 6 && cycle >= 55) {
+                        const t = easeInOut((cycle - 55) / 15);
+                        this.bodyLean = 0.3 * (1 - t);
+                        this.armRaise = 0.3 * (1 - t);
+                        this.miningSwing = 0.5 * (1 - t);
+                        if (cycle >= 69) {
+                            this.releaseSlot();
+                            this.state = 'going_base';
+                            this.miningSwing = 0;
+                            this.miningPhase = 0;
+                            this.bodyLean = 0;
+                            this.armRaise = 0;
+                            this.holdingRock = false;
+                        }
+                    }
+                    }
+                } else if (this.state === 'going_base') {
+                    let dist = Math.hypot(this.baseX - this.x, this.baseY - this.y);
+                    if (dist > 35) {
+                        let angle = Math.atan2(this.baseY - this.y, this.baseX - this.x);
+                        this.x += Math.cos(angle) * 1.5 * SPEED_MULT;
+                        this.y += Math.sin(angle) * 1.5 * SPEED_MULT;
+                    } else {
+                        this.state = 'delivering';
+                        this.deliverTimer = 0;
+                        this.bagHold = false;
+                        this.bagOffsetX = 0;
+                        this.bagOffsetY = 0;
+                        this.bodyLean = 0;
+                        this.armRaise = 0;
+                    }
+                } else if (this.state === 'delivering') {
+                    this.deliverTimer++;
+                    const t = this.deliverTimer;
+                    if (t <= 45) {
+                        const p = t / 45;
+                        this.bagHold = true;
+                        this.bagOffsetX = -18 + p * 28;
+                        this.bagOffsetY = -18 + p * 12;
+                        this.bodyLean = p * 0.25;
+                        this.armRaise = p * 0.6;
+                    } else if (t <= 160) {
+                        this.bagHold = true;
+                        this.bagOffsetX = 10;
+                        this.bagOffsetY = -6;
+                        this.bodyLean = 0.25;
+                        this.armRaise = 0.5;
+                        if ((t - 46) % 18 === 0 && this.bagGold > 0) {
+                            this.bagGold--;
+                            const gx = this.x + (this.isPlayer ? 20 : -20);
+                            const gy = this.y - 30;
+                            spawnMiningSparks(gx, gy);
+                            if (this.isPlayer) {
+                                const g = Math.max(1, Math.floor(13 * (typeof coopGoldMult === 'function' ? coopGoldMult() : 1)));
+                                unitOwnerState(this).gold += g;
+                                addFloatingText(gx, gy - 20, '+' + g, '#f1c40f');
+                            } else {
+                                const g = Math.max(1, Math.floor(13 * (typeof coopEnemyGoldMult === 'function' ? coopEnemyGoldMult() : 1)));
+                                enemy.gold += g;
+                            }
+                        }
+                    } else if (t <= 200) {
+                        const p = (t - 160) / 40;
+                        this.bagHold = true;
+                        this.bagOffsetX = 10 - p * 28;
+                        this.bagOffsetY = -6 - p * 12;
+                        this.bodyLean = 0.25 * (1 - p);
+                        this.armRaise = 0.5 * (1 - p);
+                        this.bagGold = 0;
+                    } else {
+                        if (this.bagGold > 0) {
+                            const leftover = this.bagGold * 13;
+                            if (this.isPlayer) {
+                                player.gold += leftover;
+                                addFloatingText(this.x, this.y - 50, '+' + leftover, '#f1c40f');
+                            } else {
+                                enemy.gold += leftover;
+                            }
+                            this.bagGold = 0;
+                        }
+                        this.bagHold = false;
+                        this.bagOffsetX = 0;
+                        this.bagOffsetY = 0;
+                        this.deliverTimer = 0;
+                        this.bodyLean = 0;
+                        this.armRaise = 0;
+                        this.assignSlot();
+                    }
+                } else {
+                    this.updateWander();
+                }
+
+                let grassTop = canvas.height - GROUND_HEIGHT;
+                let minY = grassTop + 20;
+                let maxY = canvas.height - 20;
+                if (this.y < minY) this.y = minY;
+                if (this.y > maxY) this.y = maxY;
+            }
+
+            draw(ctx) {
+                if (this.state === 'outside') return;
+                let isFlipped = false;
+                if (this.state === 'mining' || this.state === 'going_mine') {
+                    if (this.localOffset && this.localOffset.dx !== 0) {
+                        isFlipped = this.localOffset.dx > 0;
+                    } else if (this.targetSlot) {
+                        isFlipped = this.x > this.targetSlot.x;
+                    } else {
+                        isFlipped = false;
+                    }
+                } else {
+                    const mdx = this.x - this.prevX;
+                    if (Math.abs(mdx) > 0.3) {
+                        isFlipped = mdx < 0;
+                    } else if (this.state === 'attacking' && this.target) {
+                        isFlipped = (this.target.x < this.x);
+                    } else if (this.state === 'going_base' || this.state === 'delivering') {
+                        isFlipped = !this.isPlayer;
+                    } else {
+                        isFlipped = !this.isPlayer;
+                    }
+                }
+
+                const isDeliver = this.state === 'delivering';
+                const isAtk = this.state === 'attacking';
+                const moved = Math.hypot(this.x - this.prevX, 0) > 0.35;
+                let isWalking = moved && this.state !== 'mining' && !isDeliver;
+                let swingAngle = this.state === 'mining' ? this.miningSwing : 0;
+                let lean = (this.state === 'mining' || isDeliver) ? this.bodyLean : 0;
+                let raise = (this.state === 'mining' || isDeliver) ? this.armRaise : 0;
+                const bagOX = isDeliver ? (this.bagOffsetX || 0) : 0;
+                const bagOY = isDeliver ? (this.bagOffsetY || 0) : 0;
+                drawMinerBackpack(ctx, this.x + (isFlipped ? -bagOX : bagOX), this.y + bagOY, isFlipped, this.bagGold || 0, isDeliver && this.bagHold);
+
+                const minerColor = unitTeamColor(this);
+                const striking = isAtk && this.attackTimer > 0 && !moved;
+                const animFrame = this.state === 'mining' ? this.actionTimer : (striking ? this.attackTimer : 0);
+                drawStickman(ctx, this.x, this.y, minerColor, isDeliver ? 'none' : 'pickaxe',
+                             animFrame, isWalking, isFlipped, swingAngle,
+                             lean, raise, false, false, this.isPlayer);
+                drawStuckArrows(ctx, this);
 
                 ctx.fillStyle = 'red';
                 ctx.fillRect(this.x - 15, this.y - 65, 30, 4);
@@ -498,469 +435,585 @@
             }
         }
 
-        function serializeUnitForNet(u) {
-            let t = 'miner';
-            if (u instanceof Clubman) t = 'clubman';
-            else if (u instanceof Archer) t = 'archer';
-            const base = {
-                t, p: u.isPlayer,
-                oi: u.ownerIndex || 0,
-                x: Math.round(u.x), y: Math.round(u.y),
-                hp: Math.round(u.hp), mhp: Math.round(u.maxHp || 1),
-                w: !!u._isActuallyWalking,
-                d: u.drawAmount ? Math.round(u.drawAmount * 100) / 100 : 0,
-            };
-            if (t === 'miner') {
-                base.dl = u.state === 'delivering';
-                base.bg = u.bagGold || 0;
-                base.bl = Math.round((u.bodyLean || 0) * 100) / 100;
-                base.ar = Math.round((u.armRaise || 0) * 100) / 100;
-                base.sw = Math.round((u.miningSwing || 0) * 100) / 100;
-                base.w = u.state !== 'mining' && u.state !== 'delivering' && Math.hypot(u.x - u.prevX, 0) > 0.35;
+        class Clubman {
+            constructor(isPlayer) {
+                this.isPlayer = isPlayer;
+                this.baseX = isPlayer ? player.base.x : enemy.base.x;
+                this.baseY = isPlayer ? player.base.y : enemy.base.y;
+
+                this.x = this.baseX + (isPlayer ? -60 : 60);
+                this.y = this.baseY + (Math.random() * 40 - 20);
+
+                this.formationIndex = isPlayer ? player.clubFormationCounter++ : enemy.clubFormationCounter++;
+
+                this.hp = 100;
+                this.maxHp = 100;
+                this.damage = 10;
+                this.attackCooldown = 100;
+                this.attackTimer = 0;
+                this.range = 52;
+                this.isAttacking = false;
+                this.didHitThisSwing = false;
+                this.attackRecover = 0;
+                this.target = null;
+                this.prevX = this.x;
+                this.isInvulnerable = false;
+                this.targetX = null;
+                this.targetY = null;
+                this._isActuallyWalking = false;
+                this.stunTimer = 0;
+                this.slowTimer = 0;
+                this.stuckArrows = [];
             }
-            return base;
-        }
 
-        function broadcastHostState() {
-            if (!isCoopHostNow()) return;
-            wsSend({
-                type: 'room_relay',
-                roomId: coopSession.roomId,
-                payload: {
-                    kind: 'state',
-                    gold: player.gold,
-                    gold2: player2.gold,
-                    baseHp: player.base.hp,
-                    enemyGold: enemy.gold,
-                    enemyBaseHp: enemy.base.hp,
-                    command: player.command,
-                    command2: player2.command,
-                    level: level,
-                    spawnQueue: player.spawnQueue,
-                    spawnTimer: player.spawnTimer,
-                    spawnTimerMax: player.spawnTimerMax,
-                    spawnQueue2: player2.spawnQueue,
-                    spawnTimer2: player2.spawnTimer,
-                    spawnTimerMax2: player2.spawnTimerMax,
-                    units: units.map(serializeUnitForNet),
-                }
-            });
-        }
+            update() {
+                let cmd = this.isPlayer ? unitOwnerState(this).command : enemy.command;
+                let enemies = units.filter(u => u.isPlayer !== this.isPlayer && u.hp > 0 && !u.isInvulnerable);
+                let enemyBase = this.isPlayer ? enemy.base : player.base;
+                let myBase = this.isPlayer ? player.base : enemy.base;
+                this.prevX = this.x;
+                this.baseX = this.isPlayer ? player.base.x : enemy.base.x;
+                this.baseY = this.isPlayer ? player.base.y : enemy.base.y;
 
-        function applyHostSnapshot(payload) {
-            latestHostSnapshot = payload;
-            player.gold = payload.gold;
-            if (typeof payload.gold2 === 'number') player2.gold = payload.gold2;
-            player.base.hp = payload.baseHp;
-            enemy.gold = payload.enemyGold;
-            enemy.base.hp = payload.enemyBaseHp;
-            if (typeof payload.level === 'number') level = payload.level;
-            if (typeof payload.command === 'number') player.command = payload.command;
-            if (typeof payload.command2 === 'number') player2.command = payload.command2;
-            if (payload.spawnQueue) player.spawnQueue = payload.spawnQueue;
-            if (typeof payload.spawnTimer === 'number') player.spawnTimer = payload.spawnTimer;
-            if (typeof payload.spawnTimerMax === 'number') player.spawnTimerMax = payload.spawnTimerMax;
-            if (payload.spawnQueue2) player2.spawnQueue = payload.spawnQueue2;
-            if (typeof payload.spawnTimer2 === 'number') player2.spawnTimer = payload.spawnTimer2;
-            if (typeof payload.spawnTimerMax2 === 'number') player2.spawnTimerMax = payload.spawnTimerMax2;
-            units.length = 0;
-            (payload.units || []).forEach(d => units.push(new GhostUnit(d)));
-            updateActionButtonsUI();
-        }
-
-        function startCoopGuestRenderLoop() {
-            stopCoopGuestRenderLoop();
-            function loop() {
-                draw();
-                coopGuestLoopId = requestAnimationFrame(loop);
-            }
-            coopGuestLoopId = requestAnimationFrame(loop);
-        }
-        function stopCoopGuestRenderLoop() {
-            if (coopGuestLoopId) cancelAnimationFrame(coopGuestLoopId);
-            coopGuestLoopId = null;
-        }
-
-        function sendRoomInput(action) {
-            if (!coopSession) return;
-            wsSend({ type: 'room_relay', roomId: coopSession.roomId, payload: { kind: 'input', action } });
-        }
-
-        function handleRoomRelay(payload) {
-            if (!coopSession || !payload) return;
-            if (payload.kind === 'state' && isCoopGuestNow()) {
-                applyHostSnapshot(payload);
-                return;
-            }
-            if (payload.kind === 'victory' && isCoopGuestNow()) {
-                showCoopVictory(payload.level);
-                return;
-            }
-            if (payload.kind === 'next_level' && isCoopGuestNow()) {
-                const next = Number(payload.level);
-                if (Number.isInteger(next) && next >= 1 && next <= 3) {
-                    coopNextLevelRequested = false;
-                    beginCoopLevel(next);
-                }
-                return;
-            }
-            if (payload.kind === 'input' && isCoopHostNow()) {
-                // 2. oyuncu girdileri — player2'ye uygula
-                if (payload.action === 'buyMiner') queueUnit('miner', 1);
-                else if (payload.action === 'buyClub') queueUnit('club', 1);
-                else if (payload.action === 'buyArcher') queueUnit('archer', 1);
-                else if (payload.action === 'attack') { player2.command = CMD_ATTACK; }
-                else if (payload.action === 'defend') { player2.command = CMD_DEFEND; }
-                else if (payload.action === 'retreat') { player2.command = CMD_RETREAT; }
-                return;
-            }
-        }
-
-        async function localRegister(username, password) {
-            const db = loadLocalUsers();
-            if (db[username]) throw new Error('Bu kullanıcı adı alınmış');
-            const salt = randomSalt();
-            const passHash = await hashPass(password, salt);
-            db[username] = { salt, passHash, maxUnlocked: 1, cleared: [] };
-            saveLocalUsers(db);
-            localStorage.setItem(LOCAL_SESSION_KEY, username);
-            return { username, maxUnlocked: 1, cleared: [] };
-        }
-
-        async function localLogin(username, password) {
-            const db = loadLocalUsers();
-            const u = db[username];
-            if (!u) throw new Error('Kullanıcı adı veya şifre hatalı');
-            const check = await hashPass(password, u.salt);
-            if (check !== u.passHash) throw new Error('Kullanıcı adı veya şifre hatalı');
-            localStorage.setItem(LOCAL_SESSION_KEY, username);
-            return {
-                username,
-                maxUnlocked: u.maxUnlocked || 1,
-                cleared: u.cleared || [],
-            };
-        }
-
-        async function saveCurrentUser() {
-            if (!currentUser) return;
-            if (useServer) {
-                try {
-                    const data = await api('/api/progress', {
-                        method: 'POST',
-                        body: {
-                            maxUnlocked: currentUser.maxUnlocked,
-                            cleared: currentUser.cleared,
-                        },
-                    });
-                    currentUser.maxUnlocked = data.maxUnlocked;
-                    currentUser.cleared = data.cleared;
+                if (this.stunTimer > 0) {
+                    this.stunTimer--;
+                    this.isAttacking = false;
+                    this._isActuallyWalking = false;
                     return;
-                } catch (e) {
-                    useServer = false;
                 }
-            }
-            const db = loadLocalUsers();
-            if (db[currentUser.username]) {
-                db[currentUser.username].maxUnlocked = currentUser.maxUnlocked;
-                db[currentUser.username].cleared = currentUser.cleared;
-                saveLocalUsers(db);
-            }
-        }
+                if (this.slowTimer > 0) this.slowTimer--;
+                const slowMul = this.slowTimer > 0 ? 0.4 : 1;
 
-        function showScreen(which) {
-            authScreen.classList.add('hidden');
-            mainMenu.classList.add('hidden');
-            campaignScreen.classList.add('hidden');
-            friendsScreen.classList.add('hidden');
-            if (which === 'auth') authScreen.classList.remove('hidden');
-            if (which === 'menu') mainMenu.classList.remove('hidden');
-            if (which === 'campaign') campaignScreen.classList.remove('hidden');
-            if (which === 'friends') friendsScreen.classList.remove('hidden');
-            if (which === 'game') {
-                gameContainer.classList.remove('menu-hidden');
-            } else {
-                gameContainer.classList.add('menu-hidden');
-            }
-        }
+                let grassTop = canvas.height - GROUND_HEIGHT;
+                let minY = grassTop + 15;
+                let maxY = canvas.height - 20;
+                if (this.y < minY) this.y = minY;
+                if (this.y > maxY) this.y = maxY;
 
-        function stopGameLoop() {
-            isGameOver = true;
-            if (animationFrameId !== null) {
-                cancelAnimationFrame(animationFrameId);
-                animationFrameId = null;
-            }
-            modal.classList.add('hidden');
-            gameStarted = false;
-        }
+                let targetFrontlineX = this.x;
+                let targetFrontlineY = this.baseY;
+                if (cmd === CMD_RETREAT) {
+                    targetFrontlineX = this.isPlayer ? -150 : worldWidth + 150;
+                    targetFrontlineY = this.baseY;
+                } else if (cmd === CMD_DEFEND) {
+                    if (this.targetX !== null && this.targetY !== null) {
+                        targetFrontlineX = this.targetX;
+                        targetFrontlineY = this.targetY;
+                    } else {
+                        targetFrontlineX = myBase.x + (this.isPlayer ? 300 : -300);
+                        targetFrontlineY = myBase.y;
+                    }
+                } else if (cmd === CMD_ATTACK) {
+                    targetFrontlineX = enemyBase.x + (this.isPlayer ? -100 : 100);
+                    targetFrontlineY = enemyBase.y;
+                }
 
-        function enterMainMenu() {
-            stopGameLoop();
-            userChip.textContent = '👤 ' + currentUser.username;
-            showScreen('menu');
-            connectWS();
-        }
+                const visibleEnemies = enemies.filter(e =>
+                    cmd === CMD_ATTACK || (cmd === CMD_DEFEND && Math.abs(e.x - myBase.x) < 550)
+                );
+                const hasValidTarget = this.target && this.target !== enemyBase &&
+                    this.target.hp > 0 && visibleEnemies.includes(this.target);
 
-        tabLogin.onclick = () => {
-            authMode = 'login';
-            tabLogin.classList.add('active');
-            tabRegister.classList.remove('active');
-            authSubmit.textContent = 'Giriş Yap';
-            authError.textContent = '';
-        };
-        tabRegister.onclick = () => {
-            authMode = 'register';
-            tabRegister.classList.add('active');
-            tabLogin.classList.remove('active');
-            authSubmit.textContent = 'Hesap Oluştur';
-            authError.textContent = '';
-        };
+                if (!hasValidTarget) this.target = null;
 
-        authSubmit.onclick = async () => {
-            const u = (authUser.value || '').trim();
-            const p = authPass.value || '';
-            authError.textContent = '';
-            if (u.length < 3) { authError.textContent = 'Kullanıcı adı en az 3 karakter olmalı'; return; }
-            if (p.length < 3) { authError.textContent = 'Şifre en az 3 karakter olmalı'; return; }
-
-            authSubmit.disabled = true;
-            const prevText = authSubmit.textContent;
-            authSubmit.textContent = 'Bekle...';
-            try {
-                let data = null;
-                if (useServer) {
-                    try {
-                        const path = authMode === 'register' ? '/api/register' : '/api/login';
-                        data = await api(path, {
-                            method: 'POST',
-                            body: { username: u, password: p },
-                        });
-                        localStorage.setItem(TOKEN_KEY, data.token);
-                        localStorage.removeItem(LOCAL_SESSION_KEY);
-                    } catch (e) {
-                        if (e.status && e.status >= 400 && e.status < 500) throw e;
-                        useServer = false;
+                let bestScore = Infinity;
+                if (!this.target) {
+                    for (let e of visibleEnemies) {
+                        let dist = Math.hypot(e.x - this.x, e.y - this.y);
+                        let currentAttackers = units.filter(u => u.isPlayer === this.isPlayer && u instanceof Clubman && u.target === e).length;
+                        let score = dist + (currentAttackers * 120);
+                        if (score < bestScore) {
+                            bestScore = score;
+                            this.target = e;
+                        }
                     }
                 }
-                if (!data) {
-                    data = authMode === 'register'
-                        ? await localRegister(u, p)
-                        : await localLogin(u, p);
-                    localStorage.removeItem(TOKEN_KEY);
+
+                let distToTarget = this.target ? Math.hypot(this.target.x - this.x, this.target.y - this.y) : Infinity;
+                if (cmd === CMD_ATTACK && !this.target) {
+                    this.target = enemyBase;
+                    distToTarget = Math.hypot(enemyBase.x - this.x, enemyBase.y - this.y);
+                } else if (cmd !== CMD_ATTACK && this.target === enemyBase) {
+                    this.target = null;
+                    distToTarget = Infinity;
                 }
-                currentUser = {
-                    username: data.username,
-                    maxUnlocked: data.maxUnlocked || 1,
-                    cleared: data.cleared || [],
-                };
-                authPass.value = '';
-                enterMainMenu();
-            } catch (e) {
-                authError.textContent = e.message || 'Giriş başarısız';
-            } finally {
-                authSubmit.disabled = false;
-                authSubmit.textContent = prevText;
-            }
-        };
 
-        document.getElementById('btnLogout').onclick = async () => {
-            try { if (useServer) await api('/api/logout', { method: 'POST' }); } catch (_) {}
-            currentUser = null;
-            localStorage.removeItem(TOKEN_KEY);
-            localStorage.removeItem(LOCAL_SESSION_KEY);
-            authUser.value = '';
-            authPass.value = '';
-            showScreen('auth');
-        };
-
-        document.getElementById('btnMultiplayer').onclick = () => {
-            alert('Multiplayer yakında geliyor!');
-        };
-
-        document.getElementById('btnCampaign').onclick = () => {
-            openCampaignMap(false);
-        };
-        document.getElementById('btnCampaignBack').onclick = () => {
-            showScreen('menu');
-        };
-
-        const NODE_POS = {
-            1: { left: '15.5%', top: '73%' },
-            2: { left: '50%', top: '38%' },
-            3: { left: '84%', top: '23%' }
-        };
-
-        function setFlagToLevel(lv, animate) {
-            const pos = NODE_POS[lv] || NODE_POS[1];
-            if (!animate) {
-                campaignFlag.style.transition = 'none';
-            } else {
-                campaignFlag.style.transition = 'left 1.2s cubic-bezier(0.4,0,0.2,1), top 1.2s cubic-bezier(0.4,0,0.2,1)';
-            }
-            campaignFlag.style.left = pos.left;
-            campaignFlag.style.top = pos.top;
-            if (!animate) {
-                void campaignFlag.offsetWidth;
-                campaignFlag.style.transition = 'left 1.2s cubic-bezier(0.4,0,0.2,1), top 1.2s cubic-bezier(0.4,0,0.2,1)';
-            }
-        }
-
-        function refreshCampaignNodes() {
-            document.querySelectorAll('.campaign-node').forEach(node => {
-                const lv = parseInt(node.dataset.level, 10);
-                node.classList.remove('locked', 'cleared', 'current');
-                const unlocked = lv <= (currentUser.maxUnlocked || 1);
-                const cleared = (currentUser.cleared || []).includes(lv);
-                if (!unlocked) node.classList.add('locked');
-                else if (cleared) node.classList.add('cleared');
-                if (lv === Math.min(currentUser.maxUnlocked || 1, 3) && !cleared) node.classList.add('current');
-                if (lv === 3 && cleared) node.classList.add('current');
-            });
-        }
-
-        function openCampaignMap(fromVictory) {
-            levelChoiceModal.classList.add('hidden');
-            showScreen('campaign');
-            refreshCampaignNodes();
-            const flagLv = Math.min(currentUser.maxUnlocked || 1, 3);
-            setFlagToLevel(fromVictory ? Math.max(1, flagLv - 1) : flagLv, false);
-            if (fromVictory) {
-                setTimeout(() => setFlagToLevel(flagLv, true), 80);
-            }
-        }
-
-        function startCampaignLevel(lv) {
-            lv = Number(lv);
-            if (!Number.isInteger(lv) || lv < 1 || lv > 3) return;
-            if (!currentUser) {
-                showScreen('auth');
-                return;
-            }
-
-            const maxUnlocked = Number(currentUser.maxUnlocked || 1);
-            if (lv > maxUnlocked) {
-                alert('Bu bölüm henüz kilitli!');
-                return;
-            }
-
-            levelChoiceModal.classList.add('hidden');
-            friendPickerModal.classList.add('hidden');
-            coopWaitingModal.classList.add('hidden');
-            coopInviteModal.classList.add('hidden');
-            coopSession = null;
-
-            if (typeof stopGameLoop === 'function') stopGameLoop();
-
-            level = lv;
-            isGameOver = false;
-            gameStarted = false;
-
-            showScreen('game');
-            resizeCanvas();
-            resetLevel();
-            if (typeof player2 !== "undefined") {
-                player2.gold = 300;
-                player2.command = CMD_DEFEND;
-                player2.spawnQueue = [];
-                player2.spawnTimer = 0;
-            }
-
-            gameStarted = true;
-            lastFrameTime = 0;
-            accumulatedTime = 0;
-
-            updateActionButtonsUI();
-            draw();
-            startGameLoop();
-        }
-
-        function onLevelVictory() {
-            if (!currentUser) return;
-            const completed = Math.max(1, level - 1);
-            if (!currentUser.cleared.includes(completed)) currentUser.cleared.push(completed);
-            if (completed >= currentUser.maxUnlocked && currentUser.maxUnlocked < 3) {
-                currentUser.maxUnlocked = completed + 1;
-            }
-            if (completed >= 3) currentUser.maxUnlocked = 3;
-            saveCurrentUser();
-        }
-
-        modalBtn.onclick = () => {
-            if (isCoopHostNow() && coopVictoryHandled && isGameOver) {
-                const nextLevel = level;
-                if (nextLevel <= 3) {
-                    modal.classList.add('hidden');
-                    coopNextLevelRequested = true;
-                    wsSend({
-                        type: 'room_relay',
-                        roomId: coopSession.roomId,
-                        payload: { kind: 'next_level', level: nextLevel }
-                    });
-                    beginCoopLevel(nextLevel);
+                this.isAttacking = false;
+                let actualMoved = false;
+                if (cmd === CMD_RETREAT) {
+                    if (Math.hypot(this.x - targetFrontlineX, this.y - targetFrontlineY) > 5) {
+                        let angle = Math.atan2(targetFrontlineY - this.y, targetFrontlineX - this.x);
+                        this.x += Math.cos(angle) * 2.0 * SPEED_MULT * slowMul;
+                        this.y += Math.sin(angle) * 1.5 * SPEED_MULT * slowMul;
+                        actualMoved = true;
+                    } else {
+                        this.x = targetFrontlineX;
+                        this.y = targetFrontlineY;
+                    }
+                    this.attackTimer = 0;
                 } else {
-                    modal.classList.add('hidden');
-                    leaveCoopSession();
+                    if (this.target && distToTarget <= this.range) {
+                        const foe = this.target;
+                        const mutual = foe instanceof Clubman && foe.target === this &&
+                            Math.hypot(foe.x - this.x, foe.y - this.y) <= (foe.range || this.range) + 8;
+
+                        if (mutual) {
+                            if (this.combatTurn === undefined && foe.combatTurn === undefined) {
+                                const iGoFirst = (this.isPlayer !== foe.isPlayer)
+                                    ? this.isPlayer
+                                    : ((this.formationIndex || 0) <= (foe.formationIndex || 0));
+                                this.combatTurn = iGoFirst;
+                                foe.combatTurn = !iGoFirst;
+                            }
+                            if (!this.combatTurn) {
+                                this.isAttacking = false;
+                                this.attackTimer = 0;
+                                this.didHitThisSwing = false;
+                            } else {
+                                this.isAttacking = true;
+                                this.attackTimer++;
+                                if (this.attackTimer === 50 && !this.didHitThisSwing) {
+                                    foe.hp -= this.damage;
+                                    if (foe.stunTimer !== undefined) foe.stunTimer = 40;
+                                    addFloatingText(foe.x, (foe.y || 320), '-' + this.damage, this.isPlayer ? '#e74c3c' : '#c0392b');
+                                    this.didHitThisSwing = true;
+                                }
+                                if (this.attackTimer >= this.attackCooldown) {
+                                    this.attackTimer = 0;
+                                    this.didHitThisSwing = false;
+                                    this.isAttacking = false;
+                                    this.attackRecover = 18;
+                                    this.combatTurn = false;
+                                    foe.combatTurn = true;
+                                    foe.attackTimer = 0;
+                                    foe.isAttacking = false;
+                                    foe.didHitThisSwing = false;
+                                }
+                            }
+                        } else {
+                            this.combatTurn = undefined;
+                            this.isAttacking = true;
+                            this.attackTimer++;
+                            if (this.attackTimer === 50 && !this.didHitThisSwing) {
+                                foe.hp -= this.damage;
+                                if (foe.stunTimer !== undefined) foe.stunTimer = 40;
+                                addFloatingText(foe.x, (foe.y || 320), '-' + this.damage, this.isPlayer ? '#e74c3c' : '#c0392b');
+                                this.didHitThisSwing = true;
+                            }
+                            if (this.attackTimer >= this.attackCooldown) {
+                                this.attackTimer = 0;
+                                this.didHitThisSwing = false;
+                                this.isAttacking = false;
+                                this.attackRecover = 18;
+                            }
+                        }
+                    } else if (this.target) {
+                        this.combatTurn = undefined;
+                        let speedX = (cmd === CMD_ATTACK) ? 2.2 : 1.8;
+                        let speedY = (cmd === CMD_ATTACK) ? 1.6 : 1.3;
+                        let angle = Math.atan2(this.target.y - this.y, this.target.x - this.x);
+                        this.x += Math.cos(angle) * speedX * SPEED_MULT * slowMul;
+                        this.y += Math.sin(angle) * speedY * SPEED_MULT * slowMul;
+                        this.attackTimer = 0;
+                        actualMoved = true;
+                    } else {
+                        this.combatTurn = undefined;
+                        let distToFrontline = Math.hypot(this.x - targetFrontlineX, this.y - targetFrontlineY);
+                        if (distToFrontline > 10) {
+                            let speedX = (cmd === CMD_ATTACK) ? 2.2 : 1.7;
+                            let speedY = (cmd === CMD_ATTACK) ? 1.6 : 1.2;
+                            let angle = Math.atan2(targetFrontlineY - this.y, targetFrontlineX - this.x);
+                            this.x += Math.cos(angle) * speedX * SPEED_MULT * slowMul;
+                            this.y += Math.sin(angle) * speedY * SPEED_MULT * slowMul;
+                            actualMoved = true;
+                        } else if (cmd === CMD_DEFEND) {
+                            this.x = targetFrontlineX;
+                            this.y = targetFrontlineY;
+                        }
+                        this.attackTimer = 0;
+                    }
                 }
-                return;
-            }
-            if (isCoopGuestNow() && coopVictoryHandled) {
-                showToast('Diğer oyuncu sonraki bölümü başlatıyor...');
-                return;
-            }
-            modal.classList.add('hidden');
-            if (player.base.hp <= 0) {
-                isGameOver = false;
-                resetLevel();
-            if (typeof player2 !== "undefined") {
-                player2.gold = 300;
-                player2.command = CMD_DEFEND;
-                player2.spawnQueue = [];
-                player2.spawnTimer = 0;
-            }
-                startGameLoop();
-                return;
-            }
-            stopGameLoop();
-            openCampaignMap(true);
-        };
 
-        (async function bootMenu() {
-            try {
-                await api('/api/me');
-                useServer = true;
-            } catch (e) {
-                if (e && e.status === 401) useServer = true;
-                else useServer = false;
+                this._isActuallyWalking = actualMoved && (Math.hypot(this.x - this.prevX, 0) > 0.4) && !this.isAttacking;
             }
 
-            const token = localStorage.getItem(TOKEN_KEY);
-            if (token && useServer) {
-                try {
-                    const data = await api('/api/me');
-                    currentUser = {
-                        username: data.username,
-                        maxUnlocked: data.maxUnlocked || 1,
-                        cleared: data.cleared || [],
-                    };
-                    enterMainMenu();
+            draw(ctx) {
+                if (this.x < -50 || this.x > worldWidth + 50) return;
+                let isFlipped = !this.isPlayer;
+                const dx = this.x - this.prevX;
+                if (Math.abs(dx) > 0.3) {
+                    isFlipped = dx < 0;
+                } else if (this.isAttacking && this.target) {
+                    isFlipped = (this.target.x < this.x);
+                } else {
+                    let cmd = this.isPlayer ? unitOwnerState(this).command : enemy.command;
+                    if (cmd === CMD_RETREAT) isFlipped = this.isPlayer;
+                    else if (cmd === CMD_ATTACK) isFlipped = !this.isPlayer;
+                    else isFlipped = !this.isPlayer;
+                }
+                const clubColor = unitTeamColor(this);
+                let clubAnim = 0;
+                if (this.isAttacking) {
+                    clubAnim = this.attackTimer;
+                } else if (this.attackRecover > 0) {
+                    clubAnim = Math.max(0, 100 - (18 - this.attackRecover) * 5);
+                    this.attackRecover--;
+                }
+                drawStickman(ctx, this.x, this.y, clubColor, 'club', clubAnim, this._isActuallyWalking && clubAnim === 0, isFlipped, 0);
+                drawStuckArrows(ctx, this);
+
+                ctx.fillStyle = 'red';
+                ctx.fillRect(this.x - 15, this.y - 65, 30, 4);
+                ctx.fillStyle = '#2ecc71';
+                ctx.fillRect(this.x - 15, this.y - 65, 30 * (this.hp / this.maxHp), 4);
+            }
+        }
+
+        class Archer {
+            constructor(isPlayer, ownerIndex = 0) {
+                this.isPlayer = isPlayer;
+                this.ownerIndex = isPlayer ? (ownerIndex || 0) : 0;
+                this.baseX = isPlayer ? player.base.x : enemy.base.x;
+                this.baseY = isPlayer ? player.base.y : enemy.base.y;
+
+                this.x = this.baseX + (isPlayer ? -70 : 70);
+                this.y = this.baseY + (Math.random() * 40 - 20);
+
+                this.formationIndex = isPlayer
+                    ? (player.archerFormationCounter = (player.archerFormationCounter || 0) + 1)
+                    : (enemy.archerFormationCounter = (enemy.archerFormationCounter || 0) + 1);
+
+                this.hp = 50;
+                this.maxHp = 50;
+                this.range = 520;
+                this.safeGap = 32;
+                this.tooClose = 240;
+                this.attackCooldown = 130;
+                this.attackTimer = 0;
+                this.drawAmount = 0;
+                this.target = null;
+                this.prevX = this.x;
+                this.isInvulnerable = false;
+                this._isActuallyWalking = false;
+                this.stunTimer = 0;
+                this.slowTimer = 0;
+                this.stuckArrows = [];
+            }
+
+            update() {
+                let cmd = this.isPlayer ? unitOwnerState(this).command : enemy.command;
+                let enemies = units.filter(u => u.isPlayer !== this.isPlayer && u.hp > 0 && !u.isInvulnerable);
+                let enemyBase = this.isPlayer ? enemy.base : player.base;
+                let myBase = this.isPlayer ? player.base : enemy.base;
+                this.prevX = this.x;
+                this.baseX = this.isPlayer ? player.base.x : enemy.base.x;
+                this.baseY = this.isPlayer ? player.base.y : enemy.base.y;
+
+                if (this.stunTimer > 0) {
+                    this.stunTimer--;
+                    this._isActuallyWalking = false;
                     return;
-                } catch (_) {
-                    localStorage.removeItem(TOKEN_KEY);
+                }
+                if (this.slowTimer > 0) this.slowTimer--;
+                const slowMul = this.slowTimer > 0 ? 0.4 : 1;
+
+                let grassTop = canvas.height - GROUND_HEIGHT;
+                let minY = grassTop + 15;
+                let maxY = canvas.height - 20;
+                if (this.y < minY) this.y = minY;
+                if (this.y > maxY) this.y = maxY;
+
+                if (cmd === CMD_RETREAT) {
+                    let targetX = this.isPlayer ? -150 : worldWidth + 150;
+                    if (Math.hypot(this.x - targetX, this.y - this.baseY) > 5) {
+                        let angle = Math.atan2(this.baseY - this.y, targetX - this.x);
+                        this.x += Math.cos(angle) * 1.7 * SPEED_MULT * slowMul;
+                        this.y += Math.sin(angle) * 1.3 * SPEED_MULT * slowMul;
+                        this._isActuallyWalking = true;
+                    } else {
+                        this.x = targetX;
+                        this.y = this.baseY;
+                        this._isActuallyWalking = false;
+                    }
+                    this.attackTimer = 0;
+                    this.drawAmount = 0;
+                    this.target = null;
+                    return;
+                }
+
+                const visibleEnemies = enemies.filter(e =>
+                    cmd === CMD_ATTACK || (cmd === CMD_DEFEND && Math.abs(e.x - myBase.x) < AI_VISION_RANGE)
+                );
+                let closest = null, minDist = Infinity;
+                for (let e of visibleEnemies) {
+                    let d = Math.hypot(e.x - this.x, e.y - this.y);
+                    if (d < minDist) { minDist = d; closest = e; }
+                }
+                this.target = (closest && minDist <= this.range) ? closest : null;
+
+                if (!this.target && cmd === CMD_ATTACK) {
+                    const distToBase = Math.hypot(enemyBase.x - this.x, enemyBase.y - this.y);
+                    if (distToBase <= this.range) this.target = enemyBase;
+                }
+
+                const onMap = this.x > -50 && this.x < worldWidth + 50;
+                if (!onMap) this.target = null;
+
+                const myClubmen = units.filter(u => u.isPlayer === this.isPlayer && u instanceof Clubman && u.hp > 0);
+                let frontClubman = null;
+                if (myClubmen.length > 0) {
+                    frontClubman = this.isPlayer
+                        ? myClubmen.reduce((a, b) => b.x > a.x ? b : a)
+                        : myClubmen.reduce((a, b) => b.x < a.x ? b : a);
+                }
+
+                let desiredX;
+                let desiredY = this.baseY;
+                if (cmd === CMD_ATTACK) {
+                    desiredX = enemyBase.x + (this.isPlayer ? -260 : 260);
+                } else {
+                    desiredX = myBase.x + (this.isPlayer ? 220 : -220);
+                }
+                if (frontClubman) {
+                    desiredX = this.isPlayer
+                        ? Math.min(desiredX, frontClubman.x - this.safeGap)
+                        : Math.max(desiredX, frontClubman.x + this.safeGap);
+                    desiredY = frontClubman.y;
+                }
+                if (this.target) {
+                    const distToTarget = Math.hypot(this.target.x - this.x, this.target.y - this.y);
+                    if (distToTarget < this.tooClose) {
+                        const back = this.tooClose - distToTarget;
+                        let adjX = this.isPlayer ? this.x - back : this.x + back;
+                        if (frontClubman) {
+                            adjX = this.isPlayer
+                                ? Math.min(adjX, frontClubman.x - this.safeGap)
+                                : Math.max(adjX, frontClubman.x + this.safeGap);
+                        }
+                        desiredX = adjX;
+                    }
+                }
+
+                let actualMoved = false;
+                const distToDesired = Math.hypot(desiredX - this.x, desiredY - this.y);
+                if (distToDesired > 8) {
+                    let angle = Math.atan2(desiredY - this.y, desiredX - this.x);
+                    this.x += Math.cos(angle) * 1.6 * SPEED_MULT * slowMul;
+                    this.y += Math.sin(angle) * 1.2 * SPEED_MULT * slowMul;
+                    actualMoved = true;
+                }
+
+                // Hedef canlı ve menzildeyse ateş animasyonu; yoksa animasyon yok
+                const canShoot = this.target && this.target.hp > 0 &&
+                    Math.hypot(this.target.x - this.x, this.target.y - this.y) < this.range + 40;
+                if (canShoot) {
+                    this.attackTimer++;
+                    const CYCLE = this.attackCooldown;
+                    const DRAW_START = Math.floor(CYCLE * 0.55);
+                    const SHOOT_AT = CYCLE - 6;
+                    if (this.attackTimer < DRAW_START) {
+                        this.drawAmount = 0;
+                    } else if (this.attackTimer < SHOOT_AT) {
+                        this.drawAmount = (this.attackTimer - DRAW_START) / (SHOOT_AT - DRAW_START);
+                    } else {
+                        this.drawAmount = 0;
+                    }
+                    if (this.attackTimer === SHOOT_AT) {
+                        projectiles.push(new Arrow(this.x, this.y - 30, this.target, this.isPlayer));
+                    }
+                    if (this.attackTimer >= CYCLE) this.attackTimer = 0;
+                } else {
+                    this.attackTimer = 0;
+                    this.drawAmount = Math.max(0, this.drawAmount - 0.15);
+                }
+
+                this._isActuallyWalking = actualMoved && !this.target;
+            }
+
+            draw(ctx) {
+                if (this.x < -50 || this.x > worldWidth + 50) return;
+                let isFlipped = !this.isPlayer;
+                const dx = this.x - this.prevX;
+                if (this.target) {
+                    isFlipped = (this.target.x < this.x);
+                } else if (Math.abs(dx) > 0.3) {
+                    isFlipped = dx < 0;
+                }
+                const archerColor = unitTeamColor(this);
+                drawStickman(ctx, this.x, this.y, archerColor, 'bow', 0, this._isActuallyWalking, isFlipped, this.drawAmount);
+                drawStuckArrows(ctx, this);
+
+                ctx.fillStyle = 'red';
+                ctx.fillRect(this.x - 15, this.y - 65, 30, 4);
+                ctx.fillStyle = '#2ecc71';
+                ctx.fillRect(this.x - 15, this.y - 65, 30 * (this.hp / this.maxHp), 4);
+            }
+        }
+
+        class BaseArcherUnit {
+            constructor(isPlayer, offsetX, offsetY, climbSpeed, ownerIndex = 0) {
+                this.isPlayer = isPlayer;
+                this.ownerIndex = isPlayer ? (ownerIndex || 0) : 0;
+                const base = isPlayer ? player.base : enemy.base;
+                this.x = base.x + offsetX;
+                this.y = base.y + 100;
+                this.targetX = base.x + offsetX;
+                this.targetY = base.y - 140 + offsetY;
+                this.climbSpeed = climbSpeed * SPEED_MULT;
+                this.state = 'climbing';
+                this.attackTimer = 0;
+                this.drawAmount = 0;
+                this.active = true;
+                this.isWalking = false;
+                this.climbAnim = 0;
+            }
+
+            update() {
+                if (!this.active) return;
+
+                if (this.state === 'climbing') {
+                    let dx = this.targetX - this.x;
+                    let dy = this.targetY - this.y;
+                    let dist = Math.hypot(dx, dy);
+
+                    this.climbAnim++;
+
+                    if (dist > this.climbSpeed) {
+                        let angle = Math.atan2(dy, dx);
+                        this.x += Math.cos(angle) * this.climbSpeed;
+                        this.y += Math.sin(angle) * this.climbSpeed;
+                        this.isWalking = true;
+                    } else {
+                        this.x = this.targetX;
+                        this.y = this.targetY;
+                        this.state = 'active';
+                        this.attackTimer = 0;
+                        this.isWalking = false;
+                    }
+                } else if (this.state === 'active') {
+                    // Sadece menzilde hedef varken yay çek / ateş animasyonu
+                    let enemies = units.filter(u => u.isPlayer !== this.isPlayer && u.hp > 0 && !u.isInvulnerable);
+                    let target = null;
+                    if (enemies.length > 0) {
+                        target = enemies.reduce((prev, curr) =>
+                            Math.abs(curr.x - this.x) < Math.abs(prev.x - this.x) ? curr : prev);
+                        if (Math.abs(target.x - this.x) >= 700) target = null;
+                    }
+                    if (!target) {
+                        this.attackTimer = 0;
+                        this.drawAmount = Math.max(0, this.drawAmount - 0.12);
+                    } else {
+                        this.attackTimer++;
+                        const CYCLE = 120;
+                        const DRAW_START = 80;
+                        const SHOOT_AT = 116;
+                        if (this.attackTimer < DRAW_START) {
+                            this.drawAmount = 0;
+                        } else if (this.attackTimer < SHOOT_AT) {
+                            this.drawAmount = (this.attackTimer - DRAW_START) / (SHOOT_AT - DRAW_START);
+                        } else {
+                            this.drawAmount = 0;
+                        }
+                        if (this.attackTimer === SHOOT_AT) {
+                            projectiles.push(new Arrow(this.x, this.y - 30, target, this.isPlayer));
+                        }
+                        if (this.attackTimer >= CYCLE) this.attackTimer = 0;
+                    }
+                    this.isWalking = false;
                 }
             }
 
-            const localName = localStorage.getItem(LOCAL_SESSION_KEY);
-            if (localName) {
-                const db = loadLocalUsers();
-                if (db[localName]) {
-                    currentUser = {
-                        username: localName,
-                        maxUnlocked: db[localName].maxUnlocked || 1,
-                        cleared: db[localName].cleared || [],
-                    };
-                    enterMainMenu();
-                    return;
+            draw(ctx) {
+                if (!this.active) return;
+                let isFlipped = false;
+                let currentWeapon = 'bow';
+
+                if (this.state === 'climbing') {
+                    isFlipped = (this.targetX < this.x);
+                    currentWeapon = 'climb';
+                } else {
+                    let enemies = units.filter(u => u.isPlayer !== this.isPlayer && u.hp > 0 && !u.isInvulnerable);
+                    if (enemies.length > 0) {
+                        let target = enemies.reduce((prev, curr) => Math.abs(curr.x - this.x) < Math.abs(prev.x - this.x) ? curr : prev);
+                        isFlipped = (target.x < this.x);
+                    }
                 }
-                localStorage.removeItem(LOCAL_SESSION_KEY);
+                drawStickman(ctx, this.x, this.y, unitTeamColor(this), currentWeapon, this.climbAnim, this.isWalking, isFlipped, this.state === 'active' ? this.drawAmount : 0);
             }
-            showScreen('auth');
-        })();
+        }
+
+        class Arrow {
+            constructor(startX, startY, targetUnit, isPlayer) {
+                this.x = startX;
+                this.y = startY;
+                this.isPlayer = isPlayer;
+                this.target = targetUnit;
+                this.active = true;
+                this.speed = 8 * SPEED_MULT;
+                this.angle = 0;
+                if (targetUnit) {
+                    this.angle = Math.atan2(targetUnit.y - startY, targetUnit.x - startX);
+                }
+            }
+
+            update() {
+                if (!this.active) return;
+
+                if (this.target && this.target.hp > 0) {
+                    this.angle = Math.atan2(this.target.y - this.y, this.target.x - this.x);
+                    this.x += Math.cos(this.angle) * this.speed;
+                    this.y += Math.sin(this.angle) * this.speed;
+                    if (Math.hypot(this.target.x - this.x, this.target.y - this.y) < 15) {
+                        this.active = false;
+                        let isHeadshot = Math.random() < 0.2;
+                        let dmg = isHeadshot ? 25 : 12;
+                        this.target.hp -= dmg;
+                        if (this.target.slowTimer !== undefined) {
+                            this.target.slowTimer = Math.max(this.target.slowTimer || 0, 150);
+                        }
+                        if (!this.target.stuckArrows) this.target.stuckArrows = [];
+                        const ox = this.x - this.target.x;
+                        const oy = this.y - this.target.y + (isHeadshot ? -28 : -8);
+                        this.target.stuckArrows.push({
+                            ox: ox * 0.3 + (Math.random() * 8 - 4),
+                            oy: isHeadshot ? -32 - Math.random() * 6 : -12 + Math.random() * 10,
+                            angle: this.angle,
+                            life: 360
+                        });
+                        if (this.target.stuckArrows.length > 6) this.target.stuckArrows.shift();
+                        if (isHeadshot) {
+                            addFloatingText(this.target.x, this.target.y - 30, 'KAFADAN! -25', '#e67e22', true);
+                        } else {
+                            addFloatingText(this.target.x, this.target.y - 30, '-12', '#e74c3c');
+                        }
+                    }
+                } else {
+                    this.x += Math.cos(this.angle) * this.speed;
+                    this.y += Math.sin(this.angle) * this.speed;
+                }
+
+                if (this.x < 0 || this.x > worldWidth || this.y < 0 || this.y > canvas.height) {
+                    this.active = false;
+                }
+            }
+
+            draw(ctx) {
+                if (!this.active) return;
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.angle);
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(-10, 0);
+                ctx.lineTo(10, 0);
+                ctx.stroke();
+                ctx.fillStyle = '#bdc3c7';
+                ctx.beginPath();
+                ctx.moveTo(10, 0);
+                ctx.lineTo(4, -3);
+                ctx.lineTo(4, 3);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
