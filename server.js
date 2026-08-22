@@ -6,6 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const http = require('http');
 const { WebSocketServer } = require('ws');
+const { GameRoom, TICK_MS } = require('./server-game');
 
 const PORT = process.env.PORT || 3847;
 const HTML_FILE = process.env.HTML_FILE || 'index.html';
@@ -227,7 +228,7 @@ app.post('/api/friends/remove', requireAuth, (req, res) => {
 
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server, path: '/ws' });
-const rooms = new Map();
+const rooms = new Map(); // roomId -> { members: [name0, name1], slots: {name:0|1}, game: GameRoom, interval }
 
 function leaveRoomForUser(username, ws) {
     const roomId = ws && ws.roomId;
@@ -236,8 +237,33 @@ function leaveRoomForUser(username, ws) {
     if (!room) return;
     room.members = room.members.filter(m => m !== username);
     room.members.forEach(m => sendTo(m, { type: 'partner_left', roomId }));
-    if (room.members.length === 0) rooms.delete(roomId);
+    if (room.members.length === 0) {
+        if (room.interval) clearInterval(room.interval);
+        rooms.delete(roomId);
+    }
     ws.roomId = null;
+    ws.slot = null;
+}
+
+function broadcastRoom(roomId, obj) {
+    const room = rooms.get(roomId);
+    if (!room) return;
+    room.members.forEach(m => sendTo(m, obj));
+}
+
+function startRoomLoop(roomId) {
+    const room = rooms.get(roomId);
+    if (!room || !room.game) return;
+    if (room.interval) clearInterval(room.interval);
+    room.interval = setInterval(() => {
+        const snap = room.game.tick();
+        broadcastRoom(roomId, { type: 'room_relay', payload: snap });
+        if (snap.over) {
+            broadcastRoom(roomId, { type: 'room_relay', payload: { kind: 'victory', winner: snap.winner, level: snap.level } });
+            clearInterval(room.interval);
+            room.interval = null;
+        }
+    }, TICK_MS);
 }
 
 wss.on('connection', (ws) => {
@@ -285,22 +311,52 @@ wss.on('connection', (ws) => {
                 sendTo(to, { type: 'coop_declined', from: ws.username });
                 return;
             }
+            // to = davet eden (slot 0), ws = kabul eden (slot 1) — eşit oyuncular
             const roomId = makeRoomId();
-            rooms.set(roomId, { members: [to, ws.username] });
-            const hostWs = onlineSockets.get(to);
-            if (hostWs) hostWs.roomId = roomId;
+            const level = msg.level || 1;
+            const game = new GameRoom(roomId, level, to, ws.username);
+            const room = {
+                members: [to, ws.username],
+                slots: { [to]: 0, [ws.username]: 1 },
+                game,
+                interval: null,
+            };
+            rooms.set(roomId, room);
+            const inviterWs = onlineSockets.get(to);
+            if (inviterWs) { inviterWs.roomId = roomId; inviterWs.slot = 0; }
             ws.roomId = roomId;
-            sendTo(to, { type: 'coop_start', roomId, role: 'host', level: msg.level, partner: ws.username });
-            ws.send(JSON.stringify({ type: 'coop_start', roomId, role: 'guest', level: msg.level, partner: to }));
+            ws.slot = 1;
+            sendTo(to, { type: 'coop_start', roomId, slot: 0, level, partner: ws.username });
+            ws.send(JSON.stringify({ type: 'coop_start', roomId, slot: 1, level, partner: to }));
+            startRoomLoop(roomId);
             return;
         }
-        if (msg.type === 'room_relay') {
+        if (msg.type === 'room_input') {
             const room = rooms.get(msg.roomId);
-            if (!room || !room.members.includes(ws.username)) return;
-            room.members.forEach(m => {
-                if (m === ws.username) return;
-                sendTo(m, { type: 'room_relay', payload: msg.payload, from: ws.username });
-            });
+            if (!room || !room.game) return;
+            const slot = room.slots[ws.username];
+            if (slot === undefined) return;
+            room.game.pushInput(slot, msg.action);
+            return;
+        }
+        if (msg.type === 'ping') {
+            const room = rooms.get(ws.roomId);
+            const now = Date.now();
+            if (room && room.game && room.slots[ws.username] !== undefined) {
+                const slot = room.slots[ws.username];
+                room.game.lastMsgAt[slot] = now;
+                if (typeof msg.t === 'number') {
+                    // client RTT reported optionally
+                }
+            }
+            ws.send(JSON.stringify({ type: 'pong', t: msg.t, serverTime: now }));
+            return;
+        }
+        if (msg.type === 'rtt') {
+            const room = rooms.get(ws.roomId);
+            if (room && room.game && room.slots[ws.username] !== undefined) {
+                room.game.setRtt(room.slots[ws.username], msg.rtt || 0);
+            }
             return;
         }
         if (msg.type === 'leave_room') {
