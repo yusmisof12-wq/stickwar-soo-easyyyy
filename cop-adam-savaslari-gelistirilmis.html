@@ -2808,22 +2808,54 @@
             return 'ws://127.0.0.1:3847/ws';
         }
 
+        let wsReconnectTimer = null;
+        let wsAuthOk = false;
+
+        function scheduleWSReconnect() {
+            if (wsReconnectTimer || !useServer || !currentUser) return;
+            wsReconnectTimer = setTimeout(() => {
+                wsReconnectTimer = null;
+                connectWS();
+            }, 1000);
+        }
+
         function connectWS() {
             if (!useServer || !currentUser) return;
             const token = localStorage.getItem(TOKEN_KEY);
             if (!token) return;
             if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
+            wsAuthOk = false;
             try {
                 ws = new WebSocket(wsUrl());
-            } catch (e) { return; }
-            ws.onopen = () => { wsSend({ type: 'auth', token }); };
+            } catch (e) {
+                scheduleWSReconnect();
+                return;
+            }
+            ws.onopen = () => {
+                ws.send(JSON.stringify({ type: 'auth', token }));
+            };
             ws.onmessage = (ev) => {
                 let msg;
                 try { msg = JSON.parse(ev.data); } catch (e) { return; }
+                if (msg.type === 'auth_ok') {
+                    wsAuthOk = true;
+                    return;
+                }
+                if (msg.type === 'auth_error') {
+                    wsAuthOk = false;
+                    try { ws.close(); } catch (e) {}
+                    return;
+                }
                 handleWsMessage(msg);
             };
-            ws.onclose = () => { ws = null; };
-            ws.onerror = () => {};
+            ws.onclose = () => {
+                ws = null;
+                wsAuthOk = false;
+                scheduleWSReconnect();
+            };
+            ws.onerror = () => {
+                wsAuthOk = false;
+            };
         }
 
         function wsSend(obj) {
@@ -3584,4 +3616,4 @@ function showScreen(which) {
         })();
     </script>
 </body>
-</html> 
+</html>
