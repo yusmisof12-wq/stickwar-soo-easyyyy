@@ -1,4 +1,4 @@
-        // ==================== HESAP + MENÜ + SEFER ====================
+ // ==================== HESAP + MENÜ + SEFER ====================
         const TOKEN_KEY = 'copAdamToken_v1';
         const LOCAL_USERS_KEY = 'copAdamUsersHashed_v1';
         const LOCAL_SESSION_KEY = 'copAdamLocalSession_v1';
@@ -96,10 +96,11 @@
         let coopVictoryHandled = false;
         let coopNextLevelRequested = false;
 
-        function isCoopPlayNow() { return !!(coopSession && coopSession.roomId); }
+        function isCoopPlayNow() { return !!(typeof coopSession !== 'undefined' && coopSession && coopSession.roomId); }
         function myCoopSlot() { return coopSession ? (coopSession.slot|0) : 0; }
-        function isSimPeer() { return false; } // fizik sunucuda
-        function isCoopGuestNow() { return isCoopPlayNow(); } // ikisi de client
+        // Çift yerel motor: ikisi de tam sefer gibi simüle eder
+        function isSimPeer() { return isCoopPlayNow(); }
+        function isCoopGuestNow() { return false; }
         function isCoopHostNow() { return false; }
 
         function wsUrl() {
@@ -422,23 +423,17 @@
             coopVictoryHandled = false;
             showScreen('game');
             resizeCanvas();
-            if (typeof initMines === 'function') initMines();
-            units = [];
-            projectiles = [];
-            floatingTexts = [];
-            retreatArchers = [];
-            player.gold = 300;
+            // Solo ile aynı motor — ikimizde de
+            if (typeof resetLevel === 'function') resetLevel();
             player2.gold = 300;
-            player.command = CMD_DEFEND;
             player2.command = CMD_DEFEND;
-            player.base.hp = 1000;
-            enemy.base.hp = level === 1 ? 280 : 500;
-            player.minerQueue = []; player.combatQueue = [];
-            player.minerTimer = 0; player.combatTimer = 0;
+            player2.minerQueue = []; player2.combatQueue = [];
+            player2.minerTimer = 0; player2.combatTimer = 0;
+            player2.minerTimerMax = 0; player2.combatTimerMax = 0;
             updateActionButtonsUI();
-            stopGameLoop();
-            startCoopGuestRenderLoop();
-            showToast('Sunucu seferi · Oyuncu ' + (myCoopSlot() + 1));
+            stopCoopGuestRenderLoop();
+            startGameLoop();
+            showToast('Arkadaş seferi · Oyuncu ' + (myCoopSlot() + 1) + ' (mavi=2)');
         }
 
         function showCoopVictory(lv, winner) {
@@ -770,13 +765,32 @@
 
         function handleRoomRelay(payload) {
             if (!coopSession || !payload) return;
-            if (payload.kind === 'state' || payload.tick !== undefined || payload.p0) {
-                applyServerSnapshot(payload);
+            if (payload.kind === 'input') {
+                applyCoopInput(payload.slot|0, payload.action);
                 return;
             }
             if (payload.kind === 'victory') {
                 showCoopVictory(payload.level, payload.winner);
             }
+        }
+
+        function applyCoopInput(slot, action) {
+            if (!isCoopPlayNow()) return;
+            // slot 0 → player, slot 1 → player2
+            if (action === 'buyMiner') queueUnit('miner', slot);
+            else if (action === 'buyClub') queueUnit('club', slot);
+            else if (action === 'buyArcher') queueUnit('archer', slot);
+            else if (action === 'attack') {
+                if (slot === 1) player2.command = CMD_ATTACK;
+                else player.command = CMD_ATTACK;
+            } else if (action === 'defend') {
+                if (slot === 1) player2.command = CMD_DEFEND;
+                else player.command = CMD_DEFEND;
+            } else if (action === 'retreat') {
+                if (slot === 1) player2.command = CMD_RETREAT;
+                else player.command = CMD_RETREAT;
+            }
+            updateActionButtonsUI();
         }
 
         async function localRegister(username, password) {
