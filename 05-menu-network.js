@@ -490,7 +490,7 @@
                 this.walking = d.w; this.drawAmt = d.d || 0;
                 this.deliver = !!d.dl; this.bagGold = d.bg || 0;
                 this.bodyLean = d.bl || 0; this.armRaise = d.ar || 0; this.swingAngle = d.sw || 0;
-                this.ownerIndex = d.oi || 0;
+                this.ownerIndex = (d.oi|0);
                 this.flip = !!d.fl;
                 this.anim = d.an || 0;
                 this.state = d.st || '';
@@ -513,15 +513,15 @@
                         !!this.walking && !mining, isFlipped, this.swingAngle, this.bodyLean, this.armRaise,
                         false, true, this.isPlayer);
                 } else if (this.type === 'clubman') {
-                    // Yürüme / vuruş animasyonu
                     let clubAnim = 0;
                     let isWalk = false;
-                    if (this.attacking || (this.anim > 0 && this.anim % 25 > 5 && this.anim % 25 < 22)) {
-                        clubAnim = 20 + (this.anim % 25);
+                    if (this.anim > 0) {
+                        clubAnim = this.anim; // host saldırı timer
+                        isWalk = false;
                     } else if (this.walking) {
-                        this._walkPhase = (this._walkPhase || 0) + 1.2;
-                        clubAnim = 0;
+                        this._walkPhase = (this._walkPhase || 0) + 1.5;
                         isWalk = true;
+                        clubAnim = 0;
                     }
                     drawStickman(ctx, this.x, this.y, color, 'club', clubAnim, isWalk, isFlipped, 0);
                 } else if (this.type === 'archer') {
@@ -550,7 +550,7 @@
             }
             const base = {
                 t, p: !!u.isPlayer,
-                oi: u.ownerIndex || 0,
+                oi: (u.ownerIndex|0),
                 x: Math.round(u.x), y: Math.round(u.y),
                 hp: Math.round(u.hp), mhp: Math.round(u.maxHp || 1),
                 w: !!u._isActuallyWalking,
@@ -612,7 +612,6 @@
                     arrows: (projectiles || []).filter(p => p.active).slice(0, 30).map(p => ({
                         x: Math.round(p.x), y: Math.round(p.y), a: p.angle
                     })),
-                    cameraX: Math.round(cameraX || 0),
                 }
             });
         }
@@ -675,42 +674,37 @@
                 }
                 return;
             }
-            // Klasik format (tam sefer motoru state)
-            if (typeof payload.gold === 'number') player.gold = payload.gold;
-            if (typeof payload.gold2 === 'number') player2.gold = payload.gold2;
-            // Slot 1 kendi altınını player üzerinden görsün
-            if (myCoopSlot() === 1 && typeof payload.gold2 === 'number') {
-                // UI localOwnerIndex 0 kullanıyor; geçici olarak player'a p2 yaz
-                const tmp = player.gold;
-                player.gold = payload.gold2;
-                player2.gold = payload.gold;
-                // kuyruklar p2
-                if (payload.minerQueue2) player.minerQueue = payload.minerQueue2;
-                if (typeof payload.minerTimer2 === 'number') player.minerTimer = payload.minerTimer2;
-                if (typeof payload.minerTimerMax2 === 'number') player.minerTimerMax = payload.minerTimerMax2;
-                if (payload.combatQueue2) player.combatQueue = payload.combatQueue2;
-                if (typeof payload.combatTimer2 === 'number') player.combatTimer = payload.combatTimer2;
-                if (typeof payload.combatTimerMax2 === 'number') player.combatTimerMax = payload.combatTimerMax2;
-                if (typeof payload.command2 === 'number') player.command = payload.command2;
-            }
-            player.base.hp = payload.baseHp;
-            enemy.gold = payload.enemyGold;
-            enemy.base.hp = payload.enemyBaseHp;
+            // Klasik format — slot'a göre kendi altın / kuyruk / komut
+            const slot = myCoopSlot();
+            if (typeof payload.baseHp === 'number') player.base.hp = payload.baseHp;
+            if (typeof payload.enemyGold === 'number') enemy.gold = payload.enemyGold;
+            if (typeof payload.enemyBaseHp === 'number') enemy.base.hp = payload.enemyBaseHp;
             if (typeof payload.level === 'number') level = payload.level;
-            if (typeof payload.command === 'number') player.command = payload.command;
-            if (typeof payload.command2 === 'number') player2.command = payload.command2;
-            if (payload.minerQueue) player.minerQueue = payload.minerQueue;
-            if (typeof payload.minerTimer === 'number') player.minerTimer = payload.minerTimer;
-            if (typeof payload.minerTimerMax === 'number') player.minerTimerMax = payload.minerTimerMax;
-            if (payload.combatQueue) player.combatQueue = payload.combatQueue;
-            if (typeof payload.combatTimer === 'number') player.combatTimer = payload.combatTimer;
-            if (typeof payload.combatTimerMax === 'number') player.combatTimerMax = payload.combatTimerMax;
-            if (payload.minerQueue2) player2.minerQueue = payload.minerQueue2;
-            if (typeof payload.minerTimer2 === 'number') player2.minerTimer = payload.minerTimer2;
-            if (typeof payload.minerTimerMax2 === 'number') player2.minerTimerMax = payload.minerTimerMax2;
-            if (payload.combatQueue2) player2.combatQueue = payload.combatQueue2;
-            if (typeof payload.combatTimer2 === 'number') player2.combatTimer = payload.combatTimer2;
-            if (typeof payload.combatTimerMax2 === 'number') player2.combatTimerMax = payload.combatTimerMax2;
+
+            if (slot === 1) {
+                // Misafir = oyuncu 2 verisi
+                if (typeof payload.gold2 === 'number') player.gold = payload.gold2;
+                if (typeof payload.gold === 'number') player2.gold = payload.gold;
+                if (typeof payload.command2 === 'number') player.command = payload.command2;
+                if (typeof payload.command === 'number') player2.command = payload.command;
+                player.minerQueue = payload.minerQueue2 || [];
+                player.minerTimer = payload.minerTimer2 || 0;
+                player.minerTimerMax = payload.minerTimerMax2 || 0;
+                player.combatQueue = payload.combatQueue2 || [];
+                player.combatTimer = payload.combatTimer2 || 0;
+                player.combatTimerMax = payload.combatTimerMax2 || 0;
+            } else {
+                if (typeof payload.gold === 'number') player.gold = payload.gold;
+                if (typeof payload.gold2 === 'number') player2.gold = payload.gold2;
+                if (typeof payload.command === 'number') player.command = payload.command;
+                if (typeof payload.command2 === 'number') player2.command = payload.command2;
+                player.minerQueue = payload.minerQueue || [];
+                player.minerTimer = payload.minerTimer || 0;
+                player.minerTimerMax = payload.minerTimerMax || 0;
+                player.combatQueue = payload.combatQueue || [];
+                player.combatTimer = payload.combatTimer || 0;
+                player.combatTimerMax = payload.combatTimerMax || 0;
+            }
             units.length = 0;
             (payload.units || []).forEach(d => {
                     const g = new GhostUnit(d);
@@ -744,7 +738,7 @@
                     update() {}
                 }));
             }
-            if (typeof payload.cameraX === 'number') cameraX = payload.cameraX;
+            // kamera senkron DEĞİL — her oyuncu kendi ekranını kaydırır
 
             updateActionButtonsUI();
         }
