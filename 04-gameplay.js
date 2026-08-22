@@ -1,4 +1,4 @@
-        function setPlayerCommand(cmd) {
+function setPlayerCommand(cmd) {
             const oi = localOwnerIndex();
             getOwnerState(oi).command = cmd;
             // Solo veya host: player.command senkron (AI tehdit hesabı için host tarafı)
@@ -653,6 +653,8 @@
         }
 
         function startGameLoop() {
+            if (typeof setMusicMode === 'function') setMusicMode('battle');
+
             if (animationFrameId !== null) return;
             lastFrameTime = 0;
             accumulatedTime = 0;
