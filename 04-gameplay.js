@@ -20,14 +20,11 @@ function setPlayerCommand(cmd) {
             setPlayerCommand(CMD_ATTACK);
         };
 
-        // Spawn süreleri (frame) — birim tipine göre
+        // Spawn süreleri (frame) — madenci ayrı; sopalı+okçu ortak sırada
         const SPAWN_TIME = { miner: 8 * 60, club: 6 * 60, archer: 7 * 60 };
         const UNIT_COST = { miner: 150, club: 125, archer: 140 };
         const MAX_QUEUE = 8;
 
-        function countQueued(type) {
-            return (player.spawnQueue || []).filter(t => t === type).length;
-        }
         function countPlayerUnits(type) {
             if (type === 'miner') return units.filter(u => u.isPlayer && u instanceof Miner).length;
             if (type === 'club') return units.filter(u => u.isPlayer && u instanceof Clubman).length;
@@ -40,60 +37,64 @@ function setPlayerCommand(cmd) {
             if (type === 'archer') return MAX_ARCHERS_PER_TEAM;
             return 0;
         }
-
+        function ensureQueues(st) {
+            if (!st.minerQueue) st.minerQueue = [];
+            if (!st.combatQueue) st.combatQueue = [];
+            if (typeof st.minerTimer !== 'number') st.minerTimer = 0;
+            if (typeof st.combatTimer !== 'number') st.combatTimer = 0;
+        }
         function countQueuedFor(ownerIndex, type) {
             const st = getOwnerState(ownerIndex);
-            return (st.spawnQueue || []).filter(t => t === type).length;
-        }
-        function countPlayerUnitsFor(ownerIndex, type) {
-            return units.filter(u => u.isPlayer && (u.ownerIndex || 0) === ownerIndex && (
-                (type === 'miner' && u instanceof Miner) ||
-                (type === 'club' && u instanceof Clubman) ||
-                (type === 'archer' && u instanceof Archer)
-            )).length;
+            ensureQueues(st);
+            if (type === 'miner') return st.minerQueue.length;
+            return st.combatQueue.filter(t => t === type).length;
         }
 
         function queueUnit(type, ownerIndex) {
             if (ownerIndex === undefined) ownerIndex = localOwnerIndex();
             const st = getOwnerState(ownerIndex);
-            if (!st.spawnQueue) st.spawnQueue = [];
+            ensureQueues(st);
             if (st.gold < UNIT_COST[type]) return false;
-            if (st.spawnQueue.length >= MAX_QUEUE) return false;
-            // Takım limiti: tüm oyuncu birimleri + kuyruk
-            const teamCount = countPlayerUnits(type) + countQueued(type) + countQueuedFor(1, type) - countQueuedFor(0, type) + countQueuedFor(0, type);
-            // basit: toplam canlı + her iki kuyruk
+
             const live = countPlayerUnits(type);
             const q0 = countQueuedFor(0, type);
             const q1 = countQueuedFor(1, type);
             if (live + q0 + q1 >= maxForType(type)) return false;
 
-            st.gold -= UNIT_COST[type];
-            st.spawnQueue.push(type);
-            if (st.spawnQueue.length === 1) {
-                st.spawnTimerMax = SPAWN_TIME[type];
-                st.spawnTimer = SPAWN_TIME[type];
+            if (type === 'miner') {
+                if (st.minerQueue.length >= MAX_QUEUE) return false;
+                st.gold -= UNIT_COST.miner;
+                st.minerQueue.push('miner');
+                if (st.minerQueue.length === 1 && st.minerTimer <= 0) {
+                    st.minerTimerMax = SPAWN_TIME.miner;
+                    st.minerTimer = SPAWN_TIME.miner;
+                }
+            } else {
+                // club + archer aynı combat kuyruğu (sıra korunur)
+                if (st.combatQueue.length >= MAX_QUEUE) return false;
+                st.gold -= UNIT_COST[type];
+                st.combatQueue.push(type);
+                if (st.combatQueue.length === 1 && st.combatTimer <= 0) {
+                    st.combatTimerMax = SPAWN_TIME[type];
+                    st.combatTimer = SPAWN_TIME[type];
+                }
             }
             return true;
         }
 
-        function processSpawnQueueFor(ownerIndex) {
-            const st = getOwnerState(ownerIndex);
-            if (!st || !st.spawnQueue) {
-                if (st) { st.spawnQueue = []; st.spawnTimer = 0; st.spawnTimerMax = 0; }
+        function processOneQueue(st, queueKey, timerKey, maxKey, ownerIndex) {
+            ensureQueues(st);
+            const q = st[queueKey];
+            if (!q || q.length === 0) {
+                st[timerKey] = 0;
+                st[maxKey] = 0;
                 return;
             }
-            if (st.spawnQueue.length === 0) {
-                st.spawnTimer = 0;
-                st.spawnTimerMax = 0;
-                return;
+            if (st[timerKey] > 0) {
+                st[timerKey]--;
+                if (st[timerKey] > 0) return;
             }
-            // Süre sayacı
-            if (st.spawnTimer > 0) {
-                st.spawnTimer--;
-                if (st.spawnTimer > 0) return;
-            }
-            // Süre bitti → birim oluştur
-            const type = st.spawnQueue.shift();
+            const type = q.shift();
             try {
                 if (type === 'miner') units.push(new Miner(true, ownerIndex));
                 else if (type === 'club') units.push(new Clubman(true, ownerIndex));
@@ -101,15 +102,22 @@ function setPlayerCommand(cmd) {
             } catch (err) {
                 console.error('Spawn hatası:', type, err);
             }
-            // Sıradakinin süresini başlat
-            if (st.spawnQueue.length > 0) {
-                const next = st.spawnQueue[0];
-                st.spawnTimerMax = SPAWN_TIME[next] || 600;
-                st.spawnTimer = st.spawnTimerMax;
+            if (q.length > 0) {
+                const next = q[0];
+                st[maxKey] = SPAWN_TIME[next] || 600;
+                st[timerKey] = st[maxKey];
             } else {
-                st.spawnTimer = 0;
-                st.spawnTimerMax = 0;
+                st[timerKey] = 0;
+                st[maxKey] = 0;
             }
+        }
+
+        function processSpawnQueueFor(ownerIndex) {
+            const st = getOwnerState(ownerIndex);
+            if (!st) return;
+            // Madenci ve savaş birimleri paralel (ayrı kuyruklar)
+            processOneQueue(st, 'minerQueue', 'minerTimer', 'minerTimerMax', ownerIndex);
+            processOneQueue(st, 'combatQueue', 'combatTimer', 'combatTimerMax', ownerIndex);
         }
 
         function processSpawnQueue() {
@@ -145,14 +153,14 @@ function setPlayerCommand(cmd) {
             player.minerCooldown = 0;
             player.clubCooldown = 0;
             player.archerCooldown = 0;
-            player.spawnQueue = [];
-            player.spawnTimer = 0;
-            player.spawnTimerMax = 0;
+            player.minerQueue = []; player.minerTimer = 0; player.minerTimerMax = 0;
+            player.combatQueue = []; player.combatTimer = 0; player.combatTimerMax = 0;
             player2.gold = 300;
             player2.command = CMD_DEFEND;
-            player2.spawnQueue = [];
-            player2.spawnTimer = 0;
-            player2.spawnTimerMax = 0;
+            player2.lastCommand = CMD_DEFEND;
+            player2.retreatGraceTimer = 0;
+            player2.minerQueue = []; player2.minerTimer = 0; player2.minerTimerMax = 0;
+            player2.combatQueue = []; player2.combatTimer = 0; player2.combatTimerMax = 0;
             player2.clubFormationCounter = 0;
             player2.archerFormationCounter = 0;
             player.clubFormationCounter = 0;
@@ -454,33 +462,44 @@ function setPlayerCommand(cmd) {
         }
 
         function updateActionButtonsUI() {
-            // Yerel oyuncunun kuyruğu / altını
             const oi = localOwnerIndex();
             const st = getOwnerState(oi);
-            const head = st.spawnQueue && st.spawnQueue[0];
-            setCircularCooldown(minerCdFill, head === 'miner' ? st.spawnTimer : 0, head === 'miner' ? st.spawnTimerMax : 1);
-            setCircularCooldown(clubCdFill, head === 'club' ? st.spawnTimer : 0, head === 'club' ? st.spawnTimerMax : 1);
-            setCircularCooldown(archerCdFill, head === 'archer' ? st.spawnTimer : 0, head === 'archer' ? st.spawnTimerMax : 1);
+            ensureQueues(st);
+
+            // Madenci kuyruğu ayrı; combat kuyruğunun başı club veya archer
+            setCircularCooldown(minerCdFill, st.minerQueue.length ? st.minerTimer : 0, st.minerTimerMax || 1);
+            const combatHead = st.combatQueue[0];
+            setCircularCooldown(clubCdFill, combatHead === 'club' ? st.combatTimer : 0, combatHead === 'club' ? (st.combatTimerMax || 1) : 1);
+            setCircularCooldown(archerCdFill, combatHead === 'archer' ? st.combatTimer : 0, combatHead === 'archer' ? (st.combatTimerMax || 1) : 1);
 
             goldEl.innerText = Math.floor(st.gold);
             levelEl.innerText = Math.min(level, 3) + "/3";
 
-            const qLen = (st.spawnQueue || []).length;
-            const qAll = (t) => countQueuedFor(0, t) + countQueuedFor(1, t);
-            btnMiner.disabled = st.gold < 150 || qLen >= MAX_QUEUE ||
+            // Kuyruk sayacı rozetleri
+            function setBadge(id, n) {
+                const el = document.getElementById(id);
+                if (!el) return;
+                if (n > 0) { el.textContent = String(n); el.classList.remove('hidden'); }
+                else { el.classList.add('hidden'); }
+            }
+            setBadge('minerQBadge', st.minerQueue.length);
+            setBadge('clubQBadge', st.combatQueue.filter(x => x === 'club').length);
+            setBadge('archerQBadge', st.combatQueue.filter(x => x === 'archer').length);
+
+            const qAll = (typ) => countQueuedFor(0, typ) + countQueuedFor(1, typ);
+            btnMiner.disabled = st.gold < 150 || st.minerQueue.length >= MAX_QUEUE ||
                 (countPlayerUnits('miner') + qAll('miner') >= MAX_MINERS_PER_TEAM);
-            btnClub.disabled = st.gold < 125 || qLen >= MAX_QUEUE ||
+            btnClub.disabled = st.gold < 125 || st.combatQueue.length >= MAX_QUEUE ||
                 (countPlayerUnits('club') + qAll('club') >= MAX_CLUBMEN_PER_TEAM);
 
             if (level >= 2) {
                 btnArcher.style.display = '';
-                btnArcher.disabled = st.gold < 140 || qLen >= MAX_QUEUE ||
+                btnArcher.disabled = st.gold < 140 || st.combatQueue.length >= MAX_QUEUE ||
                     (countPlayerUnits('archer') + qAll('archer') >= MAX_ARCHERS_PER_TEAM);
             } else {
                 btnArcher.style.display = 'none';
             }
 
-            // Komut butonları yerel oyuncunun komutuna göre
             Object.values(cmdBtns).forEach(b => b.classList.remove('active'));
             if (cmdBtns[st.command]) cmdBtns[st.command].classList.add('active');
         }
@@ -490,11 +509,7 @@ function setPlayerCommand(cmd) {
             frames++;
 
             if (isCoopHostNow()) {
-                coopBroadcastCounter++;
-                if (coopBroadcastCounter >= 3) {
-                    coopBroadcastCounter = 0;
-                    broadcastHostState();
-                }
+                broadcastHostState();
             }
 
             if (frames % (player.command === CMD_RETREAT ? 150 : 300) === 0) {
