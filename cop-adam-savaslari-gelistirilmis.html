@@ -3372,18 +3372,24 @@ function showScreen(which) {
         }
 
         function refreshCampaignNodes() {
-            document.querySelectorAll('.campaign-node').forEach(node => {
-                const lv = parseInt(node.dataset.level, 10);
-                node.classList.remove('locked', 'cleared', 'current');
-                const unlocked = lv <= (currentUser.maxUnlocked || 1);
-                const cleared = (currentUser.cleared || []).includes(lv);
-                if (!unlocked) node.classList.add('locked');
-                else if (cleared) node.classList.add('cleared');
-                if (lv === Math.min(currentUser.maxUnlocked || 1, 3) && !cleared) node.classList.add('current');
-                if (lv === 3 && cleared) node.classList.add('current');
-            });
+          document.querySelectorAll('.campaign-node').forEach(node => {
+    node.onclick = () => {
+        const lv = parseInt(node.dataset.level, 10);
+        // 🔥 EKLE: Kullanıcı oturumu var mı?
+        if (!currentUser) {
+            alert('Lütfen önce giriş yapın.');
+            return;
         }
-
+        if (lv > (currentUser.maxUnlocked || 1)) {
+            alert('Bu bölüm henüz kilitli!');
+            return;
+        }
+        pendingLevelChoice = lv;
+        levelChoiceTitle.textContent = 'Bölüm ' + lv;
+        document.getElementById('btnPlayWithFriend').style.display = useServer ? '' : 'none';
+        levelChoiceModal.classList.remove('hidden');
+    };
+});
         function openCampaignMap(fromVictory) {
             showScreen('campaign');
             refreshCampaignNodes();
