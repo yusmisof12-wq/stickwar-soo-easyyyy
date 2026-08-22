@@ -1183,10 +1183,12 @@
             return hud;
         }
 
-        function musicUrl(name) {
-            try { return new URL('music/' + name, window.location.href).href; }
-            catch (_) { return 'music/' + name; }
-        }
+// 05-menu-network.js dosyasında musicUrl fonksiyonunu bununla değiştirin:
+function musicUrl(name) {
+    // mp3 dosyaları repo kökünde (music/ klasörü yok), o yüzden doğrudan isimle çağırıyoruz
+    try { return new URL(name, window.location.href).href; }
+    catch (_) { return name; }
+}        
 
         function ensureTracks() {
             if (!audioMenu) {
