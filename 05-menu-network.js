@@ -1,4 +1,4 @@
-// ==================== HESAP + MENÜ + SEFER ====================
+        // ==================== HESAP + MENÜ + SEFER ====================
         const TOKEN_KEY = 'copAdamToken_v1';
         const LOCAL_USERS_KEY = 'copAdamUsersHashed_v1';
         const LOCAL_SESSION_KEY = 'copAdamLocalSession_v1';
@@ -96,8 +96,10 @@
         let coopVictoryHandled = false;
         let coopNextLevelRequested = false;
 
-        function isCoopGuestNow() { return !!(coopSession && coopSession.role === 'guest'); }
-        function isCoopHostNow() { return !!(coopSession && coopSession.role === 'host'); }
+        function isCoopGuestNow() { return false; } // host mantığı kalktı
+        function isCoopHostNow() { return false; }
+        function isCoopPlayNow() { return !!(coopSession && coopSession.roomId); }
+        function myCoopSlot() { return coopSession ? (coopSession.slot|0) : 0; }
 
         function wsUrl() {
             const loc = window.location;
@@ -137,7 +139,8 @@
             ws.onmessage = (ev) => {
                 let msg;
                 try { msg = JSON.parse(ev.data); } catch (e) { return; }
-                if (msg.type === 'auth_ok') {
+                if (msg.type === 'auth_ok') { if (typeof startPingLoop === 'function') startPingLoop(); }
+            if (false && msg.type === 'auth_ok_UNUSED') {
                     wsAuthOk = true;
                     return;
                 }
@@ -185,6 +188,14 @@
                 if (!friendsScreen.classList.contains('hidden')) refreshFriendsPanel();
                 return;
             }
+            if (msg.type === 'pong') {
+                if (typeof msg.t === 'number') {
+                    currentPing = Math.max(0, Date.now() - msg.t);
+                    wsSend({ type: 'rtt', rtt: currentPing });
+                    updatePingUI();
+                }
+                return;
+            }
             if (msg.type === 'coop_invite') {
                 pendingCoopInvite = { from: msg.from, level: msg.level };
                 coopInviteText.textContent = msg.from + ' seni ' + msg.level + '. bölüme davet ediyor';
@@ -203,7 +214,7 @@
             if (msg.type === 'coop_start') {
                 coopWaitingModal.classList.add('hidden');
                 coopInviteModal.classList.add('hidden');
-                coopSession = { roomId: msg.roomId, role: msg.role, partner: msg.partner };
+                coopSession = { roomId: msg.roomId, slot: msg.slot|0, partner: msg.partner };
                 coopVictoryHandled = false;
                 coopNextLevelRequested = false;
                 beginCoopLevel(msg.level);
@@ -403,57 +414,46 @@
         };
 
         function beginCoopLevel(lv) {
-            level = Number(lv);
-            coopVictoryHandled = false;
-            coopNextLevelRequested = false;
-            modal.classList.add('hidden');
-            levelChoiceModal.classList.add('hidden');
-            friendPickerModal.classList.add('hidden');
-            coopWaitingModal.classList.add('hidden');
-            coopInviteModal.classList.add('hidden');
-            stopCoopGuestRenderLoop();
-            if (typeof stopGameLoop === 'function') stopGameLoop();
+            lv = Number(lv) || 1;
+            level = lv;
             isGameOver = false;
+            gameStarted = true;
+            coopVictoryHandled = false;
+            // Yerel simülasyon YOK — sadece sunucu state çiz
+            units = [];
+            projectiles = [];
+            floatingTexts = [];
+            retreatArchers = [];
             showScreen('game');
             resizeCanvas();
-            if (coopSession.role === 'host') {
-                resetLevel();
-            if (typeof player2 !== "undefined") {
-                player2.gold = 300;
-                player2.command = CMD_DEFEND;
-                player2.minerQueue = []; player2.minerTimer = 0; player2.minerTimerMax = 0;
-                player2.combatQueue = []; player2.combatTimer = 0; player2.combatTimerMax = 0;
-            }
-                gameStarted = true;
-                updateActionButtonsUI();
-                draw();
-                startGameLoop();
-            } else {
-                latestHostSnapshot = null;
-                units.length = 0;
-                projectiles.length = 0;
-                player.gold = 300;
-                player.base.hp = 1000;
-                player.base.maxHp = 1000;
-                enemy.base.maxHp = level === 1 ? 280 : (level === 2 ? 900 : 1800);
-                enemy.base.hp = enemy.base.maxHp;
-                setPlayerCommand(CMD_DEFEND);
-                if (typeof initMines === 'function') initMines();
-                gameStarted = true;
-                updateActionButtonsUI();
-                draw();
-                startCoopGuestRenderLoop();
-            }
+            if (typeof initMines === 'function') initMines();
+            player.gold = 300; player2.gold = 300;
+            player.base.hp = 1000; enemy.base.hp = level === 1 ? 280 : 500;
+            player.command = CMD_DEFEND; player2.command = CMD_DEFEND;
+            updateActionButtonsUI();
+            stopGameLoop();
+            // sadece çizim döngüsü
+            startCoopGuestRenderLoop();
+            showToast('Sunucu odası · sen oyuncu ' + (myCoopSlot() + 1));
         }
 
-        function showCoopVictory(lv) {
-            if (!isCoopGuestNow() || coopVictoryHandled) return;
+        function showCoopVictory(lv, winner) {
+            if (coopVictoryHandled) return;
             coopVictoryHandled = true;
             isGameOver = true;
             stopCoopGuestRenderLoop();
-            modalTitle.innerText = Number(lv) >= 3 ? 'Tebrikler! Seferi Bitirdiniz!' : 'Bölüm Tamamlandı!';
-            modalBtn.innerText = Number(lv) >= 3 ? 'Sefer Haritası' : 'Sonraki Bölüm';
+            if (winner === 'enemy') {
+                modalTitle.innerText = 'Kaybettiniz!';
+            } else {
+                modalTitle.innerText = Number(lv) >= 3 ? 'Tebrikler! Seferi Bitirdiniz!' : 'Bölüm Tamamlandı!';
+            }
+            modalBtn.innerText = 'Sefer Haritası';
             modal.classList.remove('hidden');
+            modalBtn.onclick = () => {
+                modal.classList.add('hidden');
+                leaveCoopSession();
+                if (typeof openCampaignMap === 'function') openCampaignMap(true);
+            };
         }
 
         function leaveCoopSession() {
@@ -484,11 +484,11 @@
 
                 if (this.type === 'miner') {
                     drawMinerBackpack(ctx, this.x, this.y, isFlipped, this.bagGold, this.deliver);
-                    const mining = this.state === 'mining';
+                    const mining = this.state === 'mine' || this.state === 'mining' || this.swingAngle;
                     drawStickman(ctx, this.x, this.y, color, this.deliver ? 'none' : 'pickaxe',
-                        mining ? this.anim : (this.swingAngle !== 0 ? 40 : 0),
+                        mining ? Math.max(1, this.anim || 20) : 0,
                         this.walking, isFlipped, this.swingAngle, this.bodyLean, this.armRaise,
-                        false, false, this.isPlayer);
+                        false, true, this.isPlayer);
                 } else if (this.type === 'clubman') {
                     drawStickman(ctx, this.x, this.y, color, 'club', this.anim, this.walking && this.anim === 0, isFlipped, 0);
                 } else if (this.type === 'archer') {
@@ -585,8 +585,56 @@
             });
         }
 
-        function applyHostSnapshot(payload) {
+        function applyServerSnapshot(payload) {
             latestHostSnapshot = payload;
+
+            // Yeni sunucu formatı (p0/p1)
+            if (payload.p0 && payload.p1) {
+                const slot = myCoopSlot();
+                const me = slot === 1 ? payload.p1 : payload.p0;
+                const other = slot === 1 ? payload.p0 : payload.p1;
+                player.gold = me.gold;
+                player2.gold = other.gold;
+                player.command = me.command;
+                player2.command = other.command;
+                player.minerQueue = Array(me.minerQ || 0).fill('miner');
+                player.minerTimer = me.minerT || 0;
+                player.minerTimerMax = me.minerTMax || 0;
+                player.combatQueue = (me.combatQ || []).slice();
+                player.combatTimer = me.combatT || 0;
+                player.combatTimerMax = me.combatTMax || 0;
+                partnerPing = other.rtt || 0;
+                if (typeof payload.baseHp === 'number') player.base.hp = payload.baseHp;
+                if (typeof payload.enemyBaseHp === 'number') enemy.base.hp = payload.enemyBaseHp;
+                if (typeof payload.level === 'number') level = payload.level;
+                units.length = 0;
+                (payload.units || []).forEach(d => units.push(new GhostUnit(d)));
+                if (Array.isArray(payload.floats)) {
+                    floatingTexts = payload.floats.map(f => ({
+                        x: f.x, y: f.y, text: f.text, color: f.color || '#f1c40f',
+                        isBig: !!f.isBig, life: f.life || 40
+                    }));
+                }
+                if (Array.isArray(payload.arrows)) {
+                    projectiles = payload.arrows.map(a => ({
+                        x: a.x, y: a.y, angle: a.a, active: true,
+                        draw(ctx) {
+                            ctx.save(); ctx.translate(this.x, this.y); ctx.rotate(this.angle);
+                            ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+                            ctx.beginPath(); ctx.moveTo(-10,0); ctx.lineTo(10,0); ctx.stroke();
+                            ctx.restore();
+                        },
+                        update() {}
+                    }));
+                }
+                updateActionButtonsUI();
+                updatePingUI();
+                if (payload.over) {
+                    // victory comes separate
+                }
+                return;
+            }
+            // Eski format (geriye dönük)
             player.gold = payload.gold;
             if (typeof payload.gold2 === 'number') player2.gold = payload.gold2;
             player.base.hp = payload.baseHp;
@@ -664,35 +712,18 @@
 
         function sendRoomInput(action) {
             if (!coopSession) return;
-            wsSend({ type: 'room_relay', roomId: coopSession.roomId, payload: { kind: 'input', action } });
+            wsSend({ type: 'room_input', roomId: coopSession.roomId, action });
         }
 
         function handleRoomRelay(payload) {
             if (!coopSession || !payload) return;
-            if (payload.kind === 'state' && isCoopGuestNow()) {
-                applyHostSnapshot(payload);
+            // Sunucu state — her iki oyuncu da aynı
+            if (payload.kind === 'state' || payload.tick !== undefined) {
+                applyServerSnapshot(payload);
                 return;
             }
-            if (payload.kind === 'victory' && isCoopGuestNow()) {
-                showCoopVictory(payload.level);
-                return;
-            }
-            if (payload.kind === 'next_level' && isCoopGuestNow()) {
-                const next = Number(payload.level);
-                if (Number.isInteger(next) && next >= 1 && next <= 3) {
-                    coopNextLevelRequested = false;
-                    beginCoopLevel(next);
-                }
-                return;
-            }
-            if (payload.kind === 'input' && isCoopHostNow()) {
-                // 2. oyuncu girdileri — player2'ye uygula
-                if (payload.action === 'buyMiner') queueUnit('miner', 1);
-                else if (payload.action === 'buyClub') queueUnit('club', 1);
-                else if (payload.action === 'buyArcher') queueUnit('archer', 1);
-                else if (payload.action === 'attack') { player2.command = CMD_ATTACK; }
-                else if (payload.action === 'defend') { player2.command = CMD_DEFEND; }
-                else if (payload.action === 'retreat') { player2.command = CMD_RETREAT; }
+            if (payload.kind === 'victory') {
+                showCoopVictory(payload.level, payload.winner);
                 return;
             }
         }
@@ -779,6 +810,7 @@
             userChip.textContent = '👤 ' + currentUser.username;
             showScreen('menu');
             connectWS();
+            if (typeof startPingLoop === 'function') startPingLoop();
         }
 
         tabLogin.onclick = () => {
