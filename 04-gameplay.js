@@ -1,562 +1,432 @@
-function setPlayerCommand(cmd) {
-    const oi = localOwnerIndex();
-    getOwnerState(oi).command = cmd;
-    if (oi === 0) player.command = cmd;
-    Object.values(cmdBtns).forEach(b => b && b.classList.remove('active'));
-    if (cmdBtns[cmd]) cmdBtns[cmd].classList.add('active');
-}
+// server.js
+// Çöp Adam Savaşları - Express + WebSocket sunucusu
+// - Oyunun HTML dosyasını statik olarak sunar
+// - /api/register, /api/login, /api/logout, /api/me, /api/progress uçlarını sağlar
+// - Arkadaş sistemi: /api/friends, /api/friends/request, /api/friends/accept, /api/friends/decline, /api/friends/remove
+// - WebSocket (/ws): çevrimiçi durumu, arkadaşla co-op daveti/kabulü ve oda (room) içi mesaj aktarımı
+// - Kullanıcılar data/users.json dosyasında saklanır (basit dosya tabanlı "veritabanı")
+//
+// NOT (Render için önemli):
+//   Render'ın ücretsiz/standart web servislerinde disk kalıcı DEĞİLDİR.
+//   Her yeniden başlatma / yeni deploy'da data/ klasörü sıfırlanabilir.
+//   Kalıcı kullanıcı verisi istiyorsan Render'da bir "Persistent Disk" ekleyip
+//   DATA_DIR env değişkenini o disk'in mount path'ine ayarla (örn: /var/data).
 
-cmdBtns[CMD_RETREAT].onclick = () => {
-    if (typeof isCoopPlayNow === 'function' && isCoopPlayNow()) { sendRoomInput('retreat'); return; }
-    setPlayerCommand(CMD_RETREAT);
-};
-cmdBtns[CMD_DEFEND].onclick = () => {
-    if (typeof isCoopPlayNow === 'function' && isCoopPlayNow()) { sendRoomInput('defend'); return; }
-    setPlayerCommand(CMD_DEFEND);
-};
-cmdBtns[CMD_ATTACK].onclick = () => {
-    if (typeof isCoopPlayNow === 'function' && isCoopPlayNow()) { sendRoomInput('attack'); return; }
-    setPlayerCommand(CMD_ATTACK);
-};
+const express = require('express');
+const cors = require('cors');
+const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
+const http = require('http');
+const { WebSocketServer } = require('ws');
 
-const SPAWN_TIME = { miner: 8 * 60, club: 6 * 60, archer: 7 * 60 };
-const UNIT_COST = { miner: 150, club: 125, archer: 140 };
-const MAX_QUEUE = 8;
+// ==================== AYARLAR ====================
+const PORT = process.env.PORT || 3847;
 
-function countPlayerUnits(type) {
-    if (type === 'miner') return units.filter(u => u.isPlayer && u instanceof Miner).length;
-    if (type === 'club') return units.filter(u => u.isPlayer && u instanceof Clubman).length;
-    if (type === 'archer') return units.filter(u => u.isPlayer && u instanceof Archer).length;
-    return 0;
-}
-function maxForType(type) {
-    if (type === 'miner') return MAX_MINERS_PER_TEAM;
-    if (type === 'club') return MAX_CLUBMEN_PER_TEAM;
-    if (type === 'archer') return MAX_ARCHERS_PER_TEAM;
-    return 0;
-}
-function ensureQueues(st) {
-    if (!st.minerQueue) st.minerQueue = [];
-    if (!st.combatQueue) st.combatQueue = [];
-    if (typeof st.minerTimer !== 'number') st.minerTimer = 0;
-    if (typeof st.combatTimer !== 'number') st.combatTimer = 0;
-}
-function countQueuedFor(ownerIndex, type) {
-    const st = getOwnerState(ownerIndex);
-    ensureQueues(st);
-    if (type === 'miner') return st.minerQueue.length;
-    return st.combatQueue.filter(t => t === type).length;
-}
-function queueUnit(type, ownerIndex) {
-    if (ownerIndex === undefined) ownerIndex = localOwnerIndex();
-    const st = getOwnerState(ownerIndex);
-    ensureQueues(st);
-    if (st.gold < UNIT_COST[type]) return false;
-    const live = countPlayerUnits(type);
-    if (live + countQueuedFor(0, type) + countQueuedFor(1, type) >= maxForType(type)) return false;
-    if (type === 'miner') {
-        if (st.minerQueue.length >= MAX_QUEUE) return false;
-        st.gold -= UNIT_COST.miner;
-        st.minerQueue.push('miner');
-        if (st.minerQueue.length === 1 && st.minerTimer <= 0) {
-            st.minerTimerMax = SPAWN_TIME.miner;
-            st.minerTimer = SPAWN_TIME.miner;
-        }
-    } else {
-        if (st.combatQueue.length >= MAX_QUEUE) return false;
-        st.gold -= UNIT_COST[type];
-        st.combatQueue.push(type);
-        if (st.combatQueue.length === 1 && st.combatTimer <= 0) {
-            st.combatTimerMax = SPAWN_TIME[type];
-            st.combatTimer = SPAWN_TIME[type];
-        }
-    }
-    return true;
-}
-function processOneQueue(st, queueKey, timerKey, maxKey, ownerIndex) {
-    ensureQueues(st);
-    const q = st[queueKey];
-    if (!q || q.length === 0) { st[timerKey] = 0; st[maxKey] = 0; return; }
-    if (st[timerKey] > 0) { st[timerKey]--; if (st[timerKey] > 0) return; }
-    const type = q.shift();
+// Oyunun ana HTML dosyasının adı. Kendi dosya adınla eşleşmiyorsa
+// HTML_FILE env değişkenini Render'da ayarla, ya da dosyayı bu isimle
+// (ya da index.html olarak) proje köküne koy.
+const HTML_FILE = process.env.HTML_FILE || 'index.html';
+
+// Kalıcı disk kullanıyorsan Render'da DATA_DIR env değişkenini
+// disk mount path'ine ayarla (örn: /var/data). Ayarlamazsan proje
+// içindeki data/ klasörü kullanılır (Render'da kalıcı olmayabilir).
+const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
+const USERS_FILE = path.join(DATA_DIR, 'users.json');
+
+// ==================== BASİT "VERİTABANI" (JSON dosyası) ====================
+if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+
+function loadUsers() {
     try {
-        if (type === 'miner') units.push(new Miner(true, ownerIndex));
-        else if (type === 'club') units.push(new Clubman(true, ownerIndex));
-        else if (type === 'archer') units.push(new Archer(true, ownerIndex));
-    } catch (err) { console.error('Spawn hatası:', type, err); }
-    if (q.length > 0) {
-        st[maxKey] = SPAWN_TIME[q[0]] || 600;
-        st[timerKey] = st[maxKey];
+        return JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
+    } catch (e) {
+        return {};
+    }
+}
+
+function saveUsers(users) {
+    fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2), 'utf8');
+}
+
+let users = loadUsers(); // { username: { salt, hash, maxUnlocked, cleared, friends, incoming, outgoing } }
+
+// Eski kayıtlarda olmayan alanları tamamla (arkadaş sistemi sonradan eklendi)
+function ensureUserShape(u) {
+    if (!Array.isArray(u.friends)) u.friends = [];
+    if (!Array.isArray(u.incoming)) u.incoming = [];
+    if (!Array.isArray(u.outgoing)) u.outgoing = [];
+    if (typeof u.maxUnlocked !== 'number') u.maxUnlocked = 1;
+    if (!Array.isArray(u.cleared)) u.cleared = [];
+    return u;
+}
+Object.keys(users).forEach(name => ensureUserShape(users[name]));
+
+// Aktif oturum token'ları: token -> username
+const sessions = new Map();
+
+// ==================== ŞİFRE YARDIMCI FONKSİYONLARI ====================
+function hashPassword(password, salt) {
+    return crypto.scryptSync(password, salt, 64).toString('hex');
+}
+function makeSalt() {
+    return crypto.randomBytes(16).toString('hex');
+}
+function makeToken() {
+    return crypto.randomBytes(32).toString('hex');
+}
+function makeRoomId() {
+    return crypto.randomBytes(8).toString('hex');
+}
+
+// ==================== EXPRESS UYGULAMASI ====================
+const app = express();
+
+app.use(cors());
+app.use(express.json());
+
+app.get('/', (req, res) => {
+    const filePath = path.join(__dirname, HTML_FILE);
+    if (fs.existsSync(filePath)) {
+        res.sendFile(filePath);
     } else {
-        st[timerKey] = 0;
-        st[maxKey] = 0;
-    }
-}
-function processSpawnQueueFor(ownerIndex) {
-    const st = getOwnerState(ownerIndex);
-    if (!st) return;
-    processOneQueue(st, 'minerQueue', 'minerTimer', 'minerTimerMax', ownerIndex);
-    processOneQueue(st, 'combatQueue', 'combatTimer', 'combatTimerMax', ownerIndex);
-}
-function processSpawnQueue() {
-    processSpawnQueueFor(0);
-    if (isCoopActive()) processSpawnQueueFor(1);
-}
-
-btnMiner.onclick = () => {
-    if (typeof isCoopPlayNow === 'function' && isCoopPlayNow()) { sendRoomInput('buyMiner'); return; }
-    queueUnit('miner', 0);
-};
-btnClub.onclick = () => {
-    if (typeof isCoopPlayNow === 'function' && isCoopPlayNow()) { sendRoomInput('buyClub'); return; }
-    queueUnit('club', 0);
-};
-btnArcher.onclick = () => {
-    if (typeof isCoopPlayNow === 'function' && isCoopPlayNow()) { sendRoomInput('buyArcher'); return; }
-    queueUnit('archer', 0);
-};
-
-function resetLevel() {
-    if (typeof coopVictoryHandled !== 'undefined') coopVictoryHandled = false;
-    units.forEach(u => { if (u instanceof Miner) u.releaseSlot(); });
-    units = [];
-    projectiles = [];
-    floatingTexts = [];
-    retreatArchers = [];
-    miningSparks = [];
-    player.gold = 300;
-    player.base.hp = 1000;
-    player.base.maxHp = 1000;
-    setPlayerCommand(CMD_DEFEND);
-    player.minerCooldown = 0;
-    player.clubCooldown = 0;
-    player.archerCooldown = 0;
-    player.minerQueue = []; player.minerTimer = 0; player.minerTimerMax = 0;
-    player.combatQueue = []; player.combatTimer = 0; player.combatTimerMax = 0;
-    player2.gold = 300;
-    player2.command = CMD_DEFEND;
-    player2.lastCommand = CMD_DEFEND;
-    player2.retreatGraceTimer = 0;
-    player2.minerQueue = []; player2.minerTimer = 0; player2.minerTimerMax = 0;
-    player2.combatQueue = []; player2.combatTimer = 0; player2.combatTimerMax = 0;
-    player2.clubFormationCounter = 0;
-    player2.archerFormationCounter = 0;
-    player.clubFormationCounter = 0;
-    player.archerFormationCounter = 0;
-    player.lastCommand = CMD_DEFEND;
-    player.retreatGraceTimer = 0;
-    enemy.gold = 300;
-    enemy.command = CMD_DEFEND;
-    enemy.aiTimer = 0;
-    enemy.aiState = 'defend';
-    enemy.lastCommand = CMD_DEFEND;
-    enemy.retreatGraceTimer = 0;
-    enemy.retreatTimer = 0;
-    enemy.regroupTimer = 0;
-    enemy.attackLossCount = 0;
-    enemy.lastAttackUnits = 0;
-    enemy.clubFormationCounter = 0;
-    enemy.archerFormationCounter = 0;
-    enemy.minerCooldown = 0;
-    enemy.clubCooldown = 0;
-    enemy.archerCooldown = 0;
-    enemy.retreatGoldSaved = 0;
-    enemy.recoveryUnitsPurchased = 0;
-    enemy.retreatCooldown = 0;
-    if (typeof initMines === 'function') initMines();
-    if (level === 1) enemy.base.maxHp = 280;
-    else if (level === 2) enemy.base.maxHp = 900;
-    else if (level === 3) enemy.base.maxHp = 1800;
-    enemy.base.hp = enemy.base.maxHp;
-    frames = 0;
-    cameraX = 0;
-    if (typeof isCoopActive === 'function' && isCoopActive()) {
-        MIN_WORLD_WIDTH = 2560;
-        GROUND_HEIGHT = 220;
-        worldWidth = 2560;
-        player.base.x = 130;
-        enemy.base.x = worldWidth - 130;
-        if (typeof updateMineSlots === 'function') updateMineSlots(false);
-    }
-}
-
-function updateAI() {
-    enemy.aiTimer++;
-    const diff = getAiDifficulty();
-    const passiveGoldInterval = enemy.command === CMD_RETREAT ? 150 : 300;
-    if (enemy.retreatCooldown > 0) enemy.retreatCooldown--;
-    if (enemy.aiTimer % passiveGoldInterval === 0) {
-        const goldAmount = Math.floor(15 * diff.passiveGoldMult);
-        if (goldAmount > 0) {
-            enemy.gold += Math.floor(goldAmount * coopEnemyGoldMult());
-            if (enemy.aiState === 'retreat') enemy.retreatGoldSaved += goldAmount;
-        }
-    }
-    const aiMiners = units.filter(u => !u.isPlayer && u instanceof Miner);
-    const aiFighters = units.filter(u => !u.isPlayer && u instanceof Clubman && u.hp > 0);
-    const aiArchers = units.filter(u => !u.isPlayer && u instanceof Archer && u.hp > 0);
-    const aiCombatUnits = aiFighters.concat(aiArchers);
-    const visiblePlayerFighters = units.filter(u => {
-        if (!(u.isPlayer && (u instanceof Clubman || u instanceof Archer) && u.hp > 0)) return false;
-        if (Math.abs(u.x - enemy.base.x) < AI_VISION_RANGE) return true;
-        for (const af of aiCombatUnits) {
-            if (Math.hypot(u.x - af.x, u.y - af.y) < 350) return true;
-        }
-        return false;
-    });
-    const knownPlayerCount = visiblePlayerFighters.length;
-    if (enemy.minerCooldown > 0) enemy.minerCooldown--;
-    if (enemy.clubCooldown > 0) enemy.clubCooldown--;
-    if (enemy.archerCooldown > 0) enemy.archerCooldown--;
-    if (enemy.minerCooldown <= 0 && enemy.gold >= 150 && aiMiners.length < Math.min(diff.maxMiners, MAX_MINERS_PER_TEAM)) {
-        if (Math.random() >= diff.mistakeChance) {
-            enemy.gold -= 150;
-            units.push(new Miner(false));
-        }
-        enemy.minerCooldown = Math.floor(player.minerMaxCooldown * diff.cooldownMult / (typeof coopEnemySpawnMult === 'function' ? coopEnemySpawnMult() : 1));
-    }
-    if (enemy.clubCooldown <= 0 && enemy.gold >= 125 && aiFighters.length < Math.min(diff.maxClubmen, MAX_CLUBMEN_PER_TEAM)) {
-        if (Math.random() >= diff.mistakeChance) {
-            enemy.gold -= 125;
-            units.push(new Clubman(false));
-            if (enemy.aiState === 'retreat') enemy.recoveryUnitsPurchased++;
-        }
-        enemy.clubCooldown = Math.floor(player.clubMaxCooldown * diff.cooldownMult / (typeof coopEnemySpawnMult === 'function' ? coopEnemySpawnMult() : 1));
-    }
-    if (enemy.archerCooldown <= 0 && enemy.gold >= 140 && aiArchers.length < Math.min(diff.maxArchers || 0, MAX_ARCHERS_PER_TEAM)) {
-        if (Math.random() >= diff.mistakeChance) {
-            enemy.gold -= 140;
-            units.push(new Archer(false));
-            if (enemy.aiState === 'retreat') enemy.recoveryUnitsPurchased++;
-        }
-        enemy.archerCooldown = Math.floor(11 * 60 * diff.cooldownMult / (typeof coopEnemySpawnMult === 'function' ? coopEnemySpawnMult() : 1));
-    }
-    const playerThreatVisible = knownPlayerCount > 0;
-    const defenseTarget = 1;
-    const armyGoal = Math.max(diff.attackThreshold + 2, knownPlayerCount + 2, 5);
-    if (enemy.aiState === 'attack') {
-        if (aiCombatUnits.length < enemy.lastAttackUnits) {
-            enemy.attackLossCount += enemy.lastAttackUnits - aiCombatUnits.length;
-        }
-        enemy.lastAttackUnits = aiCombatUnits.length;
-    }
-    let newState = 'defend';
-    let newCommand = CMD_DEFEND;
-    if (enemy.aiState === 'retreat') {
-        enemy.retreatTimer = Math.max(0, enemy.retreatTimer - 1);
-        const recovered = aiCombatUnits.length >= defenseTarget && enemy.retreatGoldSaved >= 30;
-        if (enemy.retreatTimer === 0 && recovered) {
-            newState = 'defend';
-            newCommand = CMD_DEFEND;
-            enemy.attackLossCount = 0;
-            enemy.lastAttackUnits = aiCombatUnits.length;
-            enemy.retreatCooldown = 300;
-        } else {
-            newState = 'retreat';
-            newCommand = CMD_RETREAT;
-        }
-    } else {
-        const canRetreat = enemy.retreatCooldown <= 0;
-        const weakCastle = enemy.base.hp < enemy.base.maxHp * diff.retreatHpThreshold;
-        const tookHeavyLosses = enemy.attackLossCount >= 4;
-        const shouldRetreat = canRetreat && (
-            (aiCombatUnits.length === 0 && playerThreatVisible) || weakCastle || tookHeavyLosses
+        res.status(500).send(
+            `Oyun dosyası bulunamadı: ${HTML_FILE}. server.js içindeki HTML_FILE değişkenini (veya HTML_FILE env değişkenini) kontrol et.`
         );
-        if (shouldRetreat) {
-            newState = 'retreat';
-            newCommand = CMD_RETREAT;
-            enemy.retreatTimer = 300;
-            enemy.retreatGoldSaved = 0;
-            enemy.recoveryUnitsPurchased = 0;
-        } else {
-            const castleCritical = enemy.base.hp < enemy.base.maxHp * 0.35;
-            const hasAdvantage = aiCombatUnits.length >= knownPlayerCount + 1;
-            if (castleCritical && !hasAdvantage) {
-                newState = 'defend';
-                newCommand = CMD_DEFEND;
-            } else {
-                const attackCommitFrames = 600;
-                const inAttackCommit = enemy.aiState === 'attack'
-                    && enemy.aiTimer - (enemy.attackStartTimer || 0) < attackCommitFrames
-                    && aiCombatUnits.length >= 1 && !tookHeavyLosses && !castleCritical;
-                if (inAttackCommit) {
-                    newState = 'attack';
-                    newCommand = CMD_ATTACK;
-                } else if (playerThreatVisible && knownPlayerCount > 0) {
-                    if (aiCombatUnits.length >= knownPlayerCount + 1 || aiCombatUnits.length >= armyGoal) {
-                        newState = 'attack';
-                        newCommand = CMD_ATTACK;
-                    } else {
-                        newState = 'defend';
-                        newCommand = CMD_DEFEND;
-                    }
-                } else if (aiCombatUnits.length >= armyGoal) {
-                    newState = 'attack';
-                    newCommand = CMD_ATTACK;
-                } else {
-                    newState = 'defend';
-                    newCommand = CMD_DEFEND;
-                }
-                if (newState === 'attack' && enemy.aiState !== 'attack') {
-                    enemy.attackLossCount = 0;
-                    enemy.lastAttackUnits = aiCombatUnits.length;
-                    enemy.attackStartTimer = enemy.aiTimer;
-                }
-            }
-        }
     }
-    enemy.aiState = newState;
-    enemy.command = newCommand;
+});
+
+app.use(express.static(__dirname, { index: false }));
+
+// Basit sağlık kontrolü (Render health check için faydalı)
+app.get('/healthz', (req, res) => {
+    res.json({ ok: true });
+});
+
+// ==================== AUTH MIDDLEWARE ====================
+function requireAuth(req, res, next) {
+    const authHeader = req.headers['authorization'] || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+    const username = token && sessions.get(token);
+    if (!username || !users[username]) {
+        return res.status(401).json({ error: 'Yetkisiz istek' });
+    }
+    req.username = username;
+    req.token = token;
+    next();
 }
 
-function updateArchers() {
-    const ensurePlayerArcher = (ownerIndex, offsetX) => {
-        const st = getOwnerState(ownerIndex);
-        const retreating = st.command === CMD_RETREAT;
-        const has = retreatArchers.some(a => a.isPlayer && (a.ownerIndex || 0) === ownerIndex);
-        if (retreating && !has) {
-            retreatArchers.push(new BaseArcherUnit(true, offsetX, ownerIndex === 1 ? 12 : -12, 1.2, ownerIndex));
-        }
-        if (!retreating) {
-            retreatArchers = retreatArchers.filter(a => !(a.isPlayer && (a.ownerIndex || 0) === ownerIndex));
-        }
+function publicUser(username) {
+    const u = users[username];
+    return {
+        username,
+        maxUnlocked: u.maxUnlocked || 1,
+        cleared: u.cleared || [],
     };
-    if (typeof isCoopActive === 'function' && isCoopActive()) {
-        ensurePlayerArcher(0, -28);
-        ensurePlayerArcher(1, 28);
-    } else {
-        retreatArchers = retreatArchers.filter(a => !a.isPlayer);
-    }
-    {
-        const isRetreating = enemy.command === CMD_RETREAT;
-        const enemyArchers = retreatArchers.filter(a => !a.isPlayer);
-        if (isRetreating && enemyArchers.length === 0) {
-            retreatArchers.push(
-                new BaseArcherUnit(false, -25, -15, 1.2, 0),
-                new BaseArcherUnit(false, 25, 15, 1.2, 0)
-            );
-        }
-        if (!isRetreating) retreatArchers = retreatArchers.filter(a => a.isPlayer);
-    }
-    retreatArchers.forEach(archer => archer.update());
 }
 
-function handleFormationAndCollisions() {
-    ['player', 'enemy'].forEach(team => {
-        let isPlayer = (team === 'player');
-        let fighters = units.filter(u => u.isPlayer === isPlayer && u instanceof Clubman && u.hp > 0);
-        fighters.sort((a, b) => a.formationIndex - b.formationIndex);
-        fighters.forEach((u, index) => {
-            let cmd = u.isPlayer ? unitOwnerState(u).command : enemy.command;
-            if (cmd === CMD_DEFEND) {
-                let row = index % 5;
-                let col = Math.floor(index / 5);
-                let baseX = isPlayer ? player.base.x + 320 : enemy.base.x - 320;
-                let direction = isPlayer ? 1 : -1;
-                u.targetX = baseX + (col * 70 * direction);
-                u.targetY = (canvas.height - GROUND_HEIGHT + 25) + (row * 35);
+// ==================== AUTH ROTALARI ====================
+
+app.post('/api/register', (req, res) => {
+    const { username, password } = req.body || {};
+
+    if (typeof username !== 'string' || username.trim().length < 3) {
+        return res.status(400).json({ error: 'Kullanıcı adı en az 3 karakter olmalı' });
+    }
+    if (typeof password !== 'string' || password.length < 3) {
+        return res.status(400).json({ error: 'Şifre en az 3 karakter olmalı' });
+    }
+
+    const name = username.trim();
+    if (users[name]) {
+        return res.status(409).json({ error: 'Bu kullanıcı adı alınmış' });
+    }
+
+    const salt = makeSalt();
+    users[name] = ensureUserShape({
+        salt,
+        hash: hashPassword(password, salt),
+        maxUnlocked: 1,
+        cleared: [],
+    });
+    saveUsers(users);
+
+    const token = makeToken();
+    sessions.set(token, name);
+
+    res.json({ token, ...publicUser(name) });
+});
+
+app.post('/api/login', (req, res) => {
+    const { username, password } = req.body || {};
+
+    if (typeof username !== 'string' || typeof password !== 'string') {
+        return res.status(400).json({ error: 'Kullanıcı adı veya şifre hatalı' });
+    }
+
+    const name = username.trim();
+    const u = users[name];
+    if (!u) {
+        return res.status(401).json({ error: 'Kullanıcı adı veya şifre hatalı' });
+    }
+
+    const check = hashPassword(password, u.salt);
+    if (check !== u.hash) {
+        return res.status(401).json({ error: 'Kullanıcı adı veya şifre hatalı' });
+    }
+
+    const token = makeToken();
+    sessions.set(token, name);
+
+    res.json({ token, ...publicUser(name) });
+});
+
+app.post('/api/logout', requireAuth, (req, res) => {
+    sessions.delete(req.token);
+    res.json({ ok: true });
+});
+
+app.get('/api/me', requireAuth, (req, res) => {
+    res.json(publicUser(req.username));
+});
+
+app.post('/api/progress', requireAuth, (req, res) => {
+    const { maxUnlocked, cleared } = req.body || {};
+    const u = users[req.username];
+
+    if (typeof maxUnlocked === 'number' && maxUnlocked > (u.maxUnlocked || 1)) {
+        u.maxUnlocked = maxUnlocked;
+    } else if (!u.maxUnlocked) {
+        u.maxUnlocked = 1;
+    }
+
+    if (Array.isArray(cleared)) {
+        const merged = new Set([...(u.cleared || []), ...cleared]);
+        u.cleared = Array.from(merged);
+    }
+
+    saveUsers(users);
+    res.json(publicUser(req.username));
+});
+
+// ==================== ARKADAŞ SİSTEMİ ====================
+
+const onlineSockets = new Map(); // username -> WebSocket
+
+function isOnline(username) {
+    return onlineSockets.has(username);
+}
+
+function friendsPayload(username) {
+    const u = users[username];
+    return {
+        friends: (u.friends || []).map(f => ({ username: f, online: isOnline(f) })),
+        incoming: u.incoming || [],
+        outgoing: u.outgoing || [],
+    };
+}
+
+function sendTo(username, obj) {
+    const ws = onlineSockets.get(username);
+    if (ws && ws.readyState === ws.OPEN) {
+        try { ws.send(JSON.stringify(obj)); } catch (e) { /* yoksay */ }
+    }
+}
+
+app.get('/api/friends', requireAuth, (req, res) => {
+    res.json(friendsPayload(req.username));
+});
+
+app.post('/api/friends/request', requireAuth, (req, res) => {
+    const target = ((req.body && req.body.username) || '').trim();
+    const me = req.username;
+
+    if (!target || target === me) {
+        return res.status(400).json({ error: 'Geçersiz kullanıcı adı' });
+    }
+    if (!users[target]) {
+        return res.status(404).json({ error: 'Böyle bir kullanıcı yok' });
+    }
+    const meRec = users[me];
+    const targetRec = users[target];
+
+    if (meRec.friends.includes(target)) {
+        return res.status(409).json({ error: 'Zaten arkadaşsınız' });
+    }
+
+    if (meRec.incoming.includes(target)) {
+        meRec.friends.push(target);
+        targetRec.friends.push(me);
+        meRec.incoming = meRec.incoming.filter(x => x !== target);
+        targetRec.outgoing = targetRec.outgoing.filter(x => x !== me);
+        saveUsers(users);
+        sendTo(target, { type: 'friend_accepted', username: me });
+        return res.json({ status: 'accepted', ...friendsPayload(me) });
+    }
+
+    if (meRec.outgoing.includes(target)) {
+        return res.status(409).json({ error: 'İstek zaten gönderildi' });
+    }
+
+    meRec.outgoing.push(target);
+    targetRec.incoming.push(me);
+    saveUsers(users);
+    sendTo(target, { type: 'friend_request', username: me });
+
+    res.json({ status: 'sent', ...friendsPayload(me) });
+});
+
+app.post('/api/friends/accept', requireAuth, (req, res) => {
+    const from = ((req.body && req.body.username) || '').trim();
+    const me = req.username;
+    const meRec = users[me];
+
+    if (!from || !meRec.incoming.includes(from) || !users[from]) {
+        return res.status(400).json({ error: 'Böyle bir istek yok' });
+    }
+    const fromRec = users[from];
+
+    meRec.friends.push(from);
+    fromRec.friends.push(me);
+    meRec.incoming = meRec.incoming.filter(x => x !== from);
+    fromRec.outgoing = fromRec.outgoing.filter(x => x !== me);
+    saveUsers(users);
+
+    sendTo(from, { type: 'friend_accepted', username: me });
+    res.json(friendsPayload(me));
+});
+
+app.post('/api/friends/decline', requireAuth, (req, res) => {
+    const from = ((req.body && req.body.username) || '').trim();
+    const me = req.username;
+    const meRec = users[me];
+
+    if (from && users[from]) {
+        meRec.incoming = meRec.incoming.filter(x => x !== from);
+        users[from].outgoing = users[from].outgoing.filter(x => x !== me);
+        saveUsers(users);
+    }
+    res.json(friendsPayload(me));
+});
+
+app.post('/api/friends/remove', requireAuth, (req, res) => {
+    const target = ((req.body && req.body.username) || '').trim();
+    const me = req.username;
+    const meRec = users[me];
+
+    meRec.friends = meRec.friends.filter(x => x !== target);
+    if (users[target]) {
+        users[target].friends = users[target].friends.filter(x => x !== me);
+    }
+    saveUsers(users);
+    res.json(friendsPayload(me));
+});
+
+// ==================== HTTP + WEBSOCKET SUNUCUSU ====================
+const server = http.createServer(app);
+const wss = new WebSocketServer({ server, path: '/ws' });
+
+const rooms = new Map(); // roomId -> { members: [usernameA, usernameB] }
+
+function leaveRoomForUser(username, ws) {
+    const roomId = ws && ws.roomId;
+    if (!roomId) return;
+    const room = rooms.get(roomId);
+    if (!room) return;
+    room.members = room.members.filter(m => m !== username);
+    room.members.forEach(m => sendTo(m, { type: 'partner_left', roomId }));
+    if (room.members.length === 0) rooms.delete(roomId);
+    ws.roomId = null;
+}
+
+wss.on('connection', (ws) => {
+    ws.username = null;
+    ws.roomId = null;
+
+    ws.on('message', (raw) => {
+        let msg;
+        try { msg = JSON.parse(raw); } catch (e) { return; }
+        if (!msg || typeof msg.type !== 'string') return;
+
+        if (msg.type === 'auth') {
+            const username = sessions.get(msg.token);
+            if (!username || !users[username]) {
+                ws.send(JSON.stringify({ type: 'auth_error', error: 'Geçersiz oturum' }));
+                ws.close();
+                return;
             }
-        });
-        for (let i = 0; i < fighters.length; i++) {
-            for (let j = i + 1; j < fighters.length; j++) {
-                let u1 = fighters[i], u2 = fighters[j];
-                let dx = u1.x - u2.x, dy = u1.y - u2.y;
-                let dist = Math.hypot(dx, dy);
-                if (dist < 28 && dist > 0.01) {
-                    let push = (28 - dist) * 0.08;
-                    let nx = dx / dist, ny = dy / dist;
-                    u1.x += nx * push; u1.y += ny * push;
-                    u2.x -= nx * push; u2.y -= ny * push;
-                }
+            ws.username = username;
+            const prev = onlineSockets.get(username);
+            if (prev && prev !== ws) { try { prev.close(); } catch (e) {} }
+            onlineSockets.set(username, ws);
+            ws.send(JSON.stringify({ type: 'auth_ok', username }));
+            return;
+        }
+
+        if (!ws.username) return;
+
+        if (msg.type === 'coop_invite') {
+            const to = msg.to;
+            const meRec = users[ws.username];
+            if (!to || !meRec.friends.includes(to)) {
+                ws.send(JSON.stringify({ type: 'error', error: 'Bu kişi arkadaşın değil' }));
+                return;
             }
-        }
-        let archers = units.filter(u => u.isPlayer === isPlayer && u instanceof Archer && u.hp > 0);
-        for (let i = 0; i < archers.length; i++) {
-            for (let j = i + 1; j < archers.length; j++) {
-                let u1 = archers[i], u2 = archers[j];
-                let dx = u1.x - u2.x, dy = u1.y - u2.y;
-                let dist = Math.hypot(dx, dy);
-                if (dist < 24 && dist > 0.01) {
-                    let push = (24 - dist) * 0.08;
-                    let nx = dx / dist, ny = dy / dist;
-                    u1.x += nx * push; u1.y += ny * push;
-                    u2.x -= nx * push; u2.y -= ny * push;
-                }
+            if (!isOnline(to)) {
+                ws.send(JSON.stringify({ type: 'error', error: 'Arkadaşın şu an çevrimiçi değil' }));
+                return;
             }
+            sendTo(to, { type: 'coop_invite', from: ws.username, level: msg.level });
+            ws.send(JSON.stringify({ type: 'invite_sent', to }));
+            return;
         }
-    });
-}
 
-function setCircularCooldown(el, remaining, max) {
-    if (!el) return;
-    if (remaining > 0 && max > 0) {
-        const pct = Math.max(0, Math.min(100, (remaining / max) * 100));
-        el.style.setProperty('--cd-deg', (pct * 3.6) + 'deg');
-        el.classList.add('active');
-    } else {
-        el.style.setProperty('--cd-deg', '0deg');
-        el.classList.remove('active');
-    }
-}
-
-function updateActionButtonsUI() {
-    const oi = localOwnerIndex();
-    const st = getOwnerState(oi);
-    ensureQueues(st);
-    setCircularCooldown(minerCdFill, st.minerQueue.length ? st.minerTimer : 0, st.minerTimerMax || 1);
-    const combatHead = st.combatQueue[0];
-    setCircularCooldown(clubCdFill, combatHead === 'club' ? st.combatTimer : 0, combatHead === 'club' ? (st.combatTimerMax || 1) : 1);
-    setCircularCooldown(archerCdFill, combatHead === 'archer' ? st.combatTimer : 0, combatHead === 'archer' ? (st.combatTimerMax || 1) : 1);
-    goldEl.innerText = Math.floor(st.gold);
-    levelEl.innerText = Math.min(level, 3) + '/3';
-    function setBadge(id, n) {
-        const el = document.getElementById(id);
-        if (!el) return;
-        if (n > 0) { el.textContent = String(n); el.classList.remove('hidden'); }
-        else el.classList.add('hidden');
-    }
-    setBadge('minerQBadge', st.minerQueue.length);
-    setBadge('clubQBadge', st.combatQueue.filter(x => x === 'club').length);
-    setBadge('archerQBadge', st.combatQueue.filter(x => x === 'archer').length);
-    const qAll = (typ) => countQueuedFor(0, typ) + countQueuedFor(1, typ);
-    btnMiner.disabled = st.gold < 150 || st.minerQueue.length >= MAX_QUEUE ||
-        (countPlayerUnits('miner') + qAll('miner') >= MAX_MINERS_PER_TEAM);
-    btnClub.disabled = st.gold < 125 || st.combatQueue.length >= MAX_QUEUE ||
-        (countPlayerUnits('club') + qAll('club') >= MAX_CLUBMEN_PER_TEAM);
-    if (level >= 2) {
-        btnArcher.style.display = '';
-        btnArcher.disabled = st.gold < 140 || st.combatQueue.length >= MAX_QUEUE ||
-            (countPlayerUnits('archer') + qAll('archer') >= MAX_ARCHERS_PER_TEAM);
-    } else {
-        btnArcher.style.display = 'none';
-    }
-    Object.values(cmdBtns).forEach(b => b && b.classList.remove('active'));
-    if (cmdBtns[st.command]) cmdBtns[st.command].classList.add('active');
-}
-
-function update() {
-    frames++;
-    if (typeof isCoopHostNow === 'function' && isCoopHostNow()) {
-        if (typeof broadcastHostState === 'function') broadcastHostState();
-    }
-    if (frames % (player.command === CMD_RETREAT ? 150 : 300) === 0) {
-        const g1 = Math.max(1, Math.floor(15 * (typeof coopGoldMult === 'function' ? coopGoldMult() : 1)));
-        player.gold += g1;
-        addFloatingText(player.base.x, player.base.y - 120, '+' + g1, '#f1c40f');
-    }
-    if (typeof isCoopActive === 'function' && isCoopActive() && frames % (player2.command === CMD_RETREAT ? 150 : 300) === 0) {
-        player2.gold += Math.max(1, Math.floor(15 * coopGoldMult()));
-    }
-    [player, enemy].forEach(team => {
-        if (team.command !== CMD_RETREAT && team.lastCommand === CMD_RETREAT) team.retreatGraceTimer = 180;
-        if (team.retreatGraceTimer > 0) team.retreatGraceTimer--;
-        team.lastCommand = team.command;
-    });
-    units.forEach(u => {
-        const team = u.isPlayer ? unitOwnerState(u) : enemy;
-        u.isInvulnerable = team.command === CMD_RETREAT || (team.retreatGraceTimer > 0);
-    });
-    updateAI();
-    updateArchers();
-    handleFormationAndCollisions();
-    units.forEach(u => {
-        try { u.update(); } catch (err) { console.error('Unit update hatası', err); }
-    });
-    projectiles.forEach(p => p.update());
-    units.forEach(u => {
-        if (u.hp <= 0 && u instanceof Miner && typeof u.releaseSlot === 'function') u.releaseSlot();
-    });
-    units = units.filter(u => u.hp > 0);
-    projectiles = projectiles.filter(p => p.active);
-    if (enemy.base.hp < 0) enemy.base.hp = 0;
-    if (player.base.hp < 0) player.base.hp = 0;
-
-    if (enemy.base.hp <= 0 && !isGameOver) {
-        enemy.base.hp = 0;
-        if (typeof isCoopPlayNow === 'function' && isCoopPlayNow()) {
-            if (typeof announceCoopResult === 'function') announceCoopResult('players', level);
-        } else {
-            isGameOver = true;
-            level++;
-            if (typeof onLevelVictory === 'function') onLevelVictory();
-            if (level > 3) {
-                modalTitle.innerText = 'Tebrikler! Seferi Bitirdiniz!';
-                modalBtn.innerText = 'Sefer Haritasına Dön';
-            } else {
-                modalTitle.innerText = (level - 1) + '. Bölüm Tamamlandı!';
-                modalBtn.innerText = 'Sonraki Bölüm';
+        if (msg.type === 'coop_response') {
+            const to = msg.to;
+            if (!msg.accept) {
+                sendTo(to, { type: 'coop_declined', from: ws.username });
+                return;
             }
-            modal.classList.remove('hidden');
-        }
-    } else if (player.base.hp <= 0 && !isGameOver) {
-        player.base.hp = 0;
-        if (typeof isCoopPlayNow === 'function' && isCoopPlayNow()) {
-            if (typeof announceCoopResult === 'function') announceCoopResult('enemy', level);
-        } else {
-            isGameOver = true;
-            modalTitle.innerText = 'Kaybettiniz! Heykeliniz Yıkıldı.';
-            modalBtn.innerText = 'Tekrar Dene';
-            modal.classList.remove('hidden');
-        }
-    }
-    processSpawnQueue();
-    updateActionButtonsUI();
-}
+            const roomId = makeRoomId();
+            rooms.set(roomId, { members: [to, ws.username] });
 
-function draw() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.save();
-    ctx.translate(-cameraX, 0);
-    drawEnvironment(ctx);
-    drawBase(ctx, true);
-    drawBase(ctx, false);
-    drawMines(ctx);
-    retreatArchers.forEach(archer => archer.draw(ctx));
-    units.sort((a, b) => a.y - b.y);
-    units.forEach(u => u.draw(ctx));
-    projectiles.forEach(p => p.draw(ctx));
-    drawMiningSparks(ctx);
-    floatingTexts.forEach(ft => {
-        ctx.fillStyle = ft.color;
-        ctx.font = ft.isBig ? 'bold 26px Arial' : 'bold 20px Arial';
-        ctx.textAlign = 'center';
-        ctx.strokeStyle = 'black';
-        ctx.lineWidth = 3;
-        ctx.strokeText(ft.text, ft.x, ft.y);
-        ctx.fillText(ft.text, ft.x, ft.y);
+            const hostWs = onlineSockets.get(to);
+            if (hostWs) hostWs.roomId = roomId;
+            ws.roomId = roomId;
+
+            sendTo(to, { type: 'coop_start', roomId, role: 'host', level: msg.level, partner: ws.username });
+            ws.send(JSON.stringify({ type: 'coop_start', roomId, role: 'guest', level: msg.level, partner: to }));
+            return;
+        }
+
+        if (msg.type === 'room_relay') {
+            const room = rooms.get(msg.roomId);
+            if (!room || !room.members.includes(ws.username)) return;
+            room.members.forEach(m => {
+                if (m === ws.username) return;
+                sendTo(m, { type: 'room_relay', payload: msg.payload, from: ws.username });
+            });
+            return;
+        }
+
+        if (msg.type === 'leave_room') {
+            leaveRoomForUser(ws.username, ws);
+            return;
+        }
     });
-    ctx.restore();
-}
 
-function updateFloatingTexts() {
-    for (let i = floatingTexts.length - 1; i >= 0; i--) {
-        const ft = floatingTexts[i];
-        ft.y -= 1.2;
-        ft.life--;
-        if (ft.life <= 0) floatingTexts.splice(i, 1);
-    }
-}
+    ws.on('close', () => {
+        if (ws.username) {
+            if (onlineSockets.get(ws.username) === ws) onlineSockets.delete(ws.username);
+            leaveRoomForUser(ws.username, ws);
+        }
+    });
+});
 
-function startGameLoop() {
-    if (typeof setMusicMode === 'function') setMusicMode('battle');
-    if (animationFrameId !== null) return;
-    lastFrameTime = 0;
-    accumulatedTime = 0;
-    animationFrameId = requestAnimationFrame(loop);
-}
-
-function loop(timestamp) {
-    animationFrameId = null;
-    if (isGameOver) return;
-    if (!lastFrameTime) lastFrameTime = timestamp;
-    accumulatedTime += Math.min(100, timestamp - lastFrameTime);
-    lastFrameTime = timestamp;
-    while (accumulatedTime >= FIXED_TIMESTEP && !isGameOver) {
-        update();
-        updateFloatingTexts();
-        updateMiningSparks();
-        accumulatedTime -= FIXED_TIMESTEP;
-    }
-    draw();
-    if (!isGameOver) animationFrameId = requestAnimationFrame(loop);
-}
+// ==================== SUNUCUYU BAŞLAT ====================
+server.listen(PORT, () => {
+    console.log(`Çöp Adam Savaşları sunucusu çalışıyor: http://localhost:${PORT}`);
+    console.log(`Oyun dosyası: ${HTML_FILE}`);
+    console.log(`Veri klasörü: ${DATA_DIR}`);
+    console.log(`WebSocket: ws://localhost:${PORT}/ws`);
+});
