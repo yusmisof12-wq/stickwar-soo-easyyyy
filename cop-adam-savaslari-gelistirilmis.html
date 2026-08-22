@@ -236,6 +236,10 @@
                         🗡️<span class="btn-cost">125</span>
                         <div class="cooldown-fill" id="clubCdFill"></div>
                     </button>
+                    <button class="btn" id="btnArcher" title="Okçu" style="display:none;">
+                        🏹<span class="btn-cost">140</span>
+                        <div class="cooldown-fill" id="archerCdFill"></div>
+                    </button>
                 </div>
                 <div class="stats">
                     💰 Altın: <span id="goldText" style="color: #f1c40f;">300</span> | ⚔️ Bölüm: <span id="levelText" style="color: #e74c3c;">1/3</span>
@@ -348,7 +352,9 @@
             base: { x: 130, y: 0, hp: 1000, maxHp: 1000 },
             minerCooldown: 0, minerMaxCooldown: 15 * 60,
             clubCooldown: 0, clubMaxCooldown: 10 * 60,
-            clubFormationCounter: 0
+            archerCooldown: 0, archerMaxCooldown: 11 * 60,
+            clubFormationCounter: 0,
+            archerFormationCounter: 0
         };
         
         let enemy = {
@@ -473,8 +479,10 @@
         const levelEl = document.getElementById('levelText');
         const btnMiner = document.getElementById('btnMiner');
         const btnClub = document.getElementById('btnClub');
+        const btnArcher = document.getElementById('btnArcher');
         const minerCdFill = document.getElementById('minerCdFill');
         const clubCdFill = document.getElementById('clubCdFill');
+        const archerCdFill = document.getElementById('archerCdFill');
         const modal = document.getElementById('modalScreen');
         const modalTitle = document.getElementById('modalTitle');
         const modalBtn = document.getElementById('modalBtn');
@@ -2085,6 +2093,14 @@
                 player.clubCooldown = player.clubMaxCooldown;
             }
         };
+        btnArcher.onclick = () => {
+            const playerArchers = units.filter(u => u.isPlayer && u instanceof Archer).length;
+            if (player.gold >= 140 && player.archerCooldown <= 0 && playerArchers < MAX_ARCHERS_PER_TEAM) {
+                player.gold -= 140;
+                units.push(new Archer(true));
+                player.archerCooldown = player.archerMaxCooldown;
+            }
+        };
 
         // modalBtn menü sisteminde tanımlı
 
@@ -2103,6 +2119,7 @@
             setPlayerCommand(CMD_DEFEND);
             player.minerCooldown = 0;
             player.clubCooldown = 0;
+            player.archerCooldown = 0;
             player.clubFormationCounter = 0;
             player.archerFormationCounter = 0;
 
@@ -2399,6 +2416,13 @@
             } else {
                 clubCdFill.style.height = '0%';
             }
+            if (player.archerCooldown > 0) {
+                player.archerCooldown--;
+                let fillPercent = ((player.archerMaxCooldown - player.archerCooldown) / player.archerMaxCooldown) * 100;
+                archerCdFill.style.height = (100 - fillPercent) + '%';
+            } else {
+                archerCdFill.style.height = '0%';
+            }
 
             if (frames % (player.command === CMD_RETREAT ? 150 : 300) === 0) {
                 player.gold += 15;
@@ -2448,8 +2472,17 @@
             levelEl.innerText = Math.min(level, 3) + "/3";
             const playerMiners = units.filter(u => u.isPlayer && u instanceof Miner).length;
             const playerClubmen = units.filter(u => u.isPlayer && u instanceof Clubman).length;
+            const playerArchers = units.filter(u => u.isPlayer && u instanceof Archer).length;
             btnMiner.disabled = player.gold < 150 || player.minerCooldown > 0 || playerMiners >= MAX_MINERS_PER_TEAM;
             btnClub.disabled = player.gold < 125 || player.clubCooldown > 0 || playerClubmen >= MAX_CLUBMEN_PER_TEAM;
+
+            // Okçu birimi: 2. seferi bitirince (yani 3. sefer ve sonrasında) kullanılabilir
+            if (level >= 3) {
+                btnArcher.style.display = '';
+                btnArcher.disabled = player.gold < 140 || player.archerCooldown > 0 || playerArchers >= MAX_ARCHERS_PER_TEAM;
+            } else {
+                btnArcher.style.display = 'none';
+            }
         }
 
         function draw() {
