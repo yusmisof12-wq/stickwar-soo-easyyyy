@@ -2927,7 +2927,7 @@ function showScreen(which) {
                 }
             }
 
-            const localName = localStorage.getItem(LOCAL_SESSION_KEY);
+                  const localName = localStorage.getItem(LOCAL_SESSION_KEY);
             if (localName) {
                 const db = loadLocalUsers();
                 if (db[localName]) {
@@ -2944,5 +2944,6 @@ function showScreen(which) {
             showScreen('auth');
         })();
     </script>
+    <script src="script.js"></script>
 </body>
 </html>
