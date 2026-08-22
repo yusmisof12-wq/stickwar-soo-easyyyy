@@ -473,28 +473,35 @@
                 this.deliver = !!d.dl; this.bagGold = d.bg || 0;
                 this.bodyLean = d.bl || 0; this.armRaise = d.ar || 0; this.swingAngle = d.sw || 0;
                 this.ownerIndex = d.oi || 0;
+                this.flip = !!d.fl;
+                this.anim = d.an || 0;
+                this.state = d.st || '';
+                this.stuckArrows = d.sa || [];
             }
             draw(ctx) {
-                const isFlipped = !this.isPlayer;
+                const isFlipped = this.flip;
                 const color = !this.isPlayer ? '#c0392b' : (this.ownerIndex === 1 ? '#2980b9' : '#1a1a1a');
 
                 if (this.type === 'miner') {
                     drawMinerBackpack(ctx, this.x, this.y, isFlipped, this.bagGold, this.deliver);
+                    const mining = this.state === 'mining';
                     drawStickman(ctx, this.x, this.y, color, this.deliver ? 'none' : 'pickaxe',
-                        this.deliver ? 0 : (this.swingAngle !== 0 ? 40 : 0),
+                        mining ? this.anim : (this.swingAngle !== 0 ? 40 : 0),
                         this.walking, isFlipped, this.swingAngle, this.bodyLean, this.armRaise,
                         false, false, this.isPlayer);
+                } else if (this.type === 'clubman') {
+                    drawStickman(ctx, this.x, this.y, color, 'club', this.anim, this.walking && this.anim === 0, isFlipped, 0);
+                } else if (this.type === 'archer') {
+                    drawStickman(ctx, this.x, this.y, color, 'bow', 0, this.walking, isFlipped, this.drawAmt);
                 } else {
-                    let weapon = 'pickaxe';
-                    if (this.type === 'clubman') weapon = 'club';
-                    else if (this.type === 'archer') weapon = 'bow';
-                    drawStickman(ctx, this.x, this.y, color, weapon, 0, this.walking, isFlipped, this.drawAmt);
+                    drawStickman(ctx, this.x, this.y, color, 'pickaxe', 0, this.walking, isFlipped, 0);
                 }
+                if (typeof drawStuckArrows === 'function') drawStuckArrows(ctx, this);
 
                 ctx.fillStyle = 'red';
                 ctx.fillRect(this.x - 15, this.y - 65, 30, 4);
                 ctx.fillStyle = '#2ecc71';
-                ctx.fillRect(this.x - 15, this.y - 65, 30 * (this.hp / this.maxHp), 4);
+                ctx.fillRect(this.x - 15, this.y - 65, 30 * Math.max(0, this.hp / this.maxHp), 4);
             }
         }
 
@@ -502,13 +509,24 @@
             let t = 'miner';
             if (u instanceof Clubman) t = 'clubman';
             else if (u instanceof Archer) t = 'archer';
+            // Yön
+            let flip = !u.isPlayer;
+            if (u.target && u.target.x !== undefined) flip = u.target.x < u.x;
+            else if (Math.abs((u.x || 0) - (u.prevX || 0)) > 0.3) flip = u.x < u.prevX;
+            if (t === 'miner' && (u.state === 'mining' || u.state === 'going_mine') && u.localOffset) {
+                flip = u.localOffset.dx > 0;
+            }
             const base = {
-                t, p: u.isPlayer,
+                t, p: !!u.isPlayer,
                 oi: u.ownerIndex || 0,
                 x: Math.round(u.x), y: Math.round(u.y),
                 hp: Math.round(u.hp), mhp: Math.round(u.maxHp || 1),
                 w: !!u._isActuallyWalking,
                 d: u.drawAmount ? Math.round(u.drawAmount * 100) / 100 : 0,
+                fl: !!flip,
+                an: 0,
+                st: u.state || '',
+                sa: (u.stuckArrows || []).slice(0, 6).map(a => ({ ox: a.ox, oy: a.oy, angle: a.angle, life: a.life })),
             };
             if (t === 'miner') {
                 base.dl = u.state === 'delivering';
@@ -516,7 +534,13 @@
                 base.bl = Math.round((u.bodyLean || 0) * 100) / 100;
                 base.ar = Math.round((u.armRaise || 0) * 100) / 100;
                 base.sw = Math.round((u.miningSwing || 0) * 100) / 100;
-                base.w = u.state !== 'mining' && u.state !== 'delivering' && Math.hypot(u.x - u.prevX, 0) > 0.35;
+                base.an = u.state === 'mining' ? (u.actionTimer || 0) : 0;
+                base.w = u.state !== 'mining' && u.state !== 'delivering' && Math.hypot(u.x - (u.prevX || u.x), 0) > 0.35;
+            } else if (t === 'clubman') {
+                base.an = u.isAttacking ? (u.attackTimer || 0) : 0;
+                base.w = !!u._isActuallyWalking && !u.isAttacking;
+            } else if (t === 'archer') {
+                base.d = u.drawAmount || 0;
             }
             return base;
         }
@@ -549,6 +573,14 @@
                     combatTimer2: player2.combatTimer,
                     combatTimerMax2: player2.combatTimerMax,
                     units: units.map(serializeUnitForNet),
+                    floats: (floatingTexts || []).slice(0, 40).map(f => ({
+                        x: Math.round(f.x), y: Math.round(f.y),
+                        text: f.text, color: f.color, isBig: !!f.isBig, life: f.life
+                    })),
+                    arrows: (projectiles || []).filter(p => p.active).slice(0, 30).map(p => ({
+                        x: Math.round(p.x), y: Math.round(p.y), a: p.angle
+                    })),
+                    cameraX: Math.round(cameraX || 0),
                 }
             });
         }
@@ -577,12 +609,49 @@
             if (typeof payload.combatTimerMax2 === 'number') player2.combatTimerMax = payload.combatTimerMax2;
             units.length = 0;
             (payload.units || []).forEach(d => units.push(new GhostUnit(d)));
+
+            // Uçan yazılar + oklar (misafir de görsün)
+            if (Array.isArray(payload.floats)) {
+                floatingTexts = payload.floats.map(f => ({
+                    x: f.x, y: f.y, text: f.text, color: f.color || '#f1c40f',
+                    isBig: !!f.isBig, life: f.life || 40
+                }));
+            }
+            if (Array.isArray(payload.arrows)) {
+                projectiles = payload.arrows.map(a => ({
+                    x: a.x, y: a.y, angle: a.a, active: true,
+                    draw(ctx) {
+                        if (!this.active) return;
+                        ctx.save();
+                        ctx.translate(this.x, this.y);
+                        ctx.rotate(this.angle);
+                        ctx.strokeStyle = '#fff';
+                        ctx.lineWidth = 2;
+                        ctx.beginPath();
+                        ctx.moveTo(-10, 0);
+                        ctx.lineTo(10, 0);
+                        ctx.stroke();
+                        ctx.restore();
+                    },
+                    update() {}
+                }));
+            }
+            if (typeof payload.cameraX === 'number') cameraX = payload.cameraX;
+
             updateActionButtonsUI();
         }
 
         function startCoopGuestRenderLoop() {
             stopCoopGuestRenderLoop();
             function loop() {
+                // Misafirde yazıları hafif yukarı kaydır (akıcılık)
+                if (Array.isArray(floatingTexts)) {
+                    for (let i = floatingTexts.length - 1; i >= 0; i--) {
+                        floatingTexts[i].y -= 0.8;
+                        floatingTexts[i].life = (floatingTexts[i].life || 40) - 1;
+                        if (floatingTexts[i].life <= 0) floatingTexts.splice(i, 1);
+                    }
+                }
                 draw();
                 coopGuestLoopId = requestAnimationFrame(loop);
             }
