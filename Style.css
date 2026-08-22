@@ -44,7 +44,46 @@ body, html {
 }
 
 /* =========================================================
-   ALT ARAYÜZ (Birim Çıkarma ve Komut Butonları)
+   KOMUT BUTONLARI (SOL ÜSTE ALINDI)
+========================================================= */
+.command-controls {
+    position: fixed; /* Ekranın neresinde olursa olsun sabitler */
+    top: 55px; /* Üstteki Altın yazısının hemen altına yerleşir */
+    left: 15px; /* Sol kenara yaslar */
+    display: flex;
+    gap: 12px;
+    z-index: 20;
+    pointer-events: none; /* Konteyner tıklamayı engellemesin */
+}
+
+.cmd-btn {
+    pointer-events: auto; /* Sadece butonlar tıklanabilir olsun */
+    width: 65px;
+    height: 65px;
+    border-radius: 50%; /* Yuvarlak görünüm */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: bold;
+    color: white;
+    cursor: pointer;
+    border: 3px solid rgba(255,255,255,0.2);
+    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    transition: transform 0.1s;
+}
+
+.cmd-btn:active {
+    transform: scale(0.95);
+}
+
+#cmdRetreat { background: #f39c12; } /* Turuncu */
+#cmdDefend  { background: #2980b9; } /* Mavi */
+#cmdAttack  { background: #c0392b; } /* Kırmızı */
+
+
+/* =========================================================
+   ALT ARAYÜZ (Sadece Birim Çıkarma Butonları Kaldı)
 ========================================================= */
 .bottom-ui {
     position: absolute;
@@ -52,16 +91,20 @@ body, html {
     left: 0;
     width: 100%;
     display: flex;
-    justify-content: space-between;
+    justify-content: space-between; /* Solda kalmalarını sağlar */
     align-items: flex-end;
     padding: 0 20px;
     pointer-events: none;
     z-index: 10;
 }
 
-/* Tüm butonların ortak özellikleri */
-.btn {
-    pointer-events: auto; /* Butonların tıklanabilir olması için */
+.unit-controls {
+    display: flex;
+    gap: 12px;
+}
+
+.btn, .unit-btn {
+    pointer-events: auto;
     position: relative;
     background: #34495e;
     color: white;
@@ -75,14 +118,8 @@ body, html {
     transition: transform 0.1s;
 }
 
-.btn:active {
+.btn:active, .unit-btn:active {
     transform: scale(0.95);
-}
-
-/* Birim Çıkarma Butonları Grubu (Sol Alt) */
-.unit-controls {
-    display: flex;
-    gap: 12px;
 }
 
 .unit-btn {
@@ -106,63 +143,44 @@ body, html {
     pointer-events: none;
 }
 
-/* Komut Butonları Grubu (Sağ Alt) */
-.command-controls {
-    display: flex;
-    gap: 12px;
-}
-
-.cmd-btn {
-    width: 65px;
-    height: 65px;
-    border-radius: 50%; /* Yuvarlak görünüm */
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 13px;
-    border: 3px solid rgba(255,255,255,0.2);
-}
-
-#cmdRetreat { background: #f39c12; } /* Turuncu */
-#cmdDefend  { background: #2980b9; } /* Mavi */
-#cmdAttack  { background: #c0392b; } /* Kırmızı */
-
-
 /* =========================================================
    MOBİL UYUMLULUK (Ekran küçüldüğünde devreye girer)
 ========================================================= */
 @media (max-width: 768px) {
     .top-ui {
         font-size: 18px;
+        top: 10px;
+        left: 10px;
+        right: 10px;
     }
 
-    .bottom-ui {
-        padding: 0 10px;
-        bottom: 15px; /* Mobilde biraz daha aşağı yasla */
-    }
-
-    /* Birim Çıkarma butonlarını mobilde küçült */
-    .unit-btn {
-        width: 55px;
-        height: 55px;
-        font-size: 11px;
-    }
-    
-    .unit-controls {
+    /* Komut Butonlarını mobilde sol üstte küçült */
+    .command-controls {
+        top: 40px; /* Mobilde altın yazısı daha küçük olduğu için biraz yukarı aldık */
+        left: 10px;
         gap: 8px;
     }
 
-    /* Komut Butonlarını mobilde küçült ve YUKARI taşı */
     .cmd-btn {
         width: 55px;
         height: 55px;
         font-size: 11px;
     }
 
-    .command-controls {
+    /* Birim Çıkarma Butonlarını mobilde alt köşede küçült */
+    .bottom-ui {
+        padding: 0 10px;
+        bottom: 15px;
+    }
+
+    .unit-controls {
         gap: 8px;
-        /* Komut butonlarını ekranın sağ orta-alt kısmına doğru yukarı çeker */
-        transform: translateY(-90px); 
+    }
+
+    .unit-btn {
+        width: 55px;
+        height: 55px;
+        font-size: 11px;
     }
 }
 
