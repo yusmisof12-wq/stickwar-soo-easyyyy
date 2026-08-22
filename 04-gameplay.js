@@ -1,4 +1,4 @@
-        function setPlayerCommand(cmd) {
+ function setPlayerCommand(cmd) {
             const oi = localOwnerIndex();
             getOwnerState(oi).command = cmd;
             // Solo veya host: player.command senkron (AI tehdit hesabı için host tarafı)
@@ -126,15 +126,24 @@
         }
 
         btnMiner.onclick = () => {
-            if (typeof isCoopGuestNow === 'function' && isCoopGuestNow()) { sendRoomInput('buyMiner'); return; }
+            if (typeof isCoopGuestNow === 'function' && isCoopGuestNow()) {
+                if (player.gold >= 150) { player.gold -= 150; updateActionButtonsUI(); }
+                sendRoomInput('buyMiner'); return;
+            }
             queueUnit('miner', 0);
         };
         btnClub.onclick = () => {
-            if (typeof isCoopGuestNow === 'function' && isCoopGuestNow()) { sendRoomInput('buyClub'); return; }
+            if (typeof isCoopGuestNow === 'function' && isCoopGuestNow()) {
+                if (player.gold >= 125) { player.gold -= 125; updateActionButtonsUI(); }
+                sendRoomInput('buyClub'); return;
+            }
             queueUnit('club', 0);
         };
         btnArcher.onclick = () => {
-            if (typeof isCoopGuestNow === 'function' && isCoopGuestNow()) { sendRoomInput('buyArcher'); return; }
+            if (typeof isCoopGuestNow === 'function' && isCoopGuestNow()) {
+                if (player.gold >= 140) { player.gold -= 140; updateActionButtonsUI(); }
+                sendRoomInput('buyArcher'); return;
+            }
             queueUnit('archer', 0);
         };
 
@@ -474,6 +483,10 @@
 
             goldEl.innerText = Math.floor(st.gold);
             levelEl.innerText = Math.min(level, 3) + "/3";
+            if (typeof isCoopPlayNow === 'function' && isCoopPlayNow()) {
+                const slot = typeof myCoopSlot === 'function' ? myCoopSlot() : 0;
+                goldEl.parentElement && (goldEl.parentElement.title = slot === 1 ? 'Senin altının (Oyuncu 2)' : 'Senin altının (Oyuncu 1)');
+            }
 
             // Kuyruk sayacı rozetleri
             function setBadge(id, n) {
