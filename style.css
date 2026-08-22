@@ -227,3 +227,35 @@ html, body {
     text-shadow: 0 0 4px #000, 0 2px 4px #000, 0 0 2px #000;
     pointer-events: none;
 }
+
+#musicHud {
+    position: fixed !important;
+    top: 12px !important;
+    right: 12px !important;
+    z-index: 99999 !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    padding: 6px 10px !important;
+    background: rgba(0,0,0,0.75) !important;
+    border: 2px solid #f1c40f !important;
+    border-radius: 24px !important;
+    pointer-events: auto !important;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.5) !important;
+}
+#musicBtn {
+    position: static !important;
+    width: 40px; height: 40px; border-radius: 50%;
+    border: none;
+    background: #2c3e50;
+    color: #fff; font-size: 20px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+}
+#musicBtn.muted { opacity: 0.5; }
+#musicVol {
+    position: static !important;
+    width: 80px;
+    accent-color: #f1c40f;
+    cursor: pointer;
+}
