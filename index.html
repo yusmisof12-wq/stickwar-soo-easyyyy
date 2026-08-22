@@ -2610,25 +2610,8 @@
                 modalBtn.innerText = "Tekrar Dene";
                 modal.classList.remove('hidden');
             }
-
-            goldEl.innerText = player.gold;
-            if (isCoopHostNow() || isCoopGuestNow()) goldEl.parentElement && (goldEl.parentElement.title = 'Ortak takım altını');
-            levelEl.innerText = Math.min(level, 3) + "/3";
-            const playerMiners = units.filter(u => u.isPlayer && u instanceof Miner).length;
-            const playerClubmen = units.filter(u => u.isPlayer && u instanceof Clubman).length;
-            const playerArchers = units.filter(u => u.isPlayer && u instanceof Archer).length;
-            btnMiner.disabled = player.gold < 150 || player.minerCooldown > 0 || playerMiners >= MAX_MINERS_PER_TEAM;
-            btnClub.disabled = player.gold < 125 || player.clubCooldown > 0 || playerClubmen >= MAX_CLUBMEN_PER_TEAM;
-
-            // Okçu birimi: 2. seferi bitirince (yani 3. sefer ve sonrasında) kullanılabilir
-            if (level >= 3) {
-                btnArcher.style.display = '';
-                btnArcher.disabled = player.gold < 140 || player.archerCooldown > 0 || playerArchers >= MAX_ARCHERS_PER_TEAM;
-            } else {
-                btnArcher.style.display = 'none';
-            }
+  updateActionButtonsUI();
         }
-
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.save();
@@ -3203,25 +3186,82 @@ function beginCoopLevel(lv) {
                     baseHp: player.base.hp,
                     enemyGold: enemy.gold,
                     enemyBaseHp: enemy.base.hp,
-                    cameraX: cameraX,
                     command: player.command,
+                    level: level,
+                    minerCooldown: player.minerCooldown,
+                    minerMaxCooldown: player.minerMaxCooldown,
+                    clubCooldown: player.clubCooldown,
+                    clubMaxCooldown: player.clubMaxCooldown,
+                    archerCooldown: player.archerCooldown,
+                    archerMaxCooldown: player.archerMaxCooldown,
                     units: units.map(serializeUnitForNet),
                 }
             });
+        function getUnitType(u) {
+            if (u.type) return u.type;
+            if (u instanceof Miner) return 'miner';
+            if (u instanceof Clubman) return 'clubman';
+            if (u instanceof Archer) return 'archer';
+            return 'other';
         }
 
-        function applyHostSnapshot(payload) {
+        function updateActionButtonsUI() {
+            if (player.minerCooldown > 0) {
+                let fillPercent = ((player.minerMaxCooldown - player.minerCooldown) / player.minerMaxCooldown) * 100;
+                minerCdFill.style.height = (100 - fillPercent) + '%';
+            } else {
+                minerCdFill.style.height = '0%';
+            }
+            if (player.clubCooldown > 0) {
+                let fillPercent = ((player.clubMaxCooldown - player.clubCooldown) / player.clubMaxCooldown) * 100;
+                clubCdFill.style.height = (100 - fillPercent) + '%';
+            } else {
+                clubCdFill.style.height = '0%';
+            }
+            if (player.archerCooldown > 0) {
+                let fillPercent = ((player.archerMaxCooldown - player.archerCooldown) / player.archerMaxCooldown) * 100;
+                archerCdFill.style.height = (100 - fillPercent) + '%';
+            } else {
+                archerCdFill.style.height = '0%';
+            }
+
+            goldEl.innerText = Math.floor(player.gold);
+            if (isCoopHostNow() || isCoopGuestNow()) goldEl.parentElement && (goldEl.parentElement.title = 'Ortak takım altını');
+            levelEl.innerText = Math.min(level, 3) + "/3";
+
+            const playerMiners = units.filter(u => u.isPlayer && getUnitType(u) === 'miner').length;
+            const playerClubmen = units.filter(u => u.isPlayer && getUnitType(u) === 'clubman').length;
+            const playerArchers = units.filter(u => u.isPlayer && getUnitType(u) === 'archer').length;
+
+            btnMiner.disabled = player.gold < 150 || player.minerCooldown > 0 || playerMiners >= MAX_MINERS_PER_TEAM;
+            btnClub.disabled = player.gold < 125 || player.clubCooldown > 0 || playerClubmen >= MAX_CLUBMEN_PER_TEAM;
+
+            if (level >= 3) {
+                btnArcher.style.display = '';
+                btnArcher.disabled = player.gold < 140 || player.archerCooldown > 0 || playerArchers >= MAX_ARCHERS_PER_TEAM;
+            } else {
+                btnArcher.style.display = 'none';
+            }
+        }
+        }
+         function applyHostSnapshot(payload) {
             latestHostSnapshot = payload;
             player.gold = payload.gold;
             player.base.hp = payload.baseHp;
             enemy.gold = payload.enemyGold;
             enemy.base.hp = payload.enemyBaseHp;
-            cameraX = payload.cameraX || 0;
+            if (typeof payload.level === 'number') level = payload.level;
+            if (typeof payload.minerCooldown === 'number') player.minerCooldown = payload.minerCooldown;
+            if (typeof payload.minerMaxCooldown === 'number') player.minerMaxCooldown = payload.minerMaxCooldown;
+            if (typeof payload.clubCooldown === 'number') player.clubCooldown = payload.clubCooldown;
+            if (typeof payload.clubMaxCooldown === 'number') player.clubMaxCooldown = payload.clubMaxCooldown;
+            if (typeof payload.archerCooldown === 'number') player.archerCooldown = payload.archerCooldown;
+            if (typeof payload.archerMaxCooldown === 'number') player.archerMaxCooldown = payload.archerMaxCooldown;
+            // cameraX artık host'tan alınmıyor — her oyuncu kendi ekranını kendi kaydırır
             units.length = 0;
             (payload.units || []).forEach(d => units.push(new GhostUnit(d)));
-            if (goldEl) goldEl.textContent = Math.floor(player.gold);
+            updateActionButtonsUI();
         }
-
         function startCoopGuestRenderLoop() {
             stopCoopGuestRenderLoop();
             function loop() {
