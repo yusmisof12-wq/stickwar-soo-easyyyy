@@ -3103,21 +3103,19 @@
             }
             pendingCoopInvite = null;
         };
-
-        // ---- Co-op oturum başlatma (host tam simülasyonu çalıştırır, guest sadece izler) ----
-        function beginCoopLevel(lv) {
-            level = Number(lv);
-            isGameOver = false;
-            coopVictoryHandled = false;
-            coopNextLevelRequested = false;
-            modal.classList.add('hidden');
-            levelChoiceModal.classList.add('hidden');
-            friendPickerModal.classList.add('hidden');
-            coopWaitingModal.classList.add('hidden');
-            coopInviteModal.classList.add('hidden');
-            stopCoopGuestRenderLoop();
-            if (typeof stopGameLoop === 'function') stopGameLoop();
-            showScreen('game');
+function beginCoopLevel(lv) {
+    level = Number(lv);
+    coopVictoryHandled = false;
+    coopNextLevelRequested = false;
+    modal.classList.add('hidden');
+    levelChoiceModal.classList.add('hidden');
+    friendPickerModal.classList.add('hidden');
+    coopWaitingModal.classList.add('hidden');
+    coopInviteModal.classList.add('hidden');
+    stopCoopGuestRenderLoop();
+    if (typeof stopGameLoop === 'function') stopGameLoop();
+    isGameOver = false;
+    showScreen('game');       
             resizeCanvas();
             if (coopSession.role === 'host') {
                 resetLevel();
