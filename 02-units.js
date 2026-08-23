@@ -1,4 +1,4 @@
- // ==================== SINIFLAR ====================
+// ==================== SINIFLAR ====================
         class Miner {
             constructor(isPlayer, ownerIndex = 0) {
                 this.isPlayer = isPlayer;
