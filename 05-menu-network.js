@@ -1354,16 +1354,25 @@
         
         // ==================== "P" TUŞU: TÜM SEFERLERİ AÇ ====================
         document.addEventListener('keydown', (e) => {
-            if (e.key !== 'p' && e.key !== 'P') return;
             const tag = (document.activeElement && document.activeElement.tagName || '').toLowerCase();
             if (tag === 'input' || tag === 'textarea') return;
-            if (!currentUser) return;
-            currentUser.maxUnlocked = 3;
-            saveCurrentUser();
-            if (campaignScreen && !campaignScreen.classList.contains('hidden')) {
-                refreshCampaignNodes();
+            // P = tüm seferler
+            if (e.key === 'p' || e.key === 'P') {
+                if (!currentUser) return;
+                if (typeof unlockAll === 'function') unlockAll();
+                else {
+                    currentUser.maxUnlocked = 3;
+                    saveCurrentUser();
+                    if (campaignScreen && !campaignScreen.classList.contains('hidden')) refreshCampaignNodes();
+                    showToast('Tüm seferler açıldı');
+                }
+                return;
             }
-            showToast('🔓 Tüm bölümler açıldı');
+            // G = god mode (sonsuz altın + anında spawn)
+            if (e.key === 'g' || e.key === 'G') {
+                if (typeof godMode === 'function') godMode(!window.CHEAT_INF);
+                return;
+            }
         });
 
         // ==================== VERI YEDEKLEME / KURTARMA (kilitli) ====================
