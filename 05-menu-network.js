@@ -1,5 +1,40 @@
 // ==================== HESAP + MENÜ + SEFER ====================
         const TOKEN_KEY = 'copAdamToken_v1';
+        const PROGRESS_PREFIX = 'copAdamProgress_v1_';
+
+        function mirrorProgressLocal(user) {
+            if (!user || !user.username) return;
+            try {
+                localStorage.setItem(PROGRESS_PREFIX + user.username, JSON.stringify({
+                    username: user.username,
+                    maxUnlocked: user.maxUnlocked || 1,
+                    cleared: Array.isArray(user.cleared) ? user.cleared : [],
+                    savedAt: Date.now(),
+                }));
+            } catch (_) {}
+        }
+        function loadMirroredProgress(username) {
+            try {
+                const raw = localStorage.getItem(PROGRESS_PREFIX + username);
+                if (!raw) return null;
+                const p = JSON.parse(raw);
+                return {
+                    maxUnlocked: Math.max(1, Number(p.maxUnlocked) || 1),
+                    cleared: Array.isArray(p.cleared) ? p.cleared : [],
+                };
+            } catch (_) { return null; }
+        }
+        function mergeProgress(serverUser, localProg) {
+            if (!localProg) return serverUser;
+            const maxU = Math.max(serverUser.maxUnlocked || 1, localProg.maxUnlocked || 1);
+            const cleared = new Set([...(serverUser.cleared || []), ...(localProg.cleared || [])]);
+            return {
+                ...serverUser,
+                maxUnlocked: maxU,
+                cleared: Array.from(cleared).sort((a, b) => a - b),
+            };
+        }
+
         const LOCAL_USERS_KEY = 'copAdamUsersHashed_v1';
         const LOCAL_SESSION_KEY = 'copAdamLocalSession_v1';
         const API_BASE = (typeof location !== 'undefined' && location.protocol.startsWith('http'))
@@ -820,6 +855,8 @@
 
         async function saveCurrentUser() {
             if (!currentUser) return;
+            // Her zaman tarayıcıya yedekle (Render veri silinse bile)
+            mirrorProgressLocal(currentUser);
             if (useServer) {
                 try {
                     const data = await api('/api/progress', {
@@ -831,17 +868,20 @@
                     });
                     currentUser.maxUnlocked = data.maxUnlocked;
                     currentUser.cleared = data.cleared;
+                    mirrorProgressLocal(currentUser);
                     return;
                 } catch (e) {
-                    useServer = false;
+                    // Ağ hatası: token'ı silme, sadece local'e yaz
+                    console.warn('[progress] sunucu kaydı başarısız, local yedek kullanılıyor', e);
                 }
             }
             const db = loadLocalUsers();
-            if (db[currentUser.username]) {
-                db[currentUser.username].maxUnlocked = currentUser.maxUnlocked;
-                db[currentUser.username].cleared = currentUser.cleared;
-                saveLocalUsers(db);
+            if (!db[currentUser.username]) {
+                db[currentUser.username] = { maxUnlocked: 1, cleared: [] };
             }
+            db[currentUser.username].maxUnlocked = currentUser.maxUnlocked;
+            db[currentUser.username].cleared = currentUser.cleared;
+            saveLocalUsers(db);
         }
 
         function showScreen(which) {
@@ -919,6 +959,11 @@
                         });
                         localStorage.setItem(TOKEN_KEY, data.token);
                         localStorage.removeItem(LOCAL_SESSION_KEY);
+                        mirrorProgressLocal({
+                            username: data.username,
+                            maxUnlocked: data.maxUnlocked || 1,
+                            cleared: data.cleared || [],
+                        });
                     } catch (e) {
                         if (e.status && e.status >= 400 && e.status < 500) throw e;
                         useServer = false;
@@ -935,6 +980,13 @@
                     maxUnlocked: data.maxUnlocked || 1,
                     cleared: data.cleared || [],
                 };
+                // Sunucu sıfırlanmış olsa bile tarayıcıdaki ilerlemeyi geri yükle
+                const localProg = loadMirroredProgress(currentUser.username);
+                if (localProg) {
+                    currentUser = mergeProgress(currentUser, localProg);
+                    try { await saveCurrentUser(); } catch (_) {}
+                }
+                mirrorProgressLocal(currentUser);
                 authPass.value = '';
                 enterMainMenu();
             } catch (e) {
@@ -1247,34 +1299,33 @@
             try {
                 if (token) {
                     const data = await api('/api/me');
-                    currentUser = {
+                    let user = {
                         username: data.username,
                         maxUnlocked: data.maxUnlocked || 1,
                         cleared: data.cleared || [],
                     };
+                    // Tarayıcı yedeği daha ilerideyse birleştir ve sunucuya yaz
+                    const localProg = loadMirroredProgress(data.username);
+                    user = mergeProgress(user, localProg);
+                    currentUser = user;
+                    mirrorProgressLocal(currentUser);
+                    if (localProg && (
+                        (localProg.maxUnlocked || 1) > (data.maxUnlocked || 1) ||
+                        (localProg.cleared || []).length > (data.cleared || []).length
+                    )) {
+                        try { await saveCurrentUser(); } catch (_) {}
+                    }
                     enterMainMenu();
                     return;
                 }
             } catch (e) {
+                // 401: token gerçekten geçersiz (sunucu verisi silinmiş olabilir)
+                // Ağ hatası: token'ı KORU, local yedekle devam et
                 if (e && e.status === 401) {
                     localStorage.removeItem(TOKEN_KEY);
                 } else {
                     useServer = false;
-                }
-            }
-
-            if (false && token && useServer) {
-                try {
-                    const data = await api('/api/me');
-                    currentUser = {
-                        username: data.username,
-                        maxUnlocked: data.maxUnlocked || 1,
-                        cleared: data.cleared || [],
-                    };
-                    enterMainMenu();
-                    return;
-                } catch (_) {
-                    localStorage.removeItem(TOKEN_KEY);
+                    console.warn('[boot] sunucu erişilemedi, local oturum denenecek', e);
                 }
             }
 
