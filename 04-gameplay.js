@@ -1,4 +1,4 @@
-function setPlayerCommand(cmd) {
+  function setPlayerCommand(cmd) {
             const oi = localOwnerIndex();
             getOwnerState(oi).command = cmd;
             // Solo veya host: player.command senkron (AI tehdit hesabı için host tarafı)
@@ -261,14 +261,14 @@ function setPlayerCommand(cmd) {
                 // Saniye (ambushTimer @60fps) → kaç orakçı
                 // Toplam ~24 birim / 3 dk — rahat savuşturulabilir
                 if (!enemy.ambushWaves) {
+                    // Daha kolay: daha az birim, daha seyrek dalgalar
                     enemy.ambushWaves = [
-                        { at: 15, count: 2 },
-                        { at: 35, count: 3 },
-                        { at: 55, count: 3 },
-                        { at: 80, count: 4 },
-                        { at: 110, count: 4 },
-                        { at: 140, count: 5 },
-                        { at: 165, count: 3 },
+                        { at: 20, count: 1 },
+                        { at: 45, count: 2 },
+                        { at: 70, count: 2 },
+                        { at: 100, count: 3 },
+                        { at: 130, count: 3 },
+                        { at: 160, count: 3 },
                     ];
                     enemy.ambushWaveIndex = 0;
                 }
