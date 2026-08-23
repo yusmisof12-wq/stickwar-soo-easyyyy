@@ -349,7 +349,7 @@ function drawStickman(ctx, x, y, color, weapon, animFrame, isWalking, isFlipped 
 function drawEnvironment(ctx) {
     let w = typeof worldWidth !== 'undefined' ? worldWidth : canvas.width * 2;
     let skyHeight = canvas.height - (typeof GROUND_HEIGHT !== 'undefined' ? GROUND_HEIGHT : 100);
-    // ✅ DÜZELTME: level'e göre era belirle (1. bölüm açık, 2. ve 3. bölüm orman)
+    // ✅ level'e göre harita seçimi: 1. bölüm açık alan, 2-3. bölüm Okçu Kabilesi
     let era = (typeof level !== 'undefined' && level >= 2) ? 2 : 1;
     let t = typeof frames !== 'undefined' ? frames : 0;
 
@@ -479,87 +479,296 @@ function drawEnvironment(ctx) {
         }
 
     } else {
-        // --- 2. BÖLÜM: Yoğun Orman (Koyu Yeşil Temalı) ---
+        // ============================================================
+        // 2. BÖLÜM: OKÇU KABİLESİ EĞİTİM KAMPI (SICAK GÜN BATIMI)
+        // ============================================================
         let skyGrad = ctx.createLinearGradient(0, 0, 0, skyHeight);
-        skyGrad.addColorStop(0, '#1b4d3d');
-        skyGrad.addColorStop(0.5, '#2e6b4f');
-        skyGrad.addColorStop(1, '#3d7a5a');
+        skyGrad.addColorStop(0, '#2c1a4d');   // Koyu mor gece başlangıcı
+        skyGrad.addColorStop(0.3, '#8e44ad'); // Mor
+        skyGrad.addColorStop(0.6, '#e74c3c'); // Kırmızı-turuncu
+        skyGrad.addColorStop(0.8, '#f39c12'); // Turuncu
+        skyGrad.addColorStop(1, '#f1c40f');   // Sarı ufuk
         ctx.fillStyle = skyGrad;
         ctx.fillRect(0, 0, w, skyHeight);
+
+        // Güneş
+        ctx.fillStyle = 'rgba(255, 255, 200, 0.8)';
+        ctx.beginPath();
+        ctx.arc(w * 0.3, skyHeight * 0.45, 80, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(255, 200, 100, 0.3)';
+        ctx.beginPath();
+        ctx.arc(w * 0.3, skyHeight * 0.45, 160, 0, Math.PI * 2);
+        ctx.fill();
 
         for (let i = 0; i < count; i++) {
             let ox = i * segW;
 
-            // Yoğun Orman Arka Katmanı (Koyu yeşil)
-            ctx.fillStyle = '#0e3d2b';
+            // Uzaktaki dağlar
+            ctx.fillStyle = '#3d2b1f';
             ctx.beginPath();
             ctx.moveTo(ox, skyHeight - 60);
-            ctx.quadraticCurveTo(ox + 300, skyHeight - 150, ox + 700, skyHeight - 80);
-            ctx.quadraticCurveTo(ox + 1100, skyHeight - 130, ox + segW, skyHeight - 60);
+            ctx.quadraticCurveTo(ox + 300, skyHeight - 150, ox + 600, skyHeight - 70);
+            ctx.quadraticCurveTo(ox + 900, skyHeight - 130, ox + segW, skyHeight - 60);
             ctx.lineTo(ox + segW, skyHeight);
             ctx.lineTo(ox, skyHeight);
             ctx.fill();
 
-            // Sık Çam Ağaçları Sıralaması
-            ctx.fillStyle = '#1a5c3a';
-            for (let tx = ox + 40; tx < ox + segW; tx += 120) {
+            // Orman / çalılık arka katmanı
+            ctx.fillStyle = '#2d1b0f';
+            for (let tx = ox + 30; tx < ox + segW; tx += 140) {
                 ctx.beginPath();
-                ctx.moveTo(tx, skyHeight - 90);
-                ctx.lineTo(tx - 20, skyHeight - 20);
-                ctx.lineTo(tx + 20, skyHeight - 20);
+                ctx.moveTo(tx, skyHeight - 40);
+                ctx.lineTo(tx - 25, skyHeight - 10);
+                ctx.lineTo(tx + 25, skyHeight - 10);
                 ctx.fill();
             }
 
-            // Daha koyu orman alt katmanı
-            ctx.fillStyle = '#0f3d24';
-            for (let tx = ox + 80; tx < ox + segW; tx += 180) {
-                ctx.beginPath();
-                ctx.moveTo(tx, skyHeight - 60);
-                ctx.lineTo(tx - 30, skyHeight - 10);
-                ctx.lineTo(tx + 30, skyHeight - 10);
-                ctx.fill();
-            }
-
-            // Kamplar veya mağaralar (süs)
+            // --- 1. TOTEM DİREKLERİ ---
+            let totemX = ox + 180;
+            ctx.fillStyle = '#4a2511';
+            ctx.fillRect(totemX - 8, skyHeight - 90, 16, 85);
             ctx.fillStyle = '#2c1a0e';
+            ctx.fillRect(totemX - 6, skyHeight - 85, 12, 10);
+            ctx.fillRect(totemX - 6, skyHeight - 65, 12, 10);
+            ctx.fillRect(totemX - 6, skyHeight - 45, 12, 10);
+            // Totem yüzü (basit)
+            ctx.fillStyle = '#f1c40f';
             ctx.beginPath();
-            ctx.arc(ox + 500, skyHeight - 10, 40, 0, Math.PI);
+            ctx.arc(totemX, skyHeight - 75, 4, 0, Math.PI * 2);
             ctx.fill();
-            ctx.fillStyle = '#1a0f08';
+            ctx.fillStyle = '#e74c3c';
             ctx.beginPath();
-            ctx.arc(ox + 500, skyHeight - 15, 25, 0, Math.PI);
+            ctx.arc(totemX - 5, skyHeight - 55, 2, 0, Math.PI * 2);
+            ctx.arc(totemX + 5, skyHeight - 55, 2, 0, Math.PI * 2);
             ctx.fill();
+            ctx.strokeStyle = '#e74c3c';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(totemX - 3, skyHeight - 47);
+            ctx.lineTo(totemX + 3, skyHeight - 43);
+            ctx.stroke();
 
-            // Ateş (animasyonlu)
-            let fireY = skyHeight - 35 + Math.sin(t * 0.15) * 3;
-            ctx.fillStyle = '#e67e22';
+            // --- 2. KABİLE ÇADIRLARI (TİPİ) ---
+            let tipiX = ox + 600;
+            ctx.fillStyle = '#8e44ad';
             ctx.beginPath();
-            ctx.arc(ox + 750, fireY, 8 + Math.sin(t * 0.2) * 2, 0, Math.PI * 2);
+            ctx.moveTo(tipiX - 25, skyHeight - 10);
+            ctx.lineTo(tipiX, skyHeight - 70);
+            ctx.lineTo(tipiX + 25, skyHeight - 10);
+            ctx.closePath();
+            ctx.fill();
+            ctx.fillStyle = '#d35400';
+            ctx.beginPath();
+            ctx.moveTo(tipiX - 15, skyHeight - 10);
+            ctx.lineTo(tipiX, skyHeight - 50);
+            ctx.lineTo(tipiX + 15, skyHeight - 10);
+            ctx.closePath();
+            ctx.fill();
+            ctx.fillStyle = '#2c3e50';
+            ctx.fillRect(tipiX - 4, skyHeight - 28, 8, 18);
+
+            // İkinci çadır (daha küçük)
+            let tipiX2 = ox + 680;
+            ctx.fillStyle = '#2e86c1';
+            ctx.beginPath();
+            ctx.moveTo(tipiX2 - 18, skyHeight - 10);
+            ctx.lineTo(tipiX2, skyHeight - 50);
+            ctx.lineTo(tipiX2 + 18, skyHeight - 10);
+            ctx.closePath();
             ctx.fill();
             ctx.fillStyle = '#f1c40f';
             ctx.beginPath();
-            ctx.arc(ox + 752, fireY - 4, 4 + Math.sin(t * 0.25) * 1.5, 0, Math.PI * 2);
+            ctx.moveTo(tipiX2 - 10, skyHeight - 10);
+            ctx.lineTo(tipiX2, skyHeight - 35);
+            ctx.lineTo(tipiX2 + 10, skyHeight - 10);
+            ctx.closePath();
             ctx.fill();
 
-            // Dev ağaç gövdeleri (ön planda)
-            ctx.fillStyle = '#2c1a0e';
-            ctx.fillRect(ox + 200, skyHeight - 70, 20, 70);
-            ctx.fillRect(ox + 900, skyHeight - 80, 22, 80);
-            ctx.fillRect(ox + 1200, skyHeight - 60, 18, 60);
-
-            // Yosun / çalılar
-            ctx.fillStyle = '#2e7d32';
-            for (let bx = ox + 50; bx < ox + segW; bx += 100) {
+            // --- 3. OKÇULUK HEDEFLERİ ---
+            let targetX = ox + 380;
+            let targetY = skyHeight - 30;
+            // Kazık
+            ctx.fillStyle = '#5d4037';
+            ctx.fillRect(targetX - 4, targetY - 10, 8, 35);
+            // Hedef tahtası
+            let sizes = [24, 18, 12, 6];
+            let colors = ['#ecf0f1', '#e74c3c', '#ecf0f1', '#e74c3c'];
+            for (let r = 0; r < 4; r++) {
+                ctx.fillStyle = colors[r];
                 ctx.beginPath();
-                ctx.arc(bx, skyHeight - 8, 12 + Math.sin(bx) * 3, 0, Math.PI * 2);
+                ctx.arc(targetX, targetY, sizes[r], 0, Math.PI * 2);
                 ctx.fill();
             }
+
+            // Hedefe saplanmış oklar (sabit)
+            for (let arrowIdx = 0; arrowIdx < 3; arrowIdx++) {
+                let angle = -0.8 + arrowIdx * 0.8;
+                let len = 14;
+                ctx.save();
+                ctx.translate(targetX + Math.sin(angle) * 6, targetY + Math.cos(angle) * 6);
+                ctx.rotate(angle);
+                ctx.strokeStyle = '#2c3e50';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.lineTo(len, 0);
+                ctx.stroke();
+                ctx.fillStyle = '#bdc3c7';
+                ctx.beginPath();
+                ctx.moveTo(len, 0);
+                ctx.lineTo(len - 5, -2);
+                ctx.lineTo(len - 5, 2);
+                ctx.fill();
+                ctx.restore();
+            }
+
+            // --- 4. OKÇULUK EĞİTİMİ YAPAN KABİLE OKÇULARI ---
+            let archerX = ox + 300;
+            let archerY = skyHeight - 8;
+            // Yay çekme animasyonu (0 ile 1 arası gidip gelir)
+            let drawAmount = 0.3 + 0.7 * Math.abs(Math.sin(t * 0.04 + ox * 0.01));
+            // Okçu rengi (kabile teması)
+            let archerColor = '#4a2c1a';
+            // Eğer `drawStickman` kullanmak istersek ama burada özel çizim yapalım ki tam kontrol sahibi olalım.
+            // Basit bir okçu çizelim:
+            ctx.save();
+            ctx.translate(archerX, archerY);
+            // Vücut
+            ctx.strokeStyle = archerColor;
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(0, -10);
+            ctx.lineTo(-6, 0);
+            ctx.moveTo(0, -10);
+            ctx.lineTo(6, 0);
+            ctx.moveTo(0, -10);
+            ctx.lineTo(0, -30);
+            ctx.stroke();
+            // Kafa
+            ctx.fillStyle = archerColor;
+            ctx.beginPath();
+            ctx.arc(0, -36, 6, 0, Math.PI * 2);
+            ctx.fill();
+            // Yay (sola doğru)
+            ctx.strokeStyle = '#8b5a2b';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(-6, -24, 12, -Math.PI / 2, Math.PI / 2);
+            ctx.stroke();
+            // Ok (çekili)
+            let pullX = -6 - drawAmount * 14;
+            ctx.strokeStyle = '#ecf0f1';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(-6, -24);
+            ctx.lineTo(pullX, -24);
+            ctx.stroke();
+            // Ok tüyü
+            ctx.fillStyle = '#e74c3c';
+            ctx.beginPath();
+            ctx.moveTo(pullX, -24);
+            ctx.lineTo(pullX - 4, -27);
+            ctx.lineTo(pullX - 4, -21);
+            ctx.fill();
+            // Kol
+            ctx.strokeStyle = archerColor;
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            ctx.moveTo(0, -24);
+            ctx.lineTo(-6 + drawAmount * 4, -24);
+            ctx.stroke();
+            ctx.restore();
+
+            // --- 5. HAVADA UÇAN OKLAR (Hedefe gidiyor) ---
+            let arrowTravel = (t * 3 + ox * 0.5) % 220;
+            if (arrowTravel < 180) {
+                let startX = archerX + 6;
+                let startY = archerY - 24;
+                let endX = targetX - 10;
+                let endY = targetY - 2;
+                let progress = arrowTravel / 180;
+                let currentX = startX + (endX - startX) * progress;
+                let currentY = startY + (endY - startY) * progress + Math.sin(progress * Math.PI) * 12;
+
+                ctx.save();
+                ctx.translate(currentX, currentY);
+                let angle = Math.atan2(endY - startY, endX - startX);
+                ctx.rotate(angle);
+                ctx.strokeStyle = '#f1c40f';
+                ctx.lineWidth = 2;
+                ctx.shadowColor = '#f1c40f';
+                ctx.shadowBlur = 8;
+                ctx.beginPath();
+                ctx.moveTo(-6, 0);
+                ctx.lineTo(8, 0);
+                ctx.stroke();
+                ctx.fillStyle = '#fff';
+                ctx.shadowBlur = 0;
+                ctx.beginPath();
+                ctx.moveTo(8, 0);
+                ctx.lineTo(3, -3);
+                ctx.lineTo(3, 3);
+                ctx.fill();
+                ctx.restore();
+            }
+
+            // --- 6. KAMP ATEŞİ (Animasyonlu) ---
+            let fireX = ox + 100;
+            let fireY = skyHeight - 8;
+            ctx.fillStyle = 'rgba(0,0,0,0.3)';
+            ctx.beginPath();
+            ctx.ellipse(fireX, fireY + 6, 20, 8, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#5d4037';
+            ctx.fillRect(fireX - 2, fireY, 4, 10);
+            ctx.fillRect(fireX - 12, fireY + 2, 24, 4);
+            // Alevler
+            let flameSize = 12 + Math.sin(t * 0.2) * 3;
+            ctx.fillStyle = '#e67e22';
+            ctx.beginPath();
+            ctx.moveTo(fireX - 10, fireY);
+            ctx.quadraticCurveTo(fireX - 8, fireY - flameSize, fireX, fireY - flameSize - 4);
+            ctx.quadraticCurveTo(fireX + 8, fireY - flameSize, fireX + 10, fireY);
+            ctx.fill();
+            ctx.fillStyle = '#f1c40f';
+            ctx.beginPath();
+            ctx.moveTo(fireX - 5, fireY);
+            ctx.quadraticCurveTo(fireX - 3, fireY - flameSize + 4, fireX, fireY - flameSize);
+            ctx.quadraticCurveTo(fireX + 3, fireY - flameSize + 4, fireX + 5, fireY);
+            ctx.fill();
+
+            // --- 7. EK HEDEFLER (Uzakta) ---
+            let targetX2 = ox + 900;
+            ctx.fillStyle = '#5d4037';
+            ctx.fillRect(targetX2 - 3, skyHeight - 20, 6, 30);
+            let s2 = [16, 10, 6, 3];
+            let c2 = ['#ecf0f1', '#e74c3c', '#ecf0f1', '#e74c3c'];
+            for (let r = 0; r < 4; r++) {
+                ctx.fillStyle = c2[r];
+                ctx.beginPath();
+                ctx.arc(targetX2, skyHeight - 10, s2[r], 0, Math.PI * 2);
+                ctx.fill();
+            }
+            // Saplanmış ok
+            ctx.strokeStyle = '#2c3e50';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(targetX2 - 20, skyHeight - 18);
+            ctx.lineTo(targetX2 - 6, skyHeight - 10);
+            ctx.stroke();
+            ctx.fillStyle = '#bdc3c7';
+            ctx.beginPath();
+            ctx.moveTo(targetX2 - 6, skyHeight - 10);
+            ctx.lineTo(targetX2 - 12, skyHeight - 14);
+            ctx.lineTo(targetX2 - 10, skyHeight - 8);
+            ctx.fill();
         }
     }
 
     // Ön Plan Savaş Alanı Çimi
-    let groundColor = era === 1 ? '#73c6b6' : '#1f5c3a';
-    let patternColor = era === 1 ? '#45b39d' : '#0f3d24';
+    let groundColor = era === 1 ? '#73c6b6' : '#3d2b1f';
+    let patternColor = era === 1 ? '#45b39d' : '#2d1b0f';
 
     ctx.fillStyle = groundColor;
     ctx.fillRect(0, skyHeight, w, typeof GROUND_HEIGHT !== 'undefined' ? GROUND_HEIGHT : 100);
