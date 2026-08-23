@@ -1,4 +1,4 @@
-        function setPlayerCommand(cmd) {
+function setPlayerCommand(cmd) {
             const oi = localOwnerIndex();
             getOwnerState(oi).command = cmd;
             // Solo veya host: player.command senkron (AI tehdit hesabı için host tarafı)
@@ -188,11 +188,17 @@
         };
 
 
+
         // ==================== 3. BÖLÜM SİNEMATİK ====================
         let cinematic = { active: false, phase: '', timer: 0, bubble: null, bubbleTimer: 0 };
 
         function isCinematicActive() {
             return !!(cinematic && cinematic.active);
+        }
+
+        function clampCameraToWorld() {
+            const maxCam = Math.max(0, worldWidth - canvas.width);
+            cameraX = Math.max(0, Math.min(cameraX, maxCam));
         }
 
         function setGameplayUIVisible(vis) {
@@ -215,31 +221,33 @@
                 bubble: null,
                 bubbleTimer: 0,
                 bubbleQueue: [
-                    { at: 30, text: 'İsyancı kampına doğru…' },
-                    { at: 120, text: 'Sessizlik… fazla sessiz.' },
-                    { at: 220, text: 'İzleri takip ediyoruz.' },
+                    { at: 50, text: 'İsyancı kampına doğru ilerliyoruz…', hold: 160 },
+                    { at: 240, text: 'Komutan: “Dikkatli olun.”', hold: 150 },
+                    { at: 420, text: 'Sessizlik… fazla sessiz.', hold: 150 },
+                    { at: 600, text: 'İzleri takip edin.', hold: 140 },
                 ],
                 ambushSaid: false,
                 fightStarted: false,
+                fightBeat: 0,
             };
             setGameplayUIVisible(false);
             setPlayerCommand(CMD_ATTACK);
 
-            // 3 keşif sopalısı
             for (let i = 0; i < 3; i++) {
                 const c = new Clubman(true, 0);
-                c.x = player.base.x + 40 + i * 28;
-                c.y = player.base.y + (i - 1) * 22;
-                c.hp = c.maxHp = 120;
+                c.x = player.base.x + 50 + i * 36;
+                c.y = player.base.y + (i - 1) * 28;
+                c.hp = c.maxHp = 140;
                 c._cinematic = true;
                 c._cinRole = 'scout';
+                c._cinLane = i; // 0 üst, 1 orta, 2 alt
                 units.push(c);
             }
-            cameraX = Math.max(0, player.base.x - canvas.width * 0.3);
+            cameraX = Math.max(0, player.base.x - canvas.width * 0.35);
+            clampCameraToWorld();
         }
 
         function endLevel3Cinematic() {
-            // kalan sinematik birimleri temizle
             units = units.filter(u => {
                 if (u._cinematic) {
                     if (u instanceof Miner && typeof u.releaseSlot === 'function') u.releaseSlot();
@@ -253,8 +261,17 @@
             ambushTimer = 0;
             enemy.ambushWaves = null;
             enemy.ambushWaveIndex = 0;
-            cameraX = Math.max(0, Math.min(player.base.x - 100, worldWidth - canvas.width));
+            cameraX = Math.max(0, Math.min(player.base.x - 80, worldWidth - canvas.width));
+            clampCameraToWorld();
             if (typeof showToast === 'function') showToast('Pusu başladı — heykeli savunun!');
+        }
+
+        function cinFocusCamera(xs, bias) {
+            if (!xs || !xs.length) return;
+            const avgX = xs.reduce((s, v) => s + v, 0) / xs.length;
+            const targetCam = avgX - canvas.width * (bias != null ? bias : 0.42);
+            cameraX += (targetCam - cameraX) * 0.06;
+            clampCameraToWorld();
         }
 
         function updateCinematic() {
@@ -262,118 +279,239 @@
             cinematic.timer++;
             frames++;
 
-            const scouts = units.filter(u => u._cinematic && u._cinRole === 'scout' && u.hp > 0);
-            const foes = units.filter(u => u._cinematic && u._cinRole === 'ambusher' && u.hp > 0);
+            let scouts = units.filter(u => u._cinematic && u._cinRole === 'scout' && u.hp > 0);
+            let foes = units.filter(u => u._cinematic && u._cinRole === 'ambusher' && u.hp > 0);
 
-            // Balon zamanlaması
+            // Diyalog kuyruğu — uzun hold
             if (cinematic.bubbleQueue && cinematic.bubbleQueue.length) {
                 const next = cinematic.bubbleQueue[0];
-                if (cinematic.timer >= next.at) {
+                if (cinematic.timer >= next.at && cinematic.bubbleTimer <= 0) {
                     cinematic.bubble = next.text;
-                    cinematic.bubbleTimer = 120;
+                    cinematic.bubbleTimer = next.hold || 150;
                     cinematic.bubbleQueue.shift();
                 }
             }
             if (cinematic.bubbleTimer > 0) cinematic.bubbleTimer--;
-            else if (cinematic.bubbleTimer <= 0 && cinematic.phase === 'walk') cinematic.bubble = null;
+            else if (cinematic.phase === 'walk' || cinematic.phase === 'aftermath') {
+                // hold bitti, sıradaki gelene kadar boş
+                if (!cinematic.bubbleQueue || !cinematic.bubbleQueue.length) {
+                    /* keep last short or clear */
+                }
+                if (cinematic.bubbleTimer <= 0 && cinematic.phase !== 'ambush') {
+                    // sadece kuyruk boşsa sil
+                    if (!cinematic.bubbleQueue || cinematic.bubbleQueue.length === 0) {
+                        if (cinematic.phase === 'walk') { /* allow clear after last */ }
+                    }
+                    if (cinematic.bubbleTimer <= 0) cinematic.bubble = cinematic.bubbleTimer <= 0 ? null : cinematic.bubble;
+                }
+            }
+            if (cinematic.bubbleTimer <= 0 && cinematic.phase !== 'ambush' && cinematic.phase !== 'fight') {
+                cinematic.bubble = null;
+            }
 
-            const spikeX = enemy.base.x - 280;
+            // Pusu noktası harita içinde kalsın
+            const spikeX = Math.min(enemy.base.x - 320, worldWidth - 400);
+            const walkStop = Math.min(spikeX - 60, worldWidth - canvas.width * 0.55);
 
             if (cinematic.phase === 'walk') {
-                // Kamerayı takip et
                 if (scouts.length) {
-                    const avgX = scouts.reduce((s, u) => s + u.x, 0) / scouts.length;
-                    const targetCam = avgX - canvas.width * 0.45;
-                    cameraX += (targetCam - cameraX) * 0.08;
-                    cameraX = Math.max(0, Math.min(cameraX, worldWidth - canvas.width));
-
-                    // Sağa yürüyüş
+                    cinFocusCamera(scouts.map(u => u.x), 0.4);
                     scouts.forEach((u, i) => {
                         u.prevX = u.x;
-                        const tx = spikeX - 40 + i * 20;
-                        if (u.x < tx) {
-                            u.x += 2.4 * SPEED_MULT;
+                        const laneY = player.base.y + (u._cinLane - 1) * 30;
+                        const tx = walkStop + (u._cinLane - 1) * 18;
+                        // YAVAŞ yürüyüş
+                        if (u.x < tx - 2) {
+                            u.x += 1.15 * SPEED_MULT;
+                            u.y += (laneY - u.y) * 0.04;
                             u._isActuallyWalking = true;
                             u.isAttacking = false;
                         } else {
+                            u.x = tx;
                             u._isActuallyWalking = false;
                         }
                     });
                     const minX = Math.min(...scouts.map(u => u.x));
-                    if (minX >= spikeX - 80 && !cinematic.ambushSaid) {
-                        cinematic.phase = 'ambush';
+                    if (minX >= walkStop - 30 && !cinematic.ambushSaid) {
+                        cinematic.phase = 'notice';
                         cinematic.timer = 0;
-                        cinematic.bubble = 'BU BİR PUSU!';
-                        cinematic.bubbleTimer = 150;
+                        cinematic.bubble = 'Durun… dikenler mi o?';
+                        cinematic.bubbleTimer = 140;
                         cinematic.ambushSaid = true;
                     }
                 }
-            } else if (cinematic.phase === 'ambush') {
-                if (scouts.length) {
-                    const avgX = scouts.reduce((s, u) => s + u.x, 0) / scouts.length;
-                    cameraX += ((avgX - canvas.width * 0.45) - cameraX) * 0.1;
-                }
+            } else if (cinematic.phase === 'notice') {
                 scouts.forEach(u => { u._isActuallyWalking = false; u.isAttacking = false; });
-                if (cinematic.timer > 90 && !cinematic.fightStarted) {
-                    // 5 orakçı spawn
-                    for (let i = 0; i < 5; i++) {
+                if (scouts.length) cinFocusCamera(scouts.map(u => u.x), 0.38);
+                if (cinematic.timer === 150) {
+                    cinematic.bubble = 'BU BİR PUSU!';
+                    cinematic.bubbleTimer = 160;
+                }
+                if (cinematic.timer > 300) {
+                    cinematic.phase = 'ambush';
+                    cinematic.timer = 0;
+                }
+            } else if (cinematic.phase === 'ambush') {
+                if (scouts.length) cinFocusCamera(scouts.map(u => u.x), 0.4);
+                scouts.forEach(u => { u._isActuallyWalking = false; });
+                if (cinematic.timer === 20 && !cinematic.fightStarted) {
+                    // 5 orakçı FARKLI yerlerden (üst/orta/alt + geriden)
+                    const spots = [
+                        { x: walkStop + 160, y: player.base.y - 55 },
+                        { x: walkStop + 200, y: player.base.y + 10 },
+                        { x: walkStop + 180, y: player.base.y + 55 },
+                        { x: walkStop + 260, y: player.base.y - 30 },
+                        { x: walkStop + 280, y: player.base.y + 40 },
+                    ];
+                    spots.forEach((sp, i) => {
                         const s = new Sicklewrath(false);
-                        s.x = enemy.base.x - 60 - (i % 3) * 35;
-                        s.y = enemy.base.y + (i - 2) * 18;
-                        s.hp = s.maxHp = 70;
+                        s.x = Math.min(sp.x, worldWidth - 80);
+                        s.y = sp.y;
+                        s.hp = s.maxHp = 75;
                         s._cinematic = true;
                         s._cinRole = 'ambusher';
+                        s._cinLane = i;
                         units.push(s);
-                    }
+                    });
                     cinematic.fightStarted = true;
+                    cinematic.bubble = 'Her yerdeler!';
+                    cinematic.bubbleTimer = 120;
+                }
+                if (cinematic.timer > 80) {
                     cinematic.phase = 'fight';
                     cinematic.timer = 0;
-                    cinematic.bubble = 'Savunun!';
-                    cinematic.bubbleTimer = 90;
+                    cinematic.fightBeat = 0;
                 }
             } else if (cinematic.phase === 'fight') {
-                // Keşif birimleri ve orakçılar savaşıyor
-                const allCin = units.filter(u => u._cinematic && u.hp > 0);
-                allCin.forEach(u => {
+                scouts = units.filter(u => u._cinematic && u._cinRole === 'scout' && u.hp > 0);
+                foes = units.filter(u => u._cinematic && u._cinRole === 'ambusher' && u.hp > 0);
+                const allAlive = units.filter(u => u._cinematic && u.hp > 0);
+                if (allAlive.length) cinFocusCamera(allAlive.map(u => u.x), 0.45);
+
+                // Savaş vuruşları — farklı davranışlar
+                cinematic.fightBeat++;
+                allAlive.forEach(u => {
                     try {
-                        // düşman keşiflere saldırır, keşifler orakçılara
+                        u.prevX = u.x;
                         if (u._cinRole === 'scout') {
-                            const target = foes[0] || units.find(e => e._cinRole === 'ambusher');
-                            u.target = target || null;
+                            // Orta lane: cesur saldır; yanlar önce gerile sonra vur
+                            const lane = u._cinLane || 0;
+                            if (lane !== 1 && cinematic.timer < 90) {
+                                // kısa kaçış
+                                u.x -= 1.3 * SPEED_MULT;
+                                u._isActuallyWalking = true;
+                                u.isAttacking = false;
+                                if (cinematic.timer === 40 && lane === 0) {
+                                    cinematic.bubble = 'Geri çekilin!';
+                                    cinematic.bubbleTimer = 100;
+                                }
+                            } else {
+                                const target = foes[lane % Math.max(1, foes.length)] || foes[0];
+                                u.target = target || null;
+                                if (target) {
+                                    const dist = Math.hypot(target.x - u.x, target.y - u.y);
+                                    if (dist > 46) {
+                                        const ang = Math.atan2(target.y - u.y, target.x - u.x);
+                                        u.x += Math.cos(ang) * 1.8 * SPEED_MULT;
+                                        u.y += Math.sin(ang) * 1.2 * SPEED_MULT;
+                                        u._isActuallyWalking = true;
+                                        u.isAttacking = false;
+                                    } else {
+                                        u._isActuallyWalking = false;
+                                        u.isAttacking = true;
+                                        u.attackTimer = (u.attackTimer || 0) + 1;
+                                        if (u.attackTimer === 50) {
+                                            target.hp -= u.damage || 12;
+                                            if (typeof addFloatingText === 'function') {
+                                                addFloatingText(target.x, target.y - 20, '-' + (u.damage || 12), '#e74c3c');
+                                            }
+                                        }
+                                        if (u.attackTimer >= 90) u.attackTimer = 0;
+                                    }
+                                }
+                            }
                         } else {
-                            const target = scouts[0] || units.find(e => e._cinRole === 'scout');
+                            // Orakçılar: farklı hedefler, çevreleme
+                            const target = scouts[u._cinLane % Math.max(1, scouts.length)] || scouts[0];
                             u.target = target || null;
+                            if (target) {
+                                const dist = Math.hypot(target.x - u.x, target.y - u.y);
+                                if (dist > 50) {
+                                    const ang = Math.atan2(target.y - u.y, target.x - u.x);
+                                    // yanlardan yaklaş
+                                    const side = (u._cinLane % 2 === 0) ? 1 : -1;
+                                    u.x += Math.cos(ang) * 1.5 * SPEED_MULT;
+                                    u.y += Math.sin(ang) * 1.1 * SPEED_MULT + side * 0.4;
+                                    u._isActuallyWalking = true;
+                                    u.isAttacking = false;
+                                } else {
+                                    u._isActuallyWalking = false;
+                                    u.isAttacking = true;
+                                    u.attackTimer = (u.attackTimer || 0) + 1;
+                                    if (u.attackTimer === 18) {
+                                        target.hp -= u.damage || 15;
+                                        if (typeof addFloatingText === 'function') {
+                                            addFloatingText(target.x, target.y - 20, '-' + (u.damage || 15), '#c0392b');
+                                        }
+                                    }
+                                    if (u.attackTimer >= 48) u.attackTimer = 0;
+                                }
+                            }
                         }
-                        u.update();
                     } catch (err) { console.error(err); }
                 });
-                if (scouts.length) {
-                    const avgX = scouts.reduce((s, u) => s + u.x, 0) / scouts.length;
-                    cameraX += ((avgX - canvas.width * 0.4) - cameraX) * 0.08;
+
+                // Ek diyaloglar
+                if (cinematic.timer === 120) {
+                    cinematic.bubble = 'Çevrildik!';
+                    cinematic.bubbleTimer = 110;
                 }
-                // Keşifler öldü mü?
-                if (scouts.length === 0) {
-                    cinematic.phase = 'aftermath';
-                    cinematic.timer = 0;
-                    cinematic.bubble = 'Keşif timi düştü…';
+                if (cinematic.timer === 260) {
+                    cinematic.bubble = 'Dayanın…';
                     cinematic.bubbleTimer = 100;
                 }
+
+                // Keşifler öldü veya uzun sürdü
+                if (scouts.length === 0 || cinematic.timer > 520) {
+                    // kalan scouts öldür
+                    units.forEach(u => {
+                        if (u._cinematic && u._cinRole === 'scout') u.hp = 0;
+                    });
+                    cinematic.phase = 'aftermath';
+                    cinematic.timer = 0;
+                    cinematic.bubble = 'Keşif timi… yok edildi.';
+                    cinematic.bubbleTimer = 160;
+                }
             } else if (cinematic.phase === 'aftermath') {
-                // Kalan orakçıları da temizle, kısa bekle, oyuna geç
-                if (cinematic.timer > 100) {
+                // Kamera heykele dönsün — boşluğa kaçmasın
+                const home = player.base.x - 40;
+                cameraX += ((home - canvas.width * 0.25) - cameraX) * 0.05;
+                clampCameraToWorld();
+                foes.forEach(u => {
+                    // orakçılar yavaşça sağa (kendi tarafına) çekilsin
+                    u.x += 0.8;
+                    u._isActuallyWalking = true;
+                    u.isAttacking = false;
+                });
+                if (cinematic.timer === 100) {
+                    cinematic.bubble = 'Heykeli savunun!';
+                    cinematic.bubbleTimer = 120;
+                }
+                if (cinematic.timer > 220) {
                     endLevel3Cinematic();
                 }
             }
 
-            // HP clamp
             units.forEach(u => { if (u.hp < 0) u.hp = 0; });
             units = units.filter(u => u.hp > 0);
+            clampCameraToWorld();
         }
 
         function drawCinematicBubble(ctx) {
             if (!cinematic.active || !cinematic.bubble || cinematic.bubbleTimer <= 0) return;
             const scouts = units.filter(u => u._cinematic && u._cinRole === 'scout' && u.hp > 0);
-            const anchor = scouts[1] || scouts[0] || units.find(u => u._cinematic);
+            const foes = units.filter(u => u._cinematic && u.hp > 0);
+            const anchor = scouts[1] || scouts[0] || foes[0];
             if (!anchor) return;
             const text = cinematic.bubble;
             ctx.save();
@@ -381,14 +519,14 @@
             const tw = ctx.measureText(text).width;
             const bx = anchor.x;
             const by = anchor.y - 88;
-            const pad = 10;
+            const pad = 12;
             const bw = tw + pad * 2;
-            const bh = 28;
-            ctx.fillStyle = 'rgba(255,255,255,0.95)';
-            ctx.strokeStyle = '#2c3e50';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
+            const bh = 30;
+            ctx.fillStyle = 'rgba(255,255,255,0.96)';
+            ctx.strokeStyle = text === 'BU BİR PUSU!' ? '#c0392b' : '#2c3e50';
+            ctx.lineWidth = 2.5;
             const rx = bx - bw / 2, ry = by - bh;
+            ctx.beginPath();
             ctx.moveTo(rx + 8, ry);
             ctx.arcTo(rx + bw, ry, rx + bw, ry + bh, 8);
             ctx.arcTo(rx + bw, ry + bh, rx, ry + bh, 8);
@@ -397,7 +535,6 @@
             ctx.closePath();
             ctx.fill();
             ctx.stroke();
-            // kuyruk
             ctx.beginPath();
             ctx.moveTo(bx - 6, by);
             ctx.lineTo(bx, by + 10);
@@ -405,13 +542,12 @@
             ctx.closePath();
             ctx.fill();
             ctx.stroke();
-            ctx.fillStyle = cinematic.bubble === 'BU BİR PUSU!' ? '#c0392b' : '#1a1a1a';
+            ctx.fillStyle = text === 'BU BİR PUSU!' ? '#c0392b' : '#1a1a1a';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText(text, bx, by - bh / 2);
             ctx.restore();
         }
-
 
         function resetLevel() {
             if (typeof coopVictoryHandled !== 'undefined') coopVictoryHandled = false;
