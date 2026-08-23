@@ -30,6 +30,17 @@
             }
         }
 
+        function updateMiningSparks() {
+            if (!miningSparks || !miningSparks.length) return;
+            for (let i = miningSparks.length - 1; i >= 0; i--) {
+                const s = miningSparks[i];
+                s.x += s.vx || 0;
+                s.y += s.vy || 0;
+                s.life--;
+                if (s.life <= 0) miningSparks.splice(i, 1);
+            }
+        }
+
         function drawMiningSparks(ctx) {
             miningSparks.forEach(s => {
                 const alpha = Math.max(0, s.life / s.maxLife);
