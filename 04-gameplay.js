@@ -12,6 +12,8 @@
 //   Kalıcı kullanıcı verisi istiyorsan Render'da bir "Persistent Disk" ekleyip
 //   DATA_DIR env değişkenini o disk'in mount path'ine ayarla (örn: /var/data).
 
+const MIRROR_ENEMY_ACTIONS = true; // true: düşman oyuncu(lar)ın yaptığı satın alma/komutları taklit eder
+
 const express = require('express');
 const cors = require('cors');
 const crypto = require('crypto');
