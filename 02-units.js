@@ -679,7 +679,7 @@
                 this.formationIndex = formOwner.clubFormationCounter++;
                 this.hp = 70;
                 this.maxHp = 70;
-                this.damage = 15;
+                this.damage = 8;
                 this.attackCooldown = 48;
                 this.attackTimer = 0;
                 this.range = 52;
