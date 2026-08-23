@@ -344,203 +344,154 @@ function drawStickman(ctx, x, y, color, weapon, animFrame, isWalking, isFlipped 
 function drawEnvironment(ctx) {
     let w = typeof worldWidth !== 'undefined' ? worldWidth : canvas.width * 2;
     let skyHeight = canvas.height - (typeof GROUND_HEIGHT !== 'undefined' ? GROUND_HEIGHT : 100);
-    let era = typeof currentEra !== 'undefined' ? currentEra : 1;
     let t = typeof frames !== 'undefined' ? frames : 0;
 
-    // 1. Gökyüzü Gradiyanı (Bölümlere göre atmosferik renk geçişleri)
+    // 1. Gökyüzü Gradiyanı (Huzurlu Şafak / Akşamüstü Tonları)
     let skyGrad = ctx.createLinearGradient(0, 0, 0, skyHeight);
-    if (era === 1) {
-        skyGrad.addColorStop(0, '#f9ebea');
-        skyGrad.addColorStop(0.5, '#f5cba7');
-        skyGrad.addColorStop(1, '#fad7a0');
-    } else {
-        skyGrad.addColorStop(0, '#d4efdf');
-        skyGrad.addColorStop(0.5, '#a9dfbf');
-        skyGrad.addColorStop(1, '#82e0aa');
-    }
+    skyGrad.addColorStop(0, '#f8c471');
+    skyGrad.addColorStop(0.5, '#f39c12');
+    skyGrad.addColorStop(1, '#e67e22');
     ctx.fillStyle = skyGrad;
     ctx.fillRect(0, 0, w, skyHeight);
 
-    // 2. Arka Plan Güneş / Işık Efekti
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+    // Güneş
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
     ctx.beginPath();
-    ctx.arc(w * 0.25, skyHeight * 0.3, 160, 0, Math.PI * 2);
+    ctx.arc(w * 0.2, skyHeight * 0.25, 130, 0, Math.PI * 2);
     ctx.fill();
 
-    // Harita boyunca kusursuz tekrar eden arka plan dilimleri (Süs / Desen Mantığı)
-    let segW = 1200;
+    // Harita boyunca kusursuz tekrar eden segmentler (Kasaba, Değirmen ve Sular)
+    let segW = 1400;
     let count = Math.ceil(w / segW) + 1;
 
     for (let i = 0; i < count; i++) {
         let ox = i * segW;
 
-        if (era === 1) {
-            // --- 1. BÖLÜM: Tepeler, Şık Kale ve Nehir ---
-            
-            // Arka Tepeler (Koyu Yeşil)
-            ctx.fillStyle = '#689f38';
+        // 2. Arka Ufuk Tepeleri
+        ctx.fillStyle = '#7d6608';
+        ctx.beginPath();
+        ctx.moveTo(ox, skyHeight - 80);
+        ctx.quadraticCurveTo(ox + 350, skyHeight - 160, ox + 700, skyHeight - 90);
+        ctx.quadraticCurveTo(ox + 1050, skyHeight - 140, ox + segW, skyHeight - 80);
+        ctx.lineTo(ox + segW, skyHeight);
+        ctx.lineTo(ox, skyHeight);
+        ctx.fill();
+
+        // 3. Arka Planı Kaplayan Geniş Su / Göl Alanı
+        ctx.fillStyle = '#2980b9';
+        ctx.fillRect(ox, skyHeight - 75, segW, 45);
+
+        // Suyun Üzerindeki Dalga / Işık Animasyonları
+        ctx.fillStyle = '#85c1e9';
+        ctx.globalAlpha = 0.6;
+        let waveAnim = (t * 0.4) % 150;
+        ctx.fillRect(ox + 100 + waveAnim, skyHeight - 55, 60, 3);
+        ctx.fillRect(ox + 500 + waveAnim, skyHeight - 45, 90, 2.5);
+        ctx.fillRect(ox + 950 + waveAnim, skyHeight - 60, 70, 3);
+        ctx.globalAlpha = 1.0;
+
+        // 4. Su Değirmeni (Suyun kenarında konumlandırılmış ve hareketli çarklı)
+        let millX = ox + 220;
+        let millY = skyHeight - 65;
+
+        // Değirmen Binası
+        ctx.fillStyle = '#b9770e';
+        ctx.fillRect(millX, millY - 45, 40, 45);
+        // Değirmen Çatısı
+        ctx.fillStyle = '#922b21';
+        ctx.beginPath();
+        ctx.moveTo(millX - 5, millY - 45);
+        ctx.lineTo(millX + 20, millY - 70);
+        ctx.lineTo(millX + 45, millY - 45);
+        ctx.closePath();
+        ctx.fill();
+
+        // Su Değirmeni Çarkı (Animasyonlu Dönen Tekerlek)
+        ctx.save();
+        let wheelX = millX - 12;
+        let wheelY = millY - 20;
+        ctx.translate(wheelX, wheelY);
+        let wheelAngle = t * 0.03; // Dönüş hızı
+        ctx.rotate(wheelAngle);
+        ctx.strokeStyle = '#5d4037';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(0, 0, 16, 0, Math.PI * 2);
+        ctx.stroke();
+        // Çark Kanatları
+        for (let wRot = 0; wRot < Math.PI * 2; wRot += Math.PI / 2) {
             ctx.beginPath();
-            ctx.moveTo(ox, skyHeight - 40);
-            ctx.quadraticCurveTo(ox + 300, skyHeight - 140, ox + 600, skyHeight - 50);
-            ctx.quadraticCurveTo(ox + 900, skyHeight - 120, ox + segW, skyHeight - 40);
-            ctx.lineTo(ox + segW, skyHeight);
-            ctx.lineTo(ox, skyHeight);
-            ctx.fill();
-
-            // Kale / Kasaba Silüeti (Dengeli yerleşim, ortada sıkışık değil)
-            let castleX = ox + 450;
-            let castleY = skyHeight - 85;
-            ctx.fillStyle = '#8c7355';
-            ctx.fillRect(castleX, castleY - 50, 60, 50);
-            // Kuleler ve siperler
-            ctx.fillRect(castleX - 20, castleY - 25, 25, 25);
-            ctx.fillRect(castleX + 55, castleY - 35, 25, 35);
-            ctx.fillRect(castleX - 18, castleY - 33, 8, 8);
-            ctx.fillRect(castleX - 5, castleY - 33, 8, 8);
-            ctx.fillRect(castleX + 60, castleY - 45, 8, 10);
-            ctx.fillRect(castleX + 72, castleY - 45, 8, 10);
-            // Pencereler / Kapı
-            ctx.fillStyle = '#3e2723';
-            ctx.fillRect(castleX + 20, castleY - 30, 10, 15);
-            ctx.fillRect(castleX - 10, castleY - 12, 6, 12);
-
-            // Ön Tepeler (Açık Yeşil)
-            ctx.fillStyle = '#7cb342';
-            ctx.beginPath();
-            ctx.moveTo(ox, skyHeight - 20);
-            ctx.quadraticCurveTo(ox + 400, skyHeight - 90, ox + 800, skyHeight - 30);
-            ctx.quadraticCurveTo(ox + 1000, skyHeight - 70, ox + segW, skyHeight - 20);
-            ctx.lineTo(ox + segW, skyHeight);
-            ctx.lineTo(ox, skyHeight);
-            ctx.fill();
-
-            // Dekoratif Çam Ağaçları
-            ctx.fillStyle = '#2e7d32';
-            let trees = [ox + 120, ox + 180, ox + 750, ox + 840, ox + 1050];
-            trees.forEach(tx => {
-                ctx.beginPath();
-                ctx.moveTo(tx, skyHeight - 60);
-                ctx.lineTo(tx - 15, skyHeight - 20);
-                ctx.lineTo(tx + 15, skyHeight - 20);
-                ctx.fill();
-            });
-
-            // Kumsal Şeridi (Taşma yapmayan kusursuz yapı)
-            ctx.fillStyle = '#e5c479';
-            ctx.fillRect(ox, skyHeight - 35, segW, 20);
-
-            // Nehir Suyu
-            ctx.fillStyle = '#4c87c4';
-            ctx.fillRect(ox, skyHeight - 15, segW, 15);
-
-            // Animasyonlu Su Dalgaları / Yansımalar
-            ctx.fillStyle = '#ffffff';
-            ctx.globalAlpha = 0.6;
-            let waveOffset = (t * 0.5) % 150;
-            ctx.fillRect(ox + 200 + waveOffset, skyHeight - 10, 40, 2);
-            ctx.fillRect(ox + 700 + waveOffset, skyHeight - 7, 50, 2);
-            ctx.globalAlpha = 1.0;
-
-            // Kumsal Kayaları
-            ctx.fillStyle = '#555555';
-            ctx.beginPath();
-            ctx.arc(ox + 550, skyHeight - 22, 12, Math.PI, 0);
-            ctx.fill();
-            ctx.beginPath();
-            ctx.arc(ox + 572, skyHeight - 20, 8, Math.PI, 0);
-            ctx.fill();
-
-        } else {
-            // --- 2. BÖLÜM: Orman, Okçuluk Eğitim Sahası ve Animasyonlu Hedefler ---
-
-            // Yoğun Orman Arka Planı
-            ctx.fillStyle = '#1e4620';
-            ctx.beginPath();
-            ctx.moveTo(ox, skyHeight - 50);
-            ctx.quadraticCurveTo(ox + 300, skyHeight - 130, ox + 600, skyHeight - 60);
-            ctx.quadraticCurveTo(ox + 900, skyHeight - 110, ox + segW, skyHeight - 50);
-            ctx.lineTo(ox + segW, skyHeight);
-            ctx.lineTo(ox, skyHeight);
-            ctx.fill();
-
-            // Orman Ağaçları
-            ctx.fillStyle = '#143216';
-            for (let tx = ox + 50; tx < ox + segW; tx += 180) {
-                ctx.beginPath();
-                ctx.moveTo(tx, skyHeight - 80);
-                ctx.lineTo(tx - 25, skyHeight - 20);
-                ctx.lineTo(tx + 25, skyHeight - 20);
-                ctx.fill();
-            }
-
-            // Okçuluk Eğitim Alanı - Hedef Tahtaları
-            let targetX = ox + 350;
-            let targetY = skyHeight - 35;
-
-            // Ahşap Ayaklar
-            ctx.strokeStyle = '#5d4037';
-            ctx.lineWidth = 3;
-            ctx.beginPath();
-            ctx.moveTo(targetX, targetY - 15);
-            ctx.lineTo(targetX - 12, skyHeight);
-            ctx.moveTo(targetX, targetY - 15);
-            ctx.lineTo(targetX + 12, skyHeight);
+            ctx.moveTo(0, 0);
+            ctx.lineTo(Math.cos(wRot) * 16, Math.sin(wRot) * 16);
             ctx.stroke();
-
-            // Hedef Tahtası (Kırmızı-Beyaz Halkalar)
-            let tCols = ['#fff', '#e74c3c', '#fff', '#e74c3c'];
-            let tRadii = [18, 12, 6, 2];
-            for (let r = 0; r < 4; r++) {
-                ctx.fillStyle = tCols[r];
-                ctx.beginPath();
-                ctx.arc(targetX, targetY - 15, tRadii[r], 0, Math.PI * 2);
-                ctx.fill();
-            }
-
-            // Animasyonlu Ok Atma Eğitimi (Okçu Stickman ve Uçan Ok)
-            let archerX = targetX - 80;
-            let archerY = skyHeight - 15;
-            
-            ctx.strokeStyle = '#34495e';
-            ctx.lineWidth = 2.5;
-            ctx.beginPath();
-            ctx.moveTo(archerX, archerY - 15);
-            ctx.lineTo(archerX, archerY - 30);
-            ctx.moveTo(archerX, archerY - 30);
-            ctx.lineTo(archerX + 12, archerY - 25);
-            ctx.stroke();
-            
-            ctx.beginPath();
-            ctx.arc(archerX, archerY - 36, 5, 0, Math.PI * 2);
-            ctx.fillStyle = '#34495e';
-            ctx.fill();
-
-            // Havada süzülen ok animasyonu
-            let arrowProgress = (t * 2) % 80;
-            ctx.strokeStyle = '#2c3e50';
-            ctx.lineWidth = 1.5;
-            ctx.beginPath();
-            ctx.moveTo(archerX + 20 + arrowProgress, archerY - 27);
-            ctx.lineTo(archerX + 32 + arrowProgress, archerY - 27);
-            ctx.stroke();
-
-            // Zemin Şeridi
-            ctx.fillStyle = '#8d6e63';
-            ctx.fillRect(ox, skyHeight - 20, segW, 20);
         }
+        ctx.restore();
+
+        // 5. Toprak Yollar (Kasaba içi bağlantılar)
+        ctx.fillStyle = '#b09062';
+        ctx.beginPath();
+        ctx.moveTo(ox + 350, skyHeight - 30);
+        ctx.quadraticCurveTo(ox + 600, skyHeight - 15, ox + 950, skyHeight - 30);
+        ctx.lineTo(ox + 900, skyHeight);
+        ctx.lineTo(ox + 400, skyHeight);
+        ctx.closePath();
+        ctx.fill();
+
+        // 6. Düzenli Kasaba Evleri (Orta Alanda Sıralı)
+        let housePositions = [ox + 480, ox + 620, ox + 760];
+        housePositions.forEach((hx, index) => {
+            let hy = skyHeight - 35;
+            // Ev Gövdesi
+            ctx.fillStyle = index === 1 ? '#d35400' : '#d5d8dc';
+            ctx.fillRect(hx, hy - 35, 45, 35);
+            // Ev Çatısı
+            ctx.fillStyle = '#78281f';
+            ctx.beginPath();
+            ctx.moveTo(hx - 5, hy - 35);
+            ctx.lineTo(hx + 22, hy - 55);
+            ctx.lineTo(hx + 50, hy - 35);
+            ctx.closePath();
+            ctx.fill();
+            // Kapı ve Pencereler
+            ctx.fillStyle = '#5d4037';
+            ctx.fillRect(hx + 17, hy - 20, 12, 20);
+            ctx.fillStyle = '#f9e79f';
+            ctx.fillRect(hx + 5, hy - 28, 9, 9);
+            ctx.fillRect(hx + 31, hy - 28, 9, 9);
+        });
+
+        // 7. Ağaçlar ve Bitkiler (Doğal Çeşitlilik)
+        ctx.fillStyle = '#1e8449';
+        let treePositions = [
+            ox + 80, ox + 140, 
+            ox + 420, ox + 570, ox + 850, ox + 920, 
+            ox + 1150, ox + 1280
+        ];
+        
+        treePositions.forEach((tx, idx) => {
+            // Ağaç Gövdesi
+            ctx.fillStyle = '#784212';
+            ctx.fillRect(tx - 3, skyHeight - 45, 6, 20);
+            // Ağaç Yaprakları (Çam veya Yuvarlak)
+            ctx.fillStyle = idx % 2 === 0 ? '#196f3d' : '#27ae60';
+            ctx.beginPath();
+            ctx.arc(tx, skyHeight - 50, 16, 0, Math.PI * 2);
+            ctx.fill();
+        });
     }
 
-    // 3. Ön Plan (Savaş Alanı Çimi)
-    ctx.fillStyle = '#27ae60';
+    // 8. Ön Plan (Savaş Alanı Zemin Katmanı)
+    ctx.fillStyle = '#548235'; 
     ctx.fillRect(0, skyHeight, w, typeof GROUND_HEIGHT !== 'undefined' ? GROUND_HEIGHT : 100);
-    ctx.fillStyle = '#1e8449';
+    
+    // Çim Desenleri
+    ctx.fillStyle = '#385723'; 
     let patternWidth = 40;
     for (let i = 0; i < w / patternWidth + 5; i++) {
         ctx.fillRect(i * patternWidth, skyHeight + 25, 4, 30);
         ctx.fillRect(i * patternWidth + 12, skyHeight + 65, 4, 20);
     }
 }
-
 
 function drawBase(ctx, isPlayer) {
     let b = isPlayer ? player.base : enemy.base;
