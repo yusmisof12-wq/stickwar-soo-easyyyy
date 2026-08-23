@@ -1,4 +1,4 @@
-  // ==================== HESAP + MENÜ + SEFER ====================
+// ==================== HESAP + MENÜ + SEFER ====================
         const TOKEN_KEY = 'copAdamToken_v1';
         const LOCAL_USERS_KEY = 'copAdamUsersHashed_v1';
         const LOCAL_SESSION_KEY = 'copAdamLocalSession_v1';
@@ -1101,194 +1101,7 @@
             openCampaignMap(true);
         };
 
-        (async function bootMenu() {
-            // Sunucu var mı diye hafif kontrol (token yoksa /api/me çağırma → 401 spam olmasın)
-            const token = localStorage.getItem(TOKEN_KEY);
-            useServer = true;
-            try {
-                if (token) {
-                    const data = await api('/api/me');
-                    currentUser = {
-                        username: data.username,
-                        maxUnlocked: data.maxUnlocked || 1,
-                        cleared: data.cleared || [],
-                    };
-                    enterMainMenu();
-                    return;
-                }
-            } catch (e) {
-                if (e && e.status === 401) {
-                    localStorage.removeItem(TOKEN_KEY);
-                } else {
-                    useServer = false;
-                }
-            }
-
-            if (false && token && useServer) {
-                try {
-                    const data = await api('/api/me');
-                    currentUser = {
-                        username: data.username,
-                        maxUnlocked: data.maxUnlocked || 1,
-                        cleared: data.cleared || [],
-                    };
-                    enterMainMenu();
-                    return;
-                } catch (_) {
-                    localStorage.removeItem(TOKEN_KEY);
-                }
-            }
-
-            const localName = localStorage.getItem(LOCAL_SESSION_KEY);
-            if (localName) {
-                const db = loadLocalUsers();
-                if (db[localName]) {
-                    currentUser = {
-                        username: localName,
-                        maxUnlocked: db[localName].maxUnlocked || 1,
-                        cleared: db[localName].cleared || [],
-                    };
-                    enterMainMenu();
-                    return;
-                }
-                localStorage.removeItem(LOCAL_SESSION_KEY);
-            }
-            showScreen('auth');
-        })();
-
-
-
-
-
         
-        // ==================== "P" TUŞU: TÜM SEFERLERİ AÇ ====================
-        document.addEventListener('keydown', (e) => {
-            if (e.key !== 'p' && e.key !== 'P') return;
-            const tag = (document.activeElement && document.activeElement.tagName || '').toLowerCase();
-            if (tag === 'input' || tag === 'textarea') return;
-            if (!currentUser) return;
-            currentUser.maxUnlocked = 3;
-            saveCurrentUser();
-            if (campaignScreen && !campaignScreen.classList.contains('hidden')) {
-                refreshCampaignNodes();
-            }
-            showToast('🔓 Tüm bölümler açıldı');
-        });
-
-        // ==================== VERI YEDEKLEME / KURTARMA (kilitli) ====================
-        // Herkese gorunmez. Kod paylassan bile Render ADMIN_KEY olmadan API calismaz.
-        // Acmak: Shift+B
-        const ADMIN_BACKUP_KEY_STORAGE = 'copAdamAdminKey_v1';
-        let adminBackupUnlocked = false;
-
-        function getAdminKey(forcePrompt) {
-            let key = localStorage.getItem(ADMIN_BACKUP_KEY_STORAGE) || '';
-            if (!key || forcePrompt) {
-                key = prompt('Admin anahtari (Render ADMIN_KEY ile ayni):', key || '') || '';
-                if (key) localStorage.setItem(ADMIN_BACKUP_KEY_STORAGE, key);
-            }
-            return key;
-        }
-
-        async function adminExportData() {
-            const key = getAdminKey(false);
-            if (!key) return;
-            try {
-                const res = await fetch(API_BASE + '/api/admin/export', {
-                    headers: { 'x-admin-key': key }
-                });
-                const data = await res.json();
-                if (!res.ok) {
-                    if (res.status === 403) {
-                        showToast('Anahtar hatali veya admin kapali');
-                        localStorage.removeItem(ADMIN_BACKUP_KEY_STORAGE);
-                        adminBackupUnlocked = false;
-                        const panel = document.getElementById('adminBackupPanel');
-                        if (panel) panel.style.display = 'none';
-                    } else showToast('Yedekleme basarisiz');
-                    return;
-                }
-                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'cop-adam-yedek-' + new Date().toISOString().slice(0, 10) + '.json';
-                document.body.appendChild(a);
-                a.click();
-                a.remove();
-                URL.revokeObjectURL(url);
-                showToast('Yedek indirildi');
-            } catch (e) {
-                showToast('Yedekleme hatasi: ' + e.message);
-            }
-        }
-
-        function adminImportData() {
-            const key = getAdminKey(false);
-            if (!key) return;
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.accept = 'application/json';
-            input.onchange = async () => {
-                const file = input.files[0];
-                if (!file) return;
-                if (!confirm('Sunucudaki TUM kullanici verisi degisecek. Sadece kendi yedegin icin kullan.')) return;
-                try {
-                    const text = await file.text();
-                    const parsed = JSON.parse(text);
-                    const res = await fetch(API_BASE + '/api/admin/import', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'x-admin-key': key },
-                        body: JSON.stringify(parsed),
-                    });
-                    const result = await res.json();
-                    if (!res.ok) {
-                        showToast('Kurtarma basarisiz');
-                        return;
-                    }
-                    showToast('Kurtarildi: ' + result.count + ' kullanici');
-                } catch (e) {
-                    showToast('Kurtarma hatasi: ' + e.message);
-                }
-            };
-            input.click();
-        }
-
-        function ensureAdminBackupUI() {
-            let panel = document.getElementById('adminBackupPanel');
-            if (!panel) {
-                panel = document.createElement('div');
-                panel.id = 'adminBackupPanel';
-                panel.style.cssText = 'position:fixed;left:10px;bottom:10px;z-index:9999;display:none;gap:6px;opacity:0.9;';
-                panel.innerHTML =
-                    '<button type="button" id="btnAdminExport" style="padding:6px 10px;font-size:12px;border-radius:6px;border:1px solid #444;background:#1a1a1a;color:#fff;cursor:pointer;">Yedekle</button>' +
-                    '<button type="button" id="btnAdminImport" style="padding:6px 10px;font-size:12px;border-radius:6px;border:1px solid #444;background:#1a1a1a;color:#fff;cursor:pointer;">Kurtar</button>';
-                document.body.appendChild(panel);
-                document.getElementById('btnAdminExport').onclick = adminExportData;
-                document.getElementById('btnAdminImport').onclick = adminImportData;
-            }
-            panel.style.display = adminBackupUnlocked ? 'flex' : 'none';
-        }
-
-        function unlockAdminBackup() {
-            const key = getAdminKey(true);
-            if (!key) return;
-            adminBackupUnlocked = true;
-            ensureAdminBackupUI();
-            showToast('Admin yedek paneli acildi');
-        }
-        window.unlockAdminBackup = unlockAdminBackup;
-
-        document.addEventListener('keydown', (e) => {
-            if (!(e.shiftKey && (e.key === 'b' || e.key === 'B'))) return;
-            const tag = (document.activeElement && document.activeElement.tagName || '').toLowerCase();
-            if (tag === 'input' || tag === 'textarea') return;
-            unlockAdminBackup();
-        });
-
-        ensureAdminBackupUI();
-
-
 // ==================== MÜZİK ====================
         const MUSIC_KEY = 'copAdamMusicMuted_v1';
         const MUSIC_VOL_KEY = 'copAdamMusicVol_v1';
@@ -1425,4 +1238,192 @@
             setTimeout(kick, 300);
             setTimeout(kick, 1000);
             setTimeout(kick, 2000);
+        })()
+
+(async function bootMenu() {
+            // Sunucu var mı diye hafif kontrol (token yoksa /api/me çağırma → 401 spam olmasın)
+            const token = localStorage.getItem(TOKEN_KEY);
+            useServer = true;
+            try {
+                if (token) {
+                    const data = await api('/api/me');
+                    currentUser = {
+                        username: data.username,
+                        maxUnlocked: data.maxUnlocked || 1,
+                        cleared: data.cleared || [],
+                    };
+                    enterMainMenu();
+                    return;
+                }
+            } catch (e) {
+                if (e && e.status === 401) {
+                    localStorage.removeItem(TOKEN_KEY);
+                } else {
+                    useServer = false;
+                }
+            }
+
+            if (false && token && useServer) {
+                try {
+                    const data = await api('/api/me');
+                    currentUser = {
+                        username: data.username,
+                        maxUnlocked: data.maxUnlocked || 1,
+                        cleared: data.cleared || [],
+                    };
+                    enterMainMenu();
+                    return;
+                } catch (_) {
+                    localStorage.removeItem(TOKEN_KEY);
+                }
+            }
+
+            const localName = localStorage.getItem(LOCAL_SESSION_KEY);
+            if (localName) {
+                const db = loadLocalUsers();
+                if (db[localName]) {
+                    currentUser = {
+                        username: localName,
+                        maxUnlocked: db[localName].maxUnlocked || 1,
+                        cleared: db[localName].cleared || [],
+                    };
+                    enterMainMenu();
+                    return;
+                }
+                localStorage.removeItem(LOCAL_SESSION_KEY);
+            }
+            showScreen('auth');
         })();
+
+
+
+
+
+
+        
+        // ==================== "P" TUŞU: TÜM SEFERLERİ AÇ ====================
+        document.addEventListener('keydown', (e) => {
+            if (e.key !== 'p' && e.key !== 'P') return;
+            const tag = (document.activeElement && document.activeElement.tagName || '').toLowerCase();
+            if (tag === 'input' || tag === 'textarea') return;
+            if (!currentUser) return;
+            currentUser.maxUnlocked = 3;
+            saveCurrentUser();
+            if (campaignScreen && !campaignScreen.classList.contains('hidden')) {
+                refreshCampaignNodes();
+            }
+            showToast('🔓 Tüm bölümler açıldı');
+        });
+
+        // ==================== VERI YEDEKLEME / KURTARMA (kilitli) ====================
+        // Herkese gorunmez. Kod paylassan bile Render ADMIN_KEY olmadan API calismaz.
+        // Acmak: Shift+B
+        const ADMIN_BACKUP_KEY_STORAGE = 'copAdamAdminKey_v1';
+        let adminBackupUnlocked = false;
+
+        function getAdminKey(forcePrompt) {
+            let key = localStorage.getItem(ADMIN_BACKUP_KEY_STORAGE) || '';
+            if (!key || forcePrompt) {
+                key = prompt('Admin anahtari (Render ADMIN_KEY ile ayni):', key || '') || '';
+                if (key) localStorage.setItem(ADMIN_BACKUP_KEY_STORAGE, key);
+            }
+            return key;
+        }
+
+        async function adminExportData() {
+            const key = getAdminKey(false);
+            if (!key) return;
+            try {
+                const res = await fetch(API_BASE + '/api/admin/export', {
+                    headers: { 'x-admin-key': key }
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    if (res.status === 403) {
+                        showToast('Anahtar hatali veya admin kapali');
+                        localStorage.removeItem(ADMIN_BACKUP_KEY_STORAGE);
+                        adminBackupUnlocked = false;
+                        const panel = document.getElementById('adminBackupPanel');
+                        if (panel) panel.style.display = 'none';
+                    } else showToast('Yedekleme basarisiz');
+                    return;
+                }
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'cop-adam-yedek-' + new Date().toISOString().slice(0, 10) + '.json';
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+                showToast('Yedek indirildi');
+            } catch (e) {
+                showToast('Yedekleme hatasi: ' + e.message);
+            }
+        }
+
+        function adminImportData() {
+            const key = getAdminKey(false);
+            if (!key) return;
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'application/json';
+            input.onchange = async () => {
+                const file = input.files[0];
+                if (!file) return;
+                if (!confirm('Sunucudaki TUM kullanici verisi degisecek. Sadece kendi yedegin icin kullan.')) return;
+                try {
+                    const text = await file.text();
+                    const parsed = JSON.parse(text);
+                    const res = await fetch(API_BASE + '/api/admin/import', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'x-admin-key': key },
+                        body: JSON.stringify(parsed),
+                    });
+                    const result = await res.json();
+                    if (!res.ok) {
+                        showToast('Kurtarma basarisiz');
+                        return;
+                    }
+                    showToast('Kurtarildi: ' + result.count + ' kullanici');
+                } catch (e) {
+                    showToast('Kurtarma hatasi: ' + e.message);
+                }
+            };
+            input.click();
+        }
+
+        function ensureAdminBackupUI() {
+            let panel = document.getElementById('adminBackupPanel');
+            if (!panel) {
+                panel = document.createElement('div');
+                panel.id = 'adminBackupPanel';
+                panel.style.cssText = 'position:fixed;left:10px;bottom:10px;z-index:9999;display:none;gap:6px;opacity:0.9;';
+                panel.innerHTML =
+                    '<button type="button" id="btnAdminExport" style="padding:6px 10px;font-size:12px;border-radius:6px;border:1px solid #444;background:#1a1a1a;color:#fff;cursor:pointer;">Yedekle</button>' +
+                    '<button type="button" id="btnAdminImport" style="padding:6px 10px;font-size:12px;border-radius:6px;border:1px solid #444;background:#1a1a1a;color:#fff;cursor:pointer;">Kurtar</button>';
+                document.body.appendChild(panel);
+                document.getElementById('btnAdminExport').onclick = adminExportData;
+                document.getElementById('btnAdminImport').onclick = adminImportData;
+            }
+            panel.style.display = adminBackupUnlocked ? 'flex' : 'none';
+        }
+
+        function unlockAdminBackup() {
+            const key = getAdminKey(true);
+            if (!key) return;
+            adminBackupUnlocked = true;
+            ensureAdminBackupUI();
+            showToast('Admin yedek paneli acildi');
+        }
+        window.unlockAdminBackup = unlockAdminBackup;
+
+        document.addEventListener('keydown', (e) => {
+            if (!(e.shiftKey && (e.key === 'b' || e.key === 'B'))) return;
+            const tag = (document.activeElement && document.activeElement.tagName || '').toLowerCase();
+            if (tag === 'input' || tag === 'textarea') return;
+            unlockAdminBackup();
+        });
+
+        ensureAdminBackupUI();
