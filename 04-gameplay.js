@@ -56,11 +56,47 @@ function setPlayerCommand(cmd) {
             return st.combatQueue.filter(t => t === type).length;
         }
 
+        // ===== TEST CHEAT =====
+        // Konsol:  unlockAll()  |  godMode()  |  godMode(false)
+        window.CHEAT_INF = false;
+        window.unlockAll = function unlockAll() {
+            if (typeof currentUser !== 'undefined' && currentUser) {
+                currentUser.maxUnlocked = 3;
+                if (!currentUser.cleared) currentUser.cleared = [];
+                [1, 2, 3].forEach(lv => {
+                    if (!currentUser.cleared.includes(lv)) currentUser.cleared.push(lv);
+                });
+                if (typeof saveCurrentUser === 'function') saveCurrentUser();
+                if (typeof refreshCampaignNodes === 'function') refreshCampaignNodes();
+                if (typeof showToast === 'function') showToast('Tüm seferler açık');
+                else alert('Tüm seferler açık');
+            } else {
+                alert('Önce giriş yap');
+            }
+        };
+        window.godMode = function godMode(on) {
+            window.CHEAT_INF = (on !== false);
+            if (window.CHEAT_INF) {
+                try {
+                    const st = typeof getOwnerState === 'function' ? getOwnerState(typeof localOwnerIndex === 'function' ? localOwnerIndex() : 0) : player;
+                    if (st) st.gold = 999999;
+                    if (typeof player !== 'undefined') player.gold = 999999;
+                    if (typeof player2 !== 'undefined') player2.gold = 999999;
+                } catch (_) {}
+                if (typeof showToast === 'function') showToast('God mode: sonsuz altın + anında spawn');
+                else console.log('[cheat] god mode ON');
+            } else {
+                if (typeof showToast === 'function') showToast('God mode kapalı');
+                else console.log('[cheat] god mode OFF');
+            }
+            return window.CHEAT_INF;
+        };
+
         function queueUnit(type, ownerIndex) {
             if (ownerIndex === undefined) ownerIndex = localOwnerIndex();
             const st = getOwnerState(ownerIndex);
             ensureQueues(st);
-            if (st.gold < UNIT_COST[type]) return false;
+            if (!window.CHEAT_INF && st.gold < UNIT_COST[type]) return false;
 
             const live = countPlayerUnits(type);
             const q0 = countQueuedFor(0, type);
@@ -69,20 +105,19 @@ function setPlayerCommand(cmd) {
 
             if (type === 'miner') {
                 if (st.minerQueue.length >= MAX_QUEUE) return false;
-                st.gold -= UNIT_COST.miner;
+                if (!window.CHEAT_INF) st.gold -= UNIT_COST.miner;
                 st.minerQueue.push('miner');
                 if (st.minerQueue.length === 1 && st.minerTimer <= 0) {
-                    st.minerTimerMax = SPAWN_TIME.miner;
-                    st.minerTimer = SPAWN_TIME.miner;
+                    st.minerTimerMax = window.CHEAT_INF ? 1 : SPAWN_TIME.miner;
+                    st.minerTimer = window.CHEAT_INF ? 1 : SPAWN_TIME.miner;
                 }
             } else {
-                // club + archer aynı combat kuyruğu (sıra korunur)
                 if (st.combatQueue.length >= MAX_QUEUE) return false;
-                st.gold -= UNIT_COST[type];
+                if (!window.CHEAT_INF) st.gold -= UNIT_COST[type];
                 st.combatQueue.push(type);
                 if (st.combatQueue.length === 1 && st.combatTimer <= 0) {
-                    st.combatTimerMax = SPAWN_TIME[type];
-                    st.combatTimer = SPAWN_TIME[type];
+                    st.combatTimerMax = window.CHEAT_INF ? 1 : SPAWN_TIME[type];
+                    st.combatTimer = window.CHEAT_INF ? 1 : SPAWN_TIME[type];
                 }
             }
             return true;
@@ -110,7 +145,7 @@ function setPlayerCommand(cmd) {
             }
             if (q.length > 0) {
                 const next = q[0];
-                st[maxKey] = SPAWN_TIME[next] || 600;
+                st[maxKey] = window.CHEAT_INF ? 1 : (SPAWN_TIME[next] || 600);
                 st[timerKey] = st[maxKey];
             } else {
                 st[timerKey] = 0;
@@ -518,6 +553,7 @@ function setPlayerCommand(cmd) {
             setCircularCooldown(clubCdFill, combatHead === 'club' ? st.combatTimer : 0, combatHead === 'club' ? (st.combatTimerMax || 1) : 1);
             setCircularCooldown(archerCdFill, combatHead === 'archer' ? st.combatTimer : 0, combatHead === 'archer' ? (st.combatTimerMax || 1) : 1);
 
+            if (window.CHEAT_INF && st.gold < 999999) st.gold = 999999;
             goldEl.innerText = Math.floor(st.gold);
             if (typeof isAmbushLevel === 'function' && isAmbushLevel()) {
                 const left = Math.max(0, (AMBUSH_DURATION_FRAMES || 10800) - (ambushTimer || 0));
