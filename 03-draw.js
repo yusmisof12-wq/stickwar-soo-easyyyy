@@ -1,4 +1,7 @@
-function drawStuckArrows(ctx, unit) {
+// ==================== 03-draw.js ====================
+// Tüm çizim fonksiyonları burada toplanmıştır.
+
+        function drawStuckArrows(ctx, unit) {
             if (!unit.stuckArrows || unit.stuckArrows.length === 0) return;
             for (let i = unit.stuckArrows.length - 1; i >= 0; i--) {
                 const a = unit.stuckArrows[i];
@@ -27,33 +30,6 @@ function drawStuckArrows(ctx, unit) {
             }
         }
 
-        function spawnMiningSparks(x, y) {
-            for (let i = 0; i < 12; i++) {
-                const angle = (Math.PI * 1.2) + (Math.random() - 0.5) * 1.4;
-                const speed = 2.5 + Math.random() * 4;
-                miningSparks.push({
-                    x: x + (Math.random() - 0.5) * 10,
-                    y: y + (Math.random() - 0.5) * 6,
-                    vx: Math.cos(angle) * speed,
-                    vy: Math.sin(angle) * speed - 1.5,
-                    life: 18 + Math.random() * 12,
-                    maxLife: 30,
-                    size: 2 + Math.random() * 3
-                });
-            }
-        }
-
-        function updateMiningSparks() {
-            for (let i = miningSparks.length - 1; i >= 0; i--) {
-                const s = miningSparks[i];
-                s.x += s.vx;
-                s.y += s.vy;
-                s.vy += 0.18;
-                s.life--;
-                if (s.life <= 0) miningSparks.splice(i, 1);
-            }
-        }
-
         function drawMiningSparks(ctx) {
             miningSparks.forEach(s => {
                 const alpha = Math.max(0, s.life / s.maxLife);
@@ -78,10 +54,8 @@ function drawStuckArrows(ctx, unit) {
             ctx.save();
             ctx.translate(x, y);
             if (isFlipped) ctx.scale(-1, 1);
-
             const cx = inHand ? 0 : -18;
             const cy = inHand ? 0 : -18;
-
             ctx.fillStyle = '#2c2c2c';
             ctx.beginPath();
             ctx.moveTo(cx - 10, cy + 8);
@@ -91,16 +65,13 @@ function drawStuckArrows(ctx, unit) {
             ctx.quadraticCurveTo(cx, cy + 14, cx - 10, cy + 8);
             ctx.closePath();
             ctx.fill();
-
             ctx.strokeStyle = '#1a1a1a';
             ctx.lineWidth = 1.5;
             ctx.stroke();
-
             ctx.fillStyle = '#1f1f1f';
             ctx.beginPath();
             ctx.ellipse(cx + 1, cy - 12, 9, 4, -0.15, 0, Math.PI * 2);
             ctx.fill();
-
             ctx.strokeStyle = '#6d4c2b';
             ctx.lineWidth = 3;
             ctx.lineCap = 'round';
@@ -108,7 +79,6 @@ function drawStuckArrows(ctx, unit) {
             ctx.moveTo(cx - 6, cy - 10);
             ctx.quadraticCurveTo(cx - 2, cy - 22, cx + 8, cy - 12);
             ctx.stroke();
-
             const crystalCount = Math.min(6, Math.max(0, bagGold | 0));
             const crystalColors = ['#5dade2', '#f1c40f', '#85c1e9', '#f39c12', '#3498db', '#e67e22'];
             for (let i = 0; i < crystalCount; i++) {
@@ -123,7 +93,6 @@ function drawStuckArrows(ctx, unit) {
                 ctx.closePath();
                 ctx.fill();
             }
-
             ctx.restore();
         }
 
@@ -135,19 +104,16 @@ function drawStuckArrows(ctx, unit) {
             ctx.lineWidth = isMinerStyle ? 4 : 3.2;
             ctx.lineCap = 'round';
             ctx.lineJoin = 'round';
-
             const isMining = (weapon === 'pickaxe' && animFrame > 0);
             const isClimbing = (weapon === 'climb');
-
             const leanX = isMining ? bodyLean * 10 : 0;
             const leanY = isMining ? bodyLean * 4 : 0;
             const isClub = (weapon === 'club' || weapon === 'sickle');
-
+            const isSickle = (weapon === 'sickle');
             const hipX = 0;
             const hipY = -12;
             const shoulderX = leanX * 0.85;
             const shoulderY = isClub ? (-36 + leanY * 0.4) : (-32 + leanY * 0.55);
-
             let headR = isMinerStyle ? 11 : (isClub ? 9 : 7.5);
             let hx = isMining ? leanX + bodyLean * 2 : shoulderX;
             let hy = shoulderY - headR + 1;
@@ -155,7 +121,6 @@ function drawStuckArrows(ctx, unit) {
                 hx = leanX + 6;
                 hy = shoulderY - headR + 4;
             }
-
             const faceImg = isPlayerFace ? minerFaceImg : minerFaceEnemyImg;
             if (isMinerStyle && faceImg && faceImg.complete && faceImg.naturalWidth > 0) {
                 const faceSize = 24;
@@ -168,8 +133,35 @@ function drawStuckArrows(ctx, unit) {
                 ctx.strokeStyle = color;
                 ctx.lineWidth = 2;
                 ctx.stroke();
+                // Orakçı: yüz çizikleri + kaş/ağız (fotoğraf)
+                if (isSickle) {
+                    ctx.strokeStyle = '#c0392b';
+                    ctx.lineWidth = 1.6;
+                    ctx.lineCap = 'round';
+                    // 3 kırmızı yara izi
+                    for (let i = 0; i < 3; i++) {
+                        const oy = hy - 2 + i * 3.2;
+                        ctx.beginPath();
+                        ctx.moveTo(hx + 1, oy);
+                        ctx.lineTo(hx + 7, oy - 1);
+                        ctx.stroke();
+                    }
+                    // kaş
+                    ctx.strokeStyle = '#1a1a1a';
+                    ctx.lineWidth = 1.4;
+                    ctx.beginPath();
+                    ctx.moveTo(hx - 4, hy - 3);
+                    ctx.lineTo(hx - 1, hy - 4);
+                    ctx.moveTo(hx + 1, hy - 4);
+                    ctx.lineTo(hx + 4, hy - 3);
+                    ctx.stroke();
+                    // kızgın ağız
+                    ctx.beginPath();
+                    ctx.moveTo(hx - 2, hy + 3);
+                    ctx.lineTo(hx + 2, hy + 3);
+                    ctx.stroke();
+                }
             }
-
             ctx.strokeStyle = color;
             ctx.lineWidth = isClub ? 6.5 : (isMinerStyle ? 5 : 3.2);
             ctx.beginPath();
@@ -177,12 +169,23 @@ function drawStuckArrows(ctx, unit) {
             ctx.lineTo(shoulderX, shoulderY);
             ctx.lineTo(hx, hy + headR - 1);
             ctx.stroke();
-
+            // Orakçı omuz çizikleri
+            if (isSickle) {
+                ctx.strokeStyle = '#922b21';
+                ctx.lineWidth = 1.5;
+                for (let i = 0; i < 3; i++) {
+                    ctx.beginPath();
+                    ctx.moveTo(shoulderX - 6, shoulderY + 4 + i * 4);
+                    ctx.lineTo(shoulderX - 1, shoulderY + 5 + i * 4);
+                    ctx.stroke();
+                }
+            }
             const walkPhase = frames * (isClub ? 0.32 : 0.20);
             const stride = isClub ? 14 : 10;
             const legSwing = isWalking ? Math.sin(walkPhase) * stride : 0;
             const legSwing2 = isWalking ? Math.sin(walkPhase + Math.PI) * stride : 0;
             const legSpread = isMining ? 3 + bodyLean * 5 : 0;
+            ctx.strokeStyle = color;
             ctx.lineWidth = isClub ? 5.5 : (isMinerStyle ? 4.5 : 3.2);
             ctx.lineCap = 'round';
             ctx.beginPath();
@@ -208,7 +211,6 @@ function drawStuckArrows(ctx, unit) {
                 ctx.lineTo(7 + legSpread * 0.5, 2);
             }
             ctx.stroke();
-
             if (isClimbing) {
                 let climbArm = Math.sin(animFrame * 0.2) * 12;
                 ctx.beginPath();
@@ -220,7 +222,6 @@ function drawStuckArrows(ctx, unit) {
             } else {
                 let armRot = 0;
                 let backArmRot = 0;
-
                 if (isMining) {
                     armRot = -50 + (1 - armRaise) * 100 + swingAngle * 25;
                     backArmRot = 5;
@@ -248,7 +249,6 @@ function drawStuckArrows(ctx, unit) {
                     armRot = Math.sin(frames * 0.22) * 25;
                     backArmRot = Math.sin(frames * 0.22 + Math.PI) * 25;
                 }
-
                 let backHandX, backHandY, handX, handY;
                 if (weapon === 'club' || weapon === 'sickle') {
                     backHandX = shoulderX - 8;
@@ -280,41 +280,74 @@ function drawStuckArrows(ctx, unit) {
                 ctx.moveTo(shoulderX, shoulderY);
                 ctx.lineTo(backHandX, backHandY);
                 ctx.stroke();
-
                 ctx.beginPath();
                 ctx.moveTo(shoulderX, shoulderY);
                 ctx.lineTo(handX, handY);
                 ctx.stroke();
-
                 if (weapon === 'pickaxe') {
-                    {
-                        ctx.save();
-                        ctx.translate(handX, handY);
-                        const pickAngle = (-1.0 + (1 - armRaise) * 1.4) + swingAngle * 0.25;
-                        ctx.rotate(pickAngle);
-
-                        ctx.strokeStyle = '#a0522d';
-                        ctx.lineWidth = 3.2;
-                        ctx.beginPath();
-                        ctx.moveTo(0, 0);
-                        ctx.lineTo(0, -28);
-                        ctx.stroke();
-
-                        ctx.strokeStyle = '#4a4a4a';
-                        ctx.lineWidth = 4;
-                        ctx.beginPath();
-                        ctx.moveTo(-13, -26);
-                        ctx.lineTo(13, -26);
-                        ctx.stroke();
-                        ctx.lineWidth = 3;
-                        ctx.beginPath();
-                        ctx.moveTo(-13, -26);
-                        ctx.lineTo(-16, -18);
-                        ctx.moveTo(13, -26);
-                        ctx.lineTo(16, -18);
-                        ctx.stroke();
-                        ctx.restore();
-                    }
+                    ctx.save();
+                    ctx.translate(handX, handY);
+                    const pickAngle = (-1.0 + (1 - armRaise) * 1.4) + swingAngle * 0.25;
+                    ctx.rotate(pickAngle);
+                    ctx.strokeStyle = '#a0522d';
+                    ctx.lineWidth = 3.2;
+                    ctx.beginPath();
+                    ctx.moveTo(0, 0);
+                    ctx.lineTo(0, -28);
+                    ctx.stroke();
+                    ctx.strokeStyle = '#4a4a4a';
+                    ctx.lineWidth = 4;
+                    ctx.beginPath();
+                    ctx.moveTo(-13, -26);
+                    ctx.lineTo(13, -26);
+                    ctx.stroke();
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.moveTo(-13, -26);
+                    ctx.lineTo(-16, -18);
+                    ctx.moveTo(13, -26);
+                    ctx.lineTo(16, -18);
+                    ctx.stroke();
+                    ctx.restore();
+                } else if (weapon === 'sickle') {
+                    const swingT = animFrame > 30 && animFrame < 55 ? (animFrame - 30) / 25 : 0;
+                    ctx.save();
+                    ctx.translate(handX, handY);
+                    ctx.rotate((-0.55 + armRot * 0.012) + swingT * 0.4);
+                    // sap
+                    ctx.strokeStyle = '#4a3728';
+                    ctx.lineWidth = 3.5;
+                    ctx.lineCap = 'round';
+                    ctx.beginPath();
+                    ctx.moveTo(0, 4);
+                    ctx.lineTo(0, -16);
+                    ctx.stroke();
+                    // kırmızı sargı
+                    ctx.strokeStyle = '#c0392b';
+                    ctx.lineWidth = 5.5;
+                    ctx.beginPath();
+                    ctx.moveTo(0, -2);
+                    ctx.lineTo(0, -14);
+                    ctx.stroke();
+                    // orak bıçağı (büyük kavis)
+                    ctx.strokeStyle = '#b0b7bf';
+                    ctx.lineWidth = 4.5;
+                    ctx.beginPath();
+                    ctx.arc(4, -26, 16, -0.2 * Math.PI, 1.05 * Math.PI, false);
+                    ctx.stroke();
+                    ctx.strokeStyle = '#ecf0f1';
+                    ctx.lineWidth = 2.2;
+                    ctx.beginPath();
+                    ctx.arc(4, -26, 16, -0.15 * Math.PI, 1.0 * Math.PI, false);
+                    ctx.stroke();
+                    // sivri uç
+                    ctx.fillStyle = '#95a5a6';
+                    ctx.beginPath();
+                    ctx.moveTo(4 - 16, -26);
+                    ctx.lineTo(4 - 20, -30);
+                    ctx.lineTo(4 - 12, -28);
+                    ctx.fill();
+                    ctx.restore();
                 } else if (weapon === 'club') {
                     const swingT = animFrame > 30 && animFrame < 55 ? (animFrame - 30) / 25 : 0;
                     const clubLen = 30 + swingT * 12;
@@ -322,7 +355,6 @@ function drawStuckArrows(ctx, unit) {
                     ctx.translate(handX, handY);
                     const clubAngle = (-0.5 + armRot * 0.014) + swingT * 0.3;
                     ctx.rotate(clubAngle);
-
                     ctx.strokeStyle = color;
                     ctx.lineWidth = 6;
                     ctx.lineCap = 'round';
@@ -330,12 +362,10 @@ function drawStuckArrows(ctx, unit) {
                     ctx.moveTo(0, 0);
                     ctx.lineTo(0, -clubLen);
                     ctx.stroke();
-
                     ctx.fillStyle = color;
                     ctx.beginPath();
                     ctx.ellipse(0, -clubLen - 2, 5, 7, 0, 0, Math.PI * 2);
                     ctx.fill();
-
                     ctx.fillStyle = '#ecf0f1';
                     const tip = -clubLen;
                     const spikes = [
@@ -351,53 +381,17 @@ function drawStuckArrows(ctx, unit) {
                         ctx.fill();
                     });
                     ctx.restore();
-                } else if (weapon === 'sickle') {
-                    // Orak: kavisli bıçak + kırmızı sargı sap
-                    const swingT = animFrame > 30 && animFrame < 55 ? (animFrame - 30) / 25 : 0;
-                    ctx.save();
-                    ctx.translate(handX, handY);
-                    const ang = (-0.6 + (typeof armRot !== 'undefined' ? armRot * 0.012 : 0)) + swingT * 0.35;
-                    ctx.rotate(ang);
-                    // sap
-                    ctx.strokeStyle = '#5d4037';
-                    ctx.lineWidth = 4;
-                    ctx.lineCap = 'round';
-                    ctx.beginPath();
-                    ctx.moveTo(0, 0);
-                    ctx.lineTo(0, -14);
-                    ctx.stroke();
-                    // kırmızı sargı
-                    ctx.strokeStyle = '#c0392b';
-                    ctx.lineWidth = 5;
-                    ctx.beginPath();
-                    ctx.moveTo(0, -2);
-                    ctx.lineTo(0, -12);
-                    ctx.stroke();
-                    // orak bıçağı
-                    ctx.strokeStyle = '#bdc3c7';
-                    ctx.lineWidth = 4;
-                    ctx.beginPath();
-                    ctx.arc(2, -22, 14, -Math.PI * 0.15, Math.PI * 0.95, false);
-                    ctx.stroke();
-                    ctx.strokeStyle = '#ecf0f1';
-                    ctx.lineWidth = 2;
-                    ctx.beginPath();
-                    ctx.arc(2, -22, 14, -Math.PI * 0.1, Math.PI * 0.9, false);
-                    ctx.stroke();
-                    ctx.restore();
                 } else if (weapon === 'bow') {
                     ctx.save();
                     ctx.translate(handX, handY);
                     const bowHalf = 15;
                     const drawT = Math.max(0, Math.min(1, swingAngle));
                     const pullX = -5 - drawT * 11;
-
                     ctx.strokeStyle = '#8b5a2b';
                     ctx.lineWidth = 2.6;
                     ctx.beginPath();
                     ctx.arc(0, 0, bowHalf, -Math.PI / 2, Math.PI / 2);
                     ctx.stroke();
-
                     ctx.strokeStyle = '#ecf0f1';
                     ctx.lineWidth = 1.3;
                     ctx.beginPath();
@@ -405,7 +399,6 @@ function drawStuckArrows(ctx, unit) {
                     ctx.lineTo(pullX, 0);
                     ctx.lineTo(0, bowHalf);
                     ctx.stroke();
-
                     ctx.strokeStyle = '#6d4c2f';
                     ctx.lineWidth = 1.8;
                     ctx.beginPath();
@@ -432,124 +425,362 @@ function drawStuckArrows(ctx, unit) {
             ctx.restore();
         }
 
+        // ============================================================
+        // 1. BÖLÜM: açık tema  |  2. BÖLÜM: orman kampı  |  3. BÖLÜM: çöl pusu
+        // ============================================================
         function drawEnvironment(ctx) {
-            const w = worldWidth;
-            const skyHeight = canvas.height - GROUND_HEIGHT;
-            const era = (typeof level !== 'undefined' && level >= 3) ? 3 : ((typeof level !== 'undefined' && level >= 2) ? 2 : 1);
-            const t = typeof frames !== 'undefined' ? frames : 0;
+            let w = typeof worldWidth !== 'undefined' ? worldWidth : canvas.width * 2;
+            let skyHeight = canvas.height - (typeof GROUND_HEIGHT !== 'undefined' ? GROUND_HEIGHT : 100);
+            let era = (typeof level !== 'undefined' && level >= 3) ? 3 : ((typeof level !== 'undefined' && level >= 2) ? 2 : 1);
+            let t = typeof frames !== 'undefined' ? frames : 0;
+            let segW = 1400;
+            let count = Math.ceil(w / segW) + 1;
 
             if (era === 3) {
-                // Çöl / gün batımı pusu
+                // --- 3. BÖLÜM: ÇÖL PUSU / GÜN BATIMI ---
                 const sunP = (typeof ambushTimer === 'number' && typeof AMBUSH_DURATION_FRAMES === 'number' && AMBUSH_DURATION_FRAMES > 0)
                     ? Math.min(1, ambushTimer / AMBUSH_DURATION_FRAMES) : 0;
                 let skyGrad = ctx.createLinearGradient(0, 0, 0, skyHeight);
-                skyGrad.addColorStop(0, sunP > 0.65 ? '#1a1028' : '#4a2c6a');
-                skyGrad.addColorStop(0.4, sunP > 0.45 ? '#a04030' : '#e67e22');
-                skyGrad.addColorStop(0.75, '#f39c12');
+                skyGrad.addColorStop(0, sunP > 0.65 ? '#1a1028' : '#5c3d7a');
+                skyGrad.addColorStop(0.35, sunP > 0.45 ? '#a04030' : '#e67e22');
+                skyGrad.addColorStop(0.7, '#f39c12');
                 skyGrad.addColorStop(1, '#f5d08a');
                 ctx.fillStyle = skyGrad;
                 ctx.fillRect(0, 0, w, skyHeight);
 
-                const sunY = skyHeight * (0.22 + sunP * 0.58);
-                const sunX = w * 0.5;
+                const sunY = skyHeight * (0.2 + sunP * 0.6);
+                const sunX = w * 0.55;
                 ctx.fillStyle = 'rgba(255, 210, 100, 0.95)';
                 ctx.beginPath();
-                ctx.arc(sunX, sunY, 50 - sunP * 8, 0, Math.PI * 2);
+                ctx.arc(sunX, sunY, 55 - sunP * 10, 0, Math.PI * 2);
                 ctx.fill();
                 ctx.fillStyle = 'rgba(243, 156, 18, 0.22)';
                 ctx.beginPath();
-                ctx.arc(sunX, sunY, 100, 0, Math.PI * 2);
+                ctx.arc(sunX, sunY, 120, 0, Math.PI * 2);
                 ctx.fill();
 
-                // Kum tepeleri
-                ctx.fillStyle = '#d4a574';
+                for (let i = 0; i < count; i++) {
+                    let ox = i * segW;
+                    ctx.fillStyle = '#d4a574';
+                    ctx.beginPath();
+                    ctx.moveTo(ox, skyHeight - 20);
+                    ctx.quadraticCurveTo(ox + 300, skyHeight - 95, ox + 700, skyHeight - 30);
+                    ctx.quadraticCurveTo(ox + 1100, skyHeight - 85, ox + segW, skyHeight - 25);
+                    ctx.lineTo(ox + segW, skyHeight);
+                    ctx.lineTo(ox, skyHeight);
+                    ctx.fill();
+                    ctx.fillStyle = '#c9956c';
+                    ctx.beginPath();
+                    ctx.moveTo(ox + 80, skyHeight - 10);
+                    ctx.quadraticCurveTo(ox + 400, skyHeight - 55, ox + 900, skyHeight - 15);
+                    ctx.lineTo(ox + 900, skyHeight);
+                    ctx.lineTo(ox + 80, skyHeight);
+                    ctx.fill();
+                    [ox + 160, ox + 480, ox + 820, ox + 1150].forEach(cx => {
+                        ctx.fillStyle = '#1e8449';
+                        ctx.fillRect(cx - 6, skyHeight - 55, 12, 45);
+                        ctx.fillRect(cx - 18, skyHeight - 40, 12, 8);
+                        ctx.fillRect(cx - 18, skyHeight - 40, 6, 22);
+                        ctx.fillRect(cx + 6, skyHeight - 34, 12, 8);
+                        ctx.fillRect(cx + 12, skyHeight - 34, 6, 18);
+                    });
+                }
+            } else if (era === 1) {
+                let skyGrad = ctx.createLinearGradient(0, 0, 0, skyHeight);
+                skyGrad.addColorStop(0, '#85c1e9');
+                skyGrad.addColorStop(0.5, '#d4efdf');
+                skyGrad.addColorStop(1, '#fcf3cf');
+                ctx.fillStyle = skyGrad;
+                ctx.fillRect(0, 0, w, skyHeight);
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
                 ctx.beginPath();
-                ctx.moveTo(0, skyHeight - 15);
-                for (let x = 0; x <= w; x += 200) {
-                    ctx.quadraticCurveTo(x + 100, skyHeight - 60 - (x % 400) / 10, x + 200, skyHeight - 20);
-                }
-                ctx.lineTo(w, skyHeight);
-                ctx.lineTo(0, skyHeight);
+                ctx.arc(w * 0.25, skyHeight * 0.2, 110, 0, Math.PI * 2);
                 ctx.fill();
-
-                // Kaktüs
-                for (let cx = 150; cx < w; cx += 280) {
-                    ctx.fillStyle = '#1e8449';
-                    ctx.fillRect(cx - 5, skyHeight - 50, 10, 40);
-                    ctx.fillRect(cx - 16, skyHeight - 38, 10, 6);
-                    ctx.fillRect(cx - 16, skyHeight - 38, 5, 18);
-                    ctx.fillRect(cx + 6, skyHeight - 32, 10, 6);
-                    ctx.fillRect(cx + 11, skyHeight - 32, 5, 14);
+                for (let i = 0; i < count; i++) {
+                    let ox = i * segW;
+                    ctx.fillStyle = '#52be80';
+                    ctx.beginPath();
+                    ctx.moveTo(ox, skyHeight - 70);
+                    ctx.quadraticCurveTo(ox + 350, skyHeight - 140, ox + 700, skyHeight - 80);
+                    ctx.quadraticCurveTo(ox + 1050, skyHeight - 120, ox + segW, skyHeight - 70);
+                    ctx.lineTo(ox + segW, skyHeight);
+                    ctx.lineTo(ox, skyHeight);
+                    ctx.fill();
+                    ctx.fillStyle = '#3498db';
+                    ctx.fillRect(ox, skyHeight - 55, segW, 25);
+                    ctx.fillStyle = '#ebf5fb';
+                    ctx.globalAlpha = 0.7;
+                    let waveAnim = (t * 0.5) % 160;
+                    ctx.fillRect(ox + 150 + waveAnim, skyHeight - 45, 50, 2.5);
+                    ctx.fillRect(ox + 600 + waveAnim, skyHeight - 40, 70, 2);
+                    ctx.fillRect(ox + 1000 + waveAnim, skyHeight - 50, 60, 2.5);
+                    ctx.globalAlpha = 1.0;
+                    let millX = ox + 240;
+                    let millY = skyHeight - 30;
+                    ctx.fillStyle = '#784212';
+                    ctx.fillRect(millX - 35, millY - 25, 40, 8);
+                    ctx.fillStyle = '#909497';
+                    ctx.fillRect(millX - 15, millY - 40, 45, 40);
+                    ctx.fillStyle = '#ba4a00';
+                    ctx.fillRect(millX - 15, millY - 75, 45, 35);
+                    ctx.fillStyle = '#641e16';
+                    ctx.beginPath();
+                    ctx.moveTo(millX - 20, millY - 75);
+                    ctx.lineTo(millX + 7, millY - 98);
+                    ctx.lineTo(millX + 35, millY - 75);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.fillStyle = '#3e2723';
+                    ctx.fillRect(millX + 2, millY - 25, 12, 25);
+                    ctx.fillStyle = '#f9e79f';
+                    ctx.fillRect(millX + 5, millY - 55, 10, 10);
+                    ctx.save();
+                    ctx.translate(millX - 22, millY - 20);
+                    ctx.rotate(t * 0.035);
+                    ctx.strokeStyle = '#5d4037';
+                    ctx.lineWidth = 5;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, 18, 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.lineWidth = 3;
+                    for (let wRot = 0; wRot < Math.PI * 2; wRot += Math.PI / 3) {
+                        ctx.beginPath();
+                        ctx.moveTo(0, 0);
+                        ctx.lineTo(Math.cos(wRot) * 18, Math.sin(wRot) * 18);
+                        ctx.stroke();
+                    }
+                    ctx.restore();
+                    ctx.fillStyle = '#d4ac0d';
+                    ctx.beginPath();
+                    ctx.moveTo(ox + 400, skyHeight - 15);
+                    ctx.quadraticCurveTo(ox + 650, skyHeight - 5, ox + 950, skyHeight - 15);
+                    ctx.lineTo(ox + 900, skyHeight);
+                    ctx.lineTo(ox + 450, skyHeight);
+                    ctx.closePath();
+                    ctx.fill();
+                    let housePositions = [ox + 500, ox + 660, ox + 820];
+                    housePositions.forEach((hx, index) => {
+                        let hy = skyHeight - 10;
+                        ctx.fillStyle = index === 1 ? '#e59866' : '#f2f4f4';
+                        ctx.fillRect(hx, hy - 40, 50, 40);
+                        ctx.fillStyle = index === 0 ? '#922b21' : '#b03a2e';
+                        ctx.beginPath();
+                        ctx.moveTo(hx - 6, hy - 40);
+                        ctx.lineTo(hx + 25, hy - 62);
+                        ctx.lineTo(hx + 56, hy - 40);
+                        ctx.closePath();
+                        ctx.fill();
+                        ctx.fillStyle = '#5d4037';
+                        ctx.fillRect(hx + 19, hy - 22, 12, 22);
+                        ctx.fillStyle = '#f9e79f';
+                        ctx.fillRect(hx + 7, hy - 32, 10, 10);
+                        ctx.fillRect(hx + 33, hy - 32, 10, 10);
+                    });
+                    let treePositions = [ox + 100, ox + 170, ox + 430, ox + 590, ox + 900, ox + 980, ox + 1200, ox + 1320];
+                    treePositions.forEach((tx, idx) => {
+                        ctx.fillStyle = '#873600';
+                        ctx.fillRect(tx - 3, skyHeight - 35, 6, 20);
+                        ctx.fillStyle = idx % 2 === 0 ? '#27ae60' : '#2ecc71';
+                        ctx.beginPath();
+                        ctx.arc(tx, skyHeight - 40, 15, 0, Math.PI * 2);
+                        ctx.fill();
+                    });
                 }
-
-                ctx.fillStyle = '#c4a35a';
-                ctx.fillRect(0, skyHeight, w, GROUND_HEIGHT);
-                ctx.fillStyle = '#a88b45';
-                for (let i = 0; i < w / 40 + 5; i++) {
-                    ctx.fillRect(i * 40, skyHeight + 25, 4, 28);
-                    ctx.fillRect(i * 40 + 12, skyHeight + 60, 4, 18);
-                }
-                return;
-            }
-
-            if (era === 2) {
+            } else {
+                // 2. BÖLÜM orman kampı
                 let skyGrad = ctx.createLinearGradient(0, 0, 0, skyHeight);
                 skyGrad.addColorStop(0, '#1a1c29');
-                skyGrad.addColorStop(0.35, '#5b2c6f');
-                skyGrad.addColorStop(0.65, '#d35400');
+                skyGrad.addColorStop(0.3, '#5b2c6f');
+                skyGrad.addColorStop(0.6, '#d35400');
+                skyGrad.addColorStop(0.85, '#f39c12');
                 skyGrad.addColorStop(1, '#f1c40f');
                 ctx.fillStyle = skyGrad;
                 ctx.fillRect(0, 0, w, skyHeight);
-                ctx.fillStyle = 'rgba(255, 240, 150, 0.85)';
+                ctx.fillStyle = 'rgba(255, 240, 150, 0.9)';
                 ctx.beginPath();
-                ctx.arc(w * 0.35, skyHeight * 0.4, 60, 0, Math.PI * 2);
+                ctx.arc(w * 0.35, skyHeight * 0.4, 75, 0, Math.PI * 2);
                 ctx.fill();
-                ctx.fillStyle = '#1e3828';
+                ctx.fillStyle = 'rgba(243, 156, 18, 0.25)';
                 ctx.beginPath();
-                ctx.moveTo(0, skyHeight - 40);
-                ctx.quadraticCurveTo(w * 0.3, skyHeight - 100, w * 0.6, skyHeight - 50);
-                ctx.quadraticCurveTo(w * 0.85, skyHeight - 110, w, skyHeight - 45);
-                ctx.lineTo(w, skyHeight);
-                ctx.lineTo(0, skyHeight);
+                ctx.arc(w * 0.35, skyHeight * 0.4, 150, 0, Math.PI * 2);
                 ctx.fill();
-                ctx.fillStyle = '#3d2b1f';
-                ctx.fillRect(0, skyHeight, w, GROUND_HEIGHT);
-                ctx.fillStyle = '#2d1b0f';
-                for (let i = 0; i < w / 40 + 5; i++) {
-                    ctx.fillRect(i * 40, skyHeight + 25, 4, 28);
+                for (let i = 0; i < count; i++) {
+                    let ox = i * segW;
+                    ctx.fillStyle = '#22382b';
+                    ctx.beginPath();
+                    ctx.moveTo(ox, skyHeight - 50);
+                    ctx.quadraticCurveTo(ox + 250, skyHeight - 120, ox + 500, skyHeight - 60);
+                    ctx.quadraticCurveTo(ox + 750, skyHeight - 140, ox + segW, skyHeight - 50);
+                    ctx.lineTo(ox + segW, skyHeight);
+                    ctx.lineTo(ox, skyHeight);
+                    ctx.fill();
+                    ctx.fillStyle = '#1e3828';
+                    for (let tx = ox + 20; tx < ox + segW; tx += 90) {
+                        let treeHeight = 50 + (tx % 30);
+                        ctx.beginPath();
+                        ctx.moveTo(tx, skyHeight - 20);
+                        ctx.lineTo(tx - 20, skyHeight - treeHeight);
+                        ctx.lineTo(tx + 20, skyHeight - treeHeight);
+                        ctx.closePath();
+                        ctx.fill();
+                    }
+                    for (let tx = ox + 70; tx < ox + segW; tx += 160) {
+                        ctx.fillStyle = '#3e2723';
+                        ctx.fillRect(tx - 6, skyHeight - 35, 12, 35);
+                        ctx.fillStyle = '#194d2c';
+                        ctx.beginPath();
+                        ctx.moveTo(tx, skyHeight - 100);
+                        ctx.lineTo(tx - 35, skyHeight - 40);
+                        ctx.lineTo(tx + 35, skyHeight - 40);
+                        ctx.closePath();
+                        ctx.fill();
+                        ctx.fillStyle = '#226639';
+                        ctx.beginPath();
+                        ctx.moveTo(tx, skyHeight - 75);
+                        ctx.lineTo(tx - 25, skyHeight - 30);
+                        ctx.lineTo(tx + 25, skyHeight - 30);
+                        ctx.closePath();
+                        ctx.fill();
+                    }
+                    let totemX = ox + 150;
+                    ctx.fillStyle = '#4e342e';
+                    ctx.fillRect(totemX - 10, skyHeight - 110, 20, 105);
+                    ctx.fillStyle = '#d35400';
+                    ctx.fillRect(totemX - 14, skyHeight - 100, 28, 15);
+                    ctx.fillStyle = '#f1c40f';
+                    ctx.beginPath();
+                    ctx.arc(totemX - 5, skyHeight - 92, 3, 0, Math.PI * 2);
+                    ctx.arc(totemX + 5, skyHeight - 92, 3, 0, Math.PI * 2);
+                    ctx.fill();
+                    let tipiX = ox + 550;
+                    ctx.fillStyle = '#6c3483';
+                    ctx.beginPath();
+                    ctx.moveTo(tipiX - 30, skyHeight - 5);
+                    ctx.lineTo(tipiX, skyHeight - 80);
+                    ctx.lineTo(tipiX + 30, skyHeight - 5);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.strokeStyle = '#f1c40f';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.moveTo(tipiX, skyHeight - 80);
+                    ctx.lineTo(tipiX, skyHeight - 5);
+                    ctx.stroke();
+                    let targetX = ox + 380;
+                    let targetY = skyHeight - 25;
+                    ctx.fillStyle = '#3e2723';
+                    ctx.fillRect(targetX - 4, targetY - 15, 8, 40);
+                    let sizes = [28, 20, 12, 5];
+                    let colors = ['#ffffff', '#e74c3c', '#ffffff', '#e74c3c'];
+                    for (let r = 0; r < 4; r++) {
+                        ctx.fillStyle = colors[r];
+                        ctx.beginPath();
+                        ctx.arc(targetX, targetY, sizes[r], 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                    for (let aIdx = 0; aIdx < 4; aIdx++) {
+                        let aAngle = -0.6 + aIdx * 0.4;
+                        ctx.save();
+                        ctx.translate(targetX, targetY);
+                        ctx.rotate(aAngle);
+                        ctx.strokeStyle = '#2c3e50';
+                        ctx.lineWidth = 2;
+                        ctx.beginPath();
+                        ctx.moveTo(0, 0);
+                        ctx.lineTo(18, 0);
+                        ctx.stroke();
+                        ctx.fillStyle = '#1abc9c';
+                        ctx.fillRect(14, -2, 4, 4);
+                        ctx.restore();
+                    }
+                    let archerX = ox + 300;
+                    let archerY = skyHeight - 5;
+                    let drawAmount = 0.4 + 0.6 * Math.abs(Math.sin(t * 0.05 + ox));
+                    ctx.save();
+                    ctx.translate(archerX, archerY);
+                    ctx.strokeStyle = '#3e2723';
+                    ctx.lineWidth = 3.5;
+                    ctx.beginPath();
+                    ctx.moveTo(0, -12);
+                    ctx.lineTo(-8, 0);
+                    ctx.moveTo(0, -12);
+                    ctx.lineTo(8, 0);
+                    ctx.moveTo(0, -12);
+                    ctx.lineTo(0, -32);
+                    ctx.stroke();
+                    ctx.fillStyle = '#3e2723';
+                    ctx.beginPath();
+                    ctx.arc(0, -38, 6, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.fillStyle = '#e74c3c';
+                    ctx.beginPath();
+                    ctx.moveTo(2, -42);
+                    ctx.lineTo(8, -50);
+                    ctx.lineTo(4, -40);
+                    ctx.fill();
+                    ctx.strokeStyle = '#a0522d';
+                    ctx.lineWidth = 2.5;
+                    ctx.beginPath();
+                    ctx.arc(-8, -25, 14, -Math.PI / 2.2, Math.PI / 2.2);
+                    ctx.stroke();
+                    let stringPullX = -8 - (drawAmount * 16);
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.lineWidth = 1.5;
+                    ctx.beginPath();
+                    ctx.moveTo(-8, -37);
+                    ctx.lineTo(stringPullX, -25);
+                    ctx.lineTo(-8, -13);
+                    ctx.stroke();
+                    ctx.restore();
+                    let flightCycle = (t * 4 + ox * 0.3) % 200;
+                    if (flightCycle < 160) {
+                        let fProgress = flightCycle / 160;
+                        let fX = (archerX + 10) + (targetX - archerX) * fProgress;
+                        let fY = (archerY - 25) + (targetY - (archerY - 25)) * fProgress - Math.sin(fProgress * Math.PI) * 20;
+                        ctx.save();
+                        ctx.translate(fX, fY);
+                        ctx.strokeStyle = '#f1c40f';
+                        ctx.lineWidth = 2;
+                        ctx.shadowColor = '#e67e22';
+                        ctx.shadowBlur = 10;
+                        ctx.beginPath();
+                        ctx.moveTo(-8, 0);
+                        ctx.lineTo(8, 0);
+                        ctx.stroke();
+                        ctx.restore();
+                    }
+                    let fireX = ox + 110;
+                    let fireY = skyHeight - 6;
+                    ctx.fillStyle = '#271c19';
+                    ctx.fillRect(fireX - 10, fireY - 2, 20, 4);
+                    let flamePulse = 14 + Math.sin(t * 0.25) * 4;
+                    ctx.fillStyle = '#e67e22';
+                    ctx.beginPath();
+                    ctx.moveTo(fireX - 8, fireY);
+                    ctx.quadraticCurveTo(fireX, fireY - flamePulse * 1.5, fireX + 2, fireY - flamePulse * 2);
+                    ctx.quadraticCurveTo(fireX + 8, fireY, fireX + 8, fireY);
+                    ctx.fill();
+                    ctx.fillStyle = '#f1c40f';
+                    ctx.beginPath();
+                    ctx.moveTo(fireX - 4, fireY);
+                    ctx.quadraticCurveTo(fireX, fireY - flamePulse, fireX + 4, fireY);
+                    ctx.fill();
                 }
-                return;
             }
 
-            // Bölüm 1 varsayılan
-            let grad = ctx.createLinearGradient(0, 0, 0, skyHeight);
-            grad.addColorStop(0, '#85c1e9');
-            grad.addColorStop(0.5, '#d4efdf');
-            grad.addColorStop(1, '#fcf3cf');
-            ctx.fillStyle = grad;
-            ctx.fillRect(0, 0, w, skyHeight);
-            ctx.fillStyle = 'rgba(255,255,255,0.55)';
-            ctx.beginPath();
-            ctx.arc(w * 0.25, skyHeight * 0.2, 80, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.fillStyle = '#52be80';
-            ctx.beginPath();
-            ctx.moveTo(0, skyHeight - 50);
-            ctx.quadraticCurveTo(w * 0.4, skyHeight - 120, w * 0.8, skyHeight - 55);
-            ctx.lineTo(w, skyHeight);
-            ctx.lineTo(0, skyHeight);
-            ctx.fill();
-            ctx.fillStyle = '#73c6b6';
-            ctx.fillRect(0, skyHeight, w, GROUND_HEIGHT);
-            ctx.fillStyle = '#45b39d';
-            for (let i = 0; i < w / 40 + 5; i++) {
-                ctx.fillRect(i * 40, skyHeight + 25, 4, 28);
+            let groundColor = era === 1 ? '#73c6b6' : (era === 3 ? '#c4a35a' : '#3d2b1f');
+            let patternColor = era === 1 ? '#45b39d' : (era === 3 ? '#a88b45' : '#2d1b0f');
+            ctx.fillStyle = groundColor;
+            ctx.fillRect(0, skyHeight, w, typeof GROUND_HEIGHT !== 'undefined' ? GROUND_HEIGHT : 100);
+            ctx.fillStyle = patternColor;
+            let patternWidth = 40;
+            for (let i = 0; i < w / patternWidth + 5; i++) {
+                ctx.fillRect(i * patternWidth, skyHeight + 25, 4, 30);
+                ctx.fillRect(i * patternWidth + 12, skyHeight + 65, 4, 20);
             }
         }
 
-
         function drawAmbushSpikes(ctx, bx, by) {
-            // Fotoğraftaki gibi çapraz dikenli barikat
             ctx.save();
             ctx.translate(bx, by + 10);
             const poles = [
@@ -560,7 +791,6 @@ function drawStuckArrows(ctx, unit) {
                 ctx.save();
                 ctx.translate(p.x, 0);
                 ctx.rotate(p.ang);
-                // kazık
                 ctx.strokeStyle = '#4a3728';
                 ctx.lineWidth = 7;
                 ctx.lineCap = 'round';
@@ -568,14 +798,12 @@ function drawStuckArrows(ctx, unit) {
                 ctx.moveTo(0, 20);
                 ctx.lineTo(0, -90);
                 ctx.stroke();
-                // sivri uç
                 ctx.fillStyle = '#2c1e14';
                 ctx.beginPath();
                 ctx.moveTo(-5, -88);
                 ctx.lineTo(0, -108);
                 ctx.lineTo(5, -88);
                 ctx.fill();
-                // sargı
                 ctx.strokeStyle = '#8b5a2b';
                 ctx.lineWidth = 3;
                 for (let y = -20; y > -70; y -= 18) {
@@ -586,7 +814,6 @@ function drawStuckArrows(ctx, unit) {
                 }
                 ctx.restore();
             });
-            // gölge
             ctx.fillStyle = 'rgba(0,0,0,0.25)';
             ctx.beginPath();
             ctx.ellipse(0, 22, 90, 14, 0, 0, Math.PI * 2);
@@ -598,24 +825,20 @@ function drawStuckArrows(ctx, unit) {
             let b = isPlayer ? player.base : enemy.base;
             let bx = b.x;
             let by = b.y;
-            // 3. bölüm: düşman heykeli yok — dikenli barikat
             if (!isPlayer && typeof isAmbushLevel === 'function' && isAmbushLevel()) {
                 drawAmbushSpikes(ctx, bx, by);
                 return;
             }
-
             ctx.fillStyle = 'rgba(0,0,0,0.3)';
             ctx.beginPath();
             ctx.ellipse(bx, by + 30, 70, 18, 0, 0, Math.PI * 2);
             ctx.fill();
-
             ctx.fillStyle = isPlayer ? '#bdc3c7' : '#34495e';
             ctx.fillRect(bx - 35, by - 140, 70, 170);
             ctx.fillStyle = isPlayer ? '#ecf0f1' : '#2c3e50';
             ctx.beginPath();
             ctx.arc(bx, by - 160, 45, 0, Math.PI * 2);
             ctx.fill();
-
             ctx.fillStyle = '#c0392b';
             ctx.fillRect(bx - 45, by - 220, 90, 12);
             ctx.fillStyle = '#2ecc71';
@@ -623,49 +846,52 @@ function drawStuckArrows(ctx, unit) {
             ctx.fillStyle = '#fff';
             ctx.font = '11px Arial';
             ctx.textAlign = 'center';
-            ctx.fillText(Math.floor(b.hp) + "/" + b.maxHp, bx, by - 210);
+            ctx.fillText(Math.floor(b.hp) + '/' + b.maxHp, bx, by - 210);
         }
 
         function drawMines(ctx) {
-            let allSlots = [...playerMineSlots, ...enemyMineSlots];
-            allSlots.forEach(slot => {
-                let mx = slot.x;
-                let my = slot.y;
+            if (typeof isAmbushLevel === 'function' && isAmbushLevel()) {
+                // pusuda düşman madeni çizme
+                playerMineSlots.forEach(slot => drawOneMine(ctx, slot));
+                return;
+            }
+            [...playerMineSlots, ...enemyMineSlots].forEach(slot => drawOneMine(ctx, slot));
+        }
 
-                ctx.fillStyle = 'rgba(0,0,0,0.25)';
+        function drawOneMine(ctx, slot) {
+            let mx = slot.x;
+            let my = slot.y;
+            ctx.fillStyle = 'rgba(0,0,0,0.25)';
+            ctx.beginPath();
+            ctx.ellipse(mx, my + 12, 28, 9, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#6b7280';
+            ctx.beginPath();
+            ctx.ellipse(mx, my + 2, 26, 16, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#4b5563';
+            ctx.beginPath();
+            ctx.ellipse(mx - 4, my + 4, 14, 10, -0.2, 0, Math.PI * 2);
+            ctx.fill();
+            let crystals = [
+                { x: -10, y: -6, w: 7, h: 16, rot: -0.25 },
+                { x: -1, y: -10, w: 8, h: 20, rot: 0.05 },
+                { x: 9, y: -5, w: 7, h: 15, rot: 0.3 }
+            ];
+            crystals.forEach(c => {
+                ctx.save();
+                ctx.translate(mx + c.x, my + c.y);
+                ctx.rotate(c.rot);
+                ctx.fillStyle = '#f1c40f';
+                ctx.fillRect(-c.w / 2, -c.h, c.w, c.h);
                 ctx.beginPath();
-                ctx.ellipse(mx, my + 12, 28, 9, 0, 0, Math.PI * 2);
+                ctx.moveTo(-c.w / 2, -c.h);
+                ctx.lineTo(0, -c.h - 5);
+                ctx.lineTo(c.w / 2, -c.h);
+                ctx.closePath();
                 ctx.fill();
-
-                ctx.fillStyle = '#6b7280';
-                ctx.beginPath();
-                ctx.ellipse(mx, my + 2, 26, 16, 0, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.fillStyle = '#4b5563';
-                ctx.beginPath();
-                ctx.ellipse(mx - 4, my + 4, 14, 10, -0.2, 0, Math.PI * 2);
-                ctx.fill();
-
-                let crystals = [
-                    { x: -10, y: -6, w: 7, h: 16, rot: -0.25 },
-                    { x: -1, y: -10, w: 8, h: 20, rot: 0.05 },
-                    { x: 9, y: -5, w: 7, h: 15, rot: 0.3 }
-                ];
-                crystals.forEach(c => {
-                    ctx.save();
-                    ctx.translate(mx + c.x, my + c.y);
-                    ctx.rotate(c.rot);
-                    ctx.fillStyle = '#f1c40f';
-                    ctx.fillRect(-c.w / 2, -c.h, c.w, c.h);
-                    ctx.beginPath();
-                    ctx.moveTo(-c.w / 2, -c.h);
-                    ctx.lineTo(0, -c.h - 5);
-                    ctx.lineTo(c.w / 2, -c.h);
-                    ctx.closePath();
-                    ctx.fill();
-                    ctx.fillStyle = '#f7dc6f';
-                    ctx.fillRect(-c.w / 4, -c.h + 2, c.w / 2, c.h * 0.4);
-                    ctx.restore();
-                });
+                ctx.fillStyle = '#f7dc6f';
+                ctx.fillRect(-c.w / 4, -c.h + 2, c.w / 2, c.h * 0.4);
+                ctx.restore();
             });
         }
