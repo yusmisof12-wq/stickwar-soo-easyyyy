@@ -392,6 +392,24 @@ function drawStuckArrows(ctx, unit) {
                     armRot = -50 + (1 - armRaise) * 100 + swingAngle * 25;
                     backArmRot = 5;
                 
+                } else if (weapon === 'sickle') {
+                    // Daha hızlı / geniş savurma
+                    if (animFrame > 0) {
+                        if (animFrame < 12) {
+                            const t = animFrame / 12;
+                            armRot = -30 - t * 70;
+                        } else if (animFrame < 28) {
+                            const t = (animFrame - 12) / 16;
+                            armRot = -100 + t * 170;
+                        } else {
+                            const t = Math.min(1, (animFrame - 28) / 20);
+                            armRot = 70 - t * 100;
+                        }
+                        backArmRot = 30;
+                    } else {
+                        armRot = -40 + (isWalking ? Math.sin(frames * 0.22) * 8 : 0);
+                        backArmRot = 15 + (isWalking ? Math.sin(frames * 0.22 + Math.PI) * 8 : 0);
+                    }
                 } else if (weapon === 'club') {
                     if (animFrame > 0) {
                         if (animFrame < 30) {
@@ -418,15 +436,17 @@ function drawStuckArrows(ctx, unit) {
                 }
                 let backHandX, backHandY, handX, handY;
                 if (weapon === 'sickle') {
-                    // İki el sapta
-                    const swingT = animFrame > 30 && animFrame < 55 ? (animFrame - 30) / 25 : 0;
+                    // İki el sapta — geniş savurma
+                    const swingT = animFrame > 12 && animFrame < 28 ? (animFrame - 12) / 16
+                        : (animFrame > 0 && animFrame <= 12 ? -0.3 * (animFrame / 12)
+                        : (animFrame >= 28 ? Math.max(0, 1 - (animFrame - 28) / 20) : 0));
                     const rad = armRot * Math.PI / 180;
-                    const gx = shoulderX + 6 + swingT * 8 + Math.sin(rad) * 4;
-                    const gy = shoulderY + 10 - swingT * 4;
-                    handX = gx + 3;
+                    const gx = shoulderX + 8 + swingT * 16 + Math.sin(rad) * 6;
+                    const gy = shoulderY + 8 - Math.abs(swingT) * 8;
+                    handX = gx + 4;
                     handY = gy;
-                    backHandX = gx - 4;
-                    backHandY = gy + 3;
+                    backHandX = gx - 5;
+                    backHandY = gy + 4;
                 } else if (weapon === 'club') {
                     backHandX = shoulderX - 8;
                     backHandY = shoulderY + 12;
@@ -516,50 +536,39 @@ function drawStuckArrows(ctx, unit) {
                     });
                     ctx.restore();
                 } else if (weapon === 'sickle') {
-                    // Orak resmi (orijinal sağa bakıyor; karakter isFlipped ile döner)
-                    const swingT = animFrame > 30 && animFrame < 55 ? (animFrame - 30) / 25 : 0;
+                    const swingT = animFrame > 12 && animFrame < 28 ? (animFrame - 12) / 16
+                        : (animFrame > 0 && animFrame <= 12 ? -(animFrame / 12) * 0.4
+                        : (animFrame >= 28 ? Math.max(0, 1 - (animFrame - 28) / 20) : 0));
                     const gripX = (handX + backHandX) / 2;
                     const gripY = (handY + backHandY) / 2;
                     const img = typeof sickleWeaponImg !== 'undefined' ? sickleWeaponImg : null;
                     if (img && img.complete && img.naturalWidth > 0) {
-                        const iw = 42 + swingT * 6;
+                        const iw = 44 + Math.abs(swingT) * 10;
                         const ih = iw * (img.naturalHeight / img.naturalWidth);
                         ctx.save();
-                        ctx.translate(gripX, gripY);
-                        // idle hafif açılı; vuruşta savrulma
-                        const ang = -0.9 + armRot * 0.012 + swingT * 0.85;
+                        ctx.translate(gripX + swingT * 6, gripY - Math.abs(swingT) * 4);
+                        const ang = -1.0 + armRot * 0.015 + swingT * 1.35;
                         ctx.rotate(ang);
-                        // tutamak altta, bıçak yukarı-sağa (resim sağa bakıyor)
-                        ctx.drawImage(img, -iw * 0.22, -ih * 0.55, iw, ih);
+                        ctx.drawImage(img, -iw * 0.2, -ih * 0.55, iw, ih);
                         ctx.restore();
                     } else {
-                        // yedek çizim
                         ctx.save();
                         ctx.translate(gripX, gripY);
-                        ctx.rotate(-0.9 + swingT * 0.8);
+                        ctx.rotate(-1.0 + swingT * 1.2);
                         ctx.strokeStyle = '#c0392b';
                         ctx.lineWidth = 5;
                         ctx.beginPath();
                         ctx.moveTo(0, 6);
-                        ctx.lineTo(0, -12);
+                        ctx.lineTo(0, -14);
                         ctx.stroke();
                         ctx.strokeStyle = '#bdc3c7';
                         ctx.lineWidth = 4;
                         ctx.beginPath();
-                        ctx.arc(4, -18, 14, -0.3 * Math.PI, 0.95 * Math.PI, false);
+                        ctx.arc(5, -20, 15, -0.3 * Math.PI, 0.95 * Math.PI, false);
                         ctx.stroke();
                         ctx.restore();
                     }
-                    // Elde 2 çizik (düşman = siyah)
-                    ctx.strokeStyle = isPlayerFace ? '#c0392b' : '#0a0a0a';
-                    ctx.lineWidth = 1.8;
-                    ctx.lineCap = 'round';
-                    ctx.beginPath();
-                    ctx.moveTo(handX - 1, handY - 2);
-                    ctx.lineTo(handX + 4, handY - 1);
-                    ctx.moveTo(handX - 1, handY + 2);
-                    ctx.lineTo(handX + 4, handY + 3);
-                    ctx.stroke();
+                    // el çizikleri yok
                 } else if (weapon === 'bow') {
                     ctx.save();
                     ctx.translate(handX, handY);
