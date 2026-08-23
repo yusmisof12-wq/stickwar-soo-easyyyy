@@ -477,90 +477,43 @@ function drawStuckArrows(ctx, unit) {
                     ctx.stroke();
                     ctx.restore();
                 } else if (weapon === 'club' || weapon === 'sickle') {
+                    // Normal ölçekli dikenli sopa (stickman ile orantılı)
                     const swingT = animFrame > 30 && animFrame < 55 ? (animFrame - 30) / 25 : 0;
+                    const clubLen = 28 + swingT * 8;
                     ctx.save();
                     ctx.translate(handX, handY);
                     const clubAngle = (-0.5 + armRot * 0.014) + swingT * 0.3;
                     ctx.rotate(clubAngle);
-                    ctx.fillStyle = '#2c3e50';
-                    ctx.fillRect(-3, 0, 6, 18);
-                    ctx.fillStyle = '#bdc3c7';
+                    // sap
+                    ctx.strokeStyle = color;
+                    ctx.lineWidth = 5;
+                    ctx.lineCap = 'round';
                     ctx.beginPath();
-                    ctx.arc(0, 20, 5, 0, Math.PI * 2);
+                    ctx.moveTo(0, 0);
+                    ctx.lineTo(0, -clubLen);
+                    ctx.stroke();
+                    // baş
+                    ctx.fillStyle = color;
+                    ctx.beginPath();
+                    ctx.ellipse(0, -clubLen - 1, 4.5, 6, 0, 0, Math.PI * 2);
                     ctx.fill();
-                    ctx.strokeStyle = '#7f8c8d';
-                    ctx.lineWidth = 1;
-                    ctx.stroke();
-                    ctx.fillStyle = '#8b0000';
-                    ctx.fillRect(-4, -25, 8, 25);
-                    ctx.strokeStyle = '#4a0000';
-                    ctx.lineWidth = 1;
-                    for (let i = 0; i < 6; i++) {
+                    // dikenler (küçük)
+                    ctx.fillStyle = '#ecf0f1';
+                    const tip = -clubLen;
+                    const spikes = [
+                        [-5, tip + 1], [5, tip + 1],
+                        [-6, tip - 4], [6, tip - 4],
+                        [-4, tip - 8], [4, tip - 8],
+                        [0, tip - 11]
+                    ];
+                    spikes.forEach(([sx, sy]) => {
                         ctx.beginPath();
-                        ctx.moveTo(-4, -2 - i * 4);
-                        ctx.lineTo(4, 2 - i * 4);
-                        ctx.stroke();
-                    }
-                    ctx.fillStyle = '#34495e';
-                    ctx.fillRect(-3, -65, 6, 40);
-                    const headBottom = -65;
-                    const headTop = -115;
-                    ctx.fillStyle = '#95a5a6';
-                    ctx.beginPath();
-                    ctx.moveTo(-16, headBottom);
-                    ctx.lineTo(16, headBottom);
-                    ctx.lineTo(20, headTop + 10);
-                    ctx.lineTo(12, headTop);
-                    ctx.lineTo(-12, headTop);
-                    ctx.lineTo(-20, headTop + 10);
-                    ctx.closePath();
-                    ctx.fill();
-                    ctx.strokeStyle = '#7f8c8d';
-                    ctx.lineWidth = 2;
-                    ctx.stroke();
-                    ctx.beginPath();
-                    ctx.moveTo(-7, headBottom); ctx.lineTo(-9, headTop + 5);
-                    ctx.moveTo(7, headBottom); ctx.lineTo(9, headTop + 5);
-                    ctx.stroke();
-                    const drawSpike = (sx, sy, angle, size) => {
-                        ctx.save();
-                        ctx.translate(sx, sy);
-                        ctx.rotate(angle);
-                        ctx.fillStyle = '#ecf0f1';
-                        ctx.beginPath();
-                        ctx.moveTo(0, 0); ctx.lineTo(-size * 0.35, 0); ctx.lineTo(0, -size);
-                        ctx.fill();
-                        ctx.fillStyle = '#7f8c8d';
-                        ctx.beginPath();
-                        ctx.moveTo(0, 0); ctx.lineTo(size * 0.35, 0); ctx.lineTo(0, -size);
-                        ctx.fill();
-                        ctx.strokeStyle = '#2c3e50';
-                        ctx.lineWidth = 1;
-                        ctx.beginPath();
-                        ctx.moveTo(-size * 0.35, 0); ctx.lineTo(0, -size); ctx.lineTo(size * 0.35, 0);
+                        ctx.moveTo(sx, sy);
+                        ctx.lineTo(sx * 0.25, sy + 4);
+                        ctx.lineTo(sx + (sx > 0 ? 1.5 : -1.5), sy + 1.5);
                         ctx.closePath();
-                        ctx.stroke();
-                        ctx.restore();
-                    };
-                    drawSpike(0, headTop, 0, 30);
-                    drawSpike(-18, -75, -Math.PI / 2.2, 22);
-                    drawSpike(-19, -90, -Math.PI / 2, 26);
-                    drawSpike(-17, -105, -Math.PI / 1.8, 22);
-                    drawSpike(18, -75, Math.PI / 2.2, 22);
-                    drawSpike(19, -90, Math.PI / 2, 26);
-                    drawSpike(17, -105, Math.PI / 1.8, 22);
-                    drawSpike(-12, headTop + 3, -Math.PI / 4, 20);
-                    drawSpike(12, headTop + 3, Math.PI / 4, 20);
-                    const drawFrontSpike = (fx, fy) => {
-                        ctx.fillStyle = '#ecf0f1';
-                        ctx.beginPath(); ctx.arc(fx, fy, 4, 0, Math.PI * 2); ctx.fill();
-                        ctx.strokeStyle = '#2c3e50'; ctx.lineWidth = 1; ctx.stroke();
-                        ctx.fillStyle = '#7f8c8d';
-                        ctx.beginPath(); ctx.arc(fx + 1.5, fy - 1.5, 1.5, 0, Math.PI * 2); ctx.fill();
-                    };
-                    drawFrontSpike(0, -75);
-                    drawFrontSpike(0, -90);
-                    drawFrontSpike(0, -105);
+                        ctx.fill();
+                    });
                     ctx.restore();
                     // Orakçı: elde 2 çizik
                     if (isSickle) {
