@@ -825,13 +825,50 @@
                     anim = Math.max(0, 90 - (14 - this.attackRecover) * 5);
                     this.attackRecover--;
                 }
-                drawStickman(ctx, this.x, this.y, col, 'sickle', anim, this._isActuallyWalking && anim === 0, isFlipped, 0);
+
+                // Sprite: fotoğraf modeli (şeffaf arka plan)
+                const img = typeof sicklewrathImg !== 'undefined' ? sicklewrathImg : null;
+                const useSprite = img && img.complete && img.naturalWidth > 0;
+                if (useSprite) {
+                    const h = 72;
+                    const w = h * (img.naturalWidth / img.naturalHeight);
+                    let bob = 0;
+                    if (this._isActuallyWalking && anim === 0) bob = Math.sin(frames * 0.35) * 2;
+                    if (anim > 28 && anim < 50) bob = -5;
+                    ctx.save();
+                    ctx.translate(this.x, this.y + bob);
+                    if (isFlipped) ctx.scale(-1, 1);
+                    // Takım rengi: arka kol+bacak siyah (sprite), ön kol+bacak renkli gölge
+                    if (this.isPlayer && col) {
+                        const off = document.createElement('canvas');
+                        off.width = Math.ceil(w);
+                        off.height = Math.ceil(h);
+                        const octx = off.getContext('2d');
+                        octx.drawImage(img, 0, 0, w, h);
+                        // renk katmanı sadece sağ-alt (ön bacak) ve orta-sol (ön kol) — arka uzuvlar siyah kalır
+                        octx.globalCompositeOperation = 'source-atop';
+                        octx.fillStyle = col;
+                        octx.globalAlpha = 0.55;
+                        octx.fillRect(w * 0.35, h * 0.55, w * 0.55, h * 0.45); // ön bacak
+                        octx.fillRect(w * 0.15, h * 0.35, w * 0.4, h * 0.28); // ön kol
+                        octx.globalAlpha = 1;
+                        ctx.drawImage(off, -w / 2, -h + 4, w, h);
+                    } else {
+                        // düşman: fotoğrafın birebir siyah modeli
+                        ctx.drawImage(img, -w / 2, -h + 4, w, h);
+                    }
+                    ctx.restore();
+                } else {
+                    // yedek: çizim modeli
+                    drawStickman(ctx, this.x, this.y, col, 'sickle', anim, this._isActuallyWalking && anim === 0, isFlipped, 0);
+                }
                 drawStuckArrows(ctx, this);
                 ctx.fillStyle = 'red';
                 ctx.fillRect(this.x - 15, this.y - 65, 30, 4);
                 ctx.fillStyle = '#2ecc71';
                 ctx.fillRect(this.x - 15, this.y - 65, 30 * (this.hp / this.maxHp), 4);
             }
+
         }
 
         class Archer {
