@@ -1,4 +1,4 @@
-// ==================== SINIFLAR ====================
+ // ==================== SINIFLAR ====================
         class Miner {
             constructor(isPlayer, ownerIndex = 0) {
                 this.isPlayer = isPlayer;
@@ -812,25 +812,49 @@
 
             draw(ctx) {
                 if (this.x < -50 || this.x > worldWidth + 50) return;
-
-                const dx = this.x - this.prevX;
-                // Stickman varsayılanı sağa bakar → isFlipped = sola bak
+                // Sopalı ile AYNI model + animasyon (sadece çizikler farklı)
                 let isFlipped = !this.isPlayer;
-                if (Math.abs(dx) > 0.25) isFlipped = dx < 0;
-                else if (this.isAttacking && this.target) isFlipped = this.target.x < this.x;
-                else isFlipped = !this.isPlayer;
-
-                const col = unitTeamColor(this) || '#1a1a1a';
+                const dx = this.x - this.prevX;
+                if (Math.abs(dx) > 0.3) {
+                    isFlipped = dx < 0;
+                } else if (this.isAttacking && this.target) {
+                    isFlipped = (this.target.x < this.x);
+                } else {
+                    let cmd = this.isPlayer ? unitOwnerState(this).command : enemy.command;
+                    if (cmd === CMD_RETREAT) isFlipped = this.isPlayer;
+                    else if (cmd === CMD_ATTACK) isFlipped = !this.isPlayer;
+                    else isFlipped = !this.isPlayer;
+                }
+                const col = unitTeamColor(this);
                 let anim = 0;
-                if (this.isAttacking) anim = this.attackTimer;
-                else if (this.attackRecover > 0) {
-                    anim = Math.max(0, 90 - (14 - this.attackRecover) * 5);
+                if (this.isAttacking) {
+                    anim = this.attackTimer;
+                } else if (this.attackRecover > 0) {
+                    anim = Math.max(0, 100 - (18 - this.attackRecover) * 5);
                     this.attackRecover--;
                 }
-                const walking = this._isActuallyWalking && anim === 0;
+                // Aynı sopa modeli
+                drawStickman(ctx, this.x, this.y, col, 'club', anim, this._isActuallyWalking && anim === 0, isFlipped, 0);
 
-                // Özel orakçı modeli (fotoğraf pozu + gerçek animasyon)
-                drawSicklewrath(ctx, this.x, this.y, col, anim, walking, isFlipped);
+                // Sadece orakçı: 2 yüz + 2 el/kol çizik
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                if (isFlipped) ctx.scale(-1, 1);
+                ctx.strokeStyle = '#c0392b';
+                ctx.lineWidth = 2;
+                ctx.lineCap = 'round';
+                // Yüz (kafa ~ 0, -46)
+                const hy = -46;
+                ctx.beginPath();
+                ctx.moveTo(3, hy - 4); ctx.lineTo(9, hy - 6);
+                ctx.moveTo(3, hy + 2); ctx.lineTo(9, hy);
+                ctx.stroke();
+                // El / ön kol bölgesi (~ 10, -28)
+                ctx.beginPath();
+                ctx.moveTo(6, -30); ctx.lineTo(12, -28);
+                ctx.moveTo(7, -26); ctx.lineTo(13, -24);
+                ctx.stroke();
+                ctx.restore();
 
                 drawStuckArrows(ctx, this);
                 ctx.fillStyle = 'red';
@@ -838,6 +862,7 @@
                 ctx.fillStyle = '#2ecc71';
                 ctx.fillRect(this.x - 15, this.y - 65, 30 * (this.hp / this.maxHp), 4);
             }
+
 
 
 
