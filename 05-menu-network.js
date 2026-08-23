@@ -489,12 +489,17 @@ function applyCoopInput(slot, action) {
     else if (action === 'attack') {
         if (slot === 1) player2.command = CMD_ATTACK;
         else player.command = CMD_ATTACK;
+        // Co-op'ta iki oyuncudan hangisi komut verirse versin düşman aynı komutu alır.
+        // room_relay ile her iki istemciye de aynı sırada geldiği için senkron bozulmaz.
+        if (typeof mirrorEnemyCommand === 'function') mirrorEnemyCommand(CMD_ATTACK);
     } else if (action === 'defend') {
         if (slot === 1) player2.command = CMD_DEFEND;
         else player.command = CMD_DEFEND;
+        if (typeof mirrorEnemyCommand === 'function') mirrorEnemyCommand(CMD_DEFEND);
     } else if (action === 'retreat') {
         if (slot === 1) player2.command = CMD_RETREAT;
         else player.command = CMD_RETREAT;
+        if (typeof mirrorEnemyCommand === 'function') mirrorEnemyCommand(CMD_RETREAT);
     }
     updateActionButtonsUI();
 }
