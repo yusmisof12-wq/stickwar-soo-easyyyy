@@ -245,8 +245,8 @@ function setPlayerCommand(cmd) {
             enemy.base.hp = enemy.base.maxHp;
             frames = 0;
             ambushTimer = 0;
-            if (typeof enemy.sickleCooldown === 'number') enemy.sickleCooldown = 40;
-            else enemy.sickleCooldown = 40;
+            enemy.ambushWaves = null;
+            enemy.ambushWaveIndex = 0;
             cameraX = 0;
         }
 
@@ -254,25 +254,35 @@ function setPlayerCommand(cmd) {
             enemy.aiTimer++;
             const diff = getAiDifficulty();
 
-            // ===== 3. BÖLÜM PUSU: sadece Orakçı, bedava, gittikçe daha sık, hep saldırı =====
+            // ===== 3. BÖLÜM PUSU: dalga spawn (normal zorluk) =====
             if (typeof isAmbushLevel === 'function' && isAmbushLevel()) {
                 enemy.command = CMD_ATTACK;
                 enemy.aiState = 'attack';
-                const sickleCount = units.filter(u => !u.isPlayer && u instanceof Sicklewrath && u.hp > 0).length;
-                const maxS = 18; // aynı anda max canlı orakçı
-                // 3 dk boyunca kademeli: başta yavaş, sonda orta
-                // ~her 2.5sn bir → sonra ~1.4sn bir (frame@60)
-                const progress = Math.min(1, ambushTimer / (AMBUSH_DURATION_FRAMES || 10800));
-                const spawnInterval = Math.max(85, Math.floor(160 - progress * 75));
-                if (typeof enemy.sickleCooldown !== 'number') enemy.sickleCooldown = 90;
-                if (enemy.sickleCooldown > 0) enemy.sickleCooldown--;
-                if (enemy.sickleCooldown <= 0 && sickleCount < maxS) {
-                    units.push(new Sicklewrath(false));
-                    // son 1 dk'da ara sıra 2. birim
-                    if (progress > 0.7 && sickleCount + 1 < maxS && Math.random() < 0.35) {
+                // Saniye (ambushTimer @60fps) → kaç orakçı
+                // Toplam ~24 birim / 3 dk — rahat savuşturulabilir
+                if (!enemy.ambushWaves) {
+                    enemy.ambushWaves = [
+                        { at: 15, count: 2 },
+                        { at: 35, count: 3 },
+                        { at: 55, count: 3 },
+                        { at: 80, count: 4 },
+                        { at: 110, count: 4 },
+                        { at: 140, count: 5 },
+                        { at: 165, count: 3 },
+                    ];
+                    enemy.ambushWaveIndex = 0;
+                }
+                const sec = Math.floor((ambushTimer || 0) / 60);
+                while (enemy.ambushWaveIndex < enemy.ambushWaves.length) {
+                    const w = enemy.ambushWaves[enemy.ambushWaveIndex];
+                    if (sec < w.at) break;
+                    for (let i = 0; i < w.count; i++) {
                         units.push(new Sicklewrath(false));
                     }
-                    enemy.sickleCooldown = spawnInterval;
+                    enemy.ambushWaveIndex++;
+                    if (typeof addFloatingText === 'function') {
+                        addFloatingText(enemy.base.x - 40, enemy.base.y - 80, 'Dalga ' + enemy.ambushWaveIndex + '!', '#e74c3c');
+                    }
                 }
                 return;
             }
@@ -463,7 +473,7 @@ function setPlayerCommand(cmd) {
         function handleFormationAndCollisions() {
             ['player', 'enemy'].forEach(team => {
                 let isPlayer = (team === 'player');
-                let fighters = units.filter(u => u.isPlayer === isPlayer && u instanceof Clubman && u.hp > 0);
+                let fighters = units.filter(u => u.isPlayer === isPlayer && (u instanceof Clubman || (typeof Sicklewrath !== 'undefined' && u instanceof Sicklewrath)) && u.hp > 0);
 
                 fighters.sort((a, b) => a.formationIndex - b.formationIndex);
 
