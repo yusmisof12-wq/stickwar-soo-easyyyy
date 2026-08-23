@@ -398,6 +398,112 @@
             ctx.restore();
         }
 
+function drawTownBackground(ctx) {
+    const skyHeight = canvas.height - GROUND_HEIGHT;
+    const baseY = skyHeight; // kasabanın oturduğu ufuk çizgisi
+    const townCenterX = worldWidth * 0.5;
+
+    // --- Arka plan evleri ---
+    const houseColors = ['#5b3a29', '#6b4226', '#4a2e1e', '#5e3c28'];
+    const houses = [
+        { dx: -260, w: 46, h: 60 },
+        { dx: -190, w: 38, h: 48 },
+        { dx: -120, w: 52, h: 70 },
+        { dx: 70,  w: 44, h: 55 },
+        { dx: 145, w: 36, h: 42 },
+        { dx: 215, w: 50, h: 66 },
+    ];
+    houses.forEach((h, i) => {
+        const hx = townCenterX + h.dx;
+        ctx.fillStyle = houseColors[i % houseColors.length];
+        ctx.fillRect(hx - h.w / 2, baseY - h.h, h.w, h.h);
+        // çatı
+        ctx.fillStyle = '#3a2418';
+        ctx.beginPath();
+        ctx.moveTo(hx - h.w / 2 - 4, baseY - h.h);
+        ctx.lineTo(hx, baseY - h.h - h.w * 0.45);
+        ctx.lineTo(hx + h.w / 2 + 4, baseY - h.h);
+        ctx.closePath();
+        ctx.fill();
+        // pencere ışığı
+        ctx.fillStyle = 'rgba(241,196,15,0.55)';
+        ctx.fillRect(hx - 5, baseY - h.h * 0.55, 6, 8);
+    });
+
+    // --- Çan kulesi (merkez) ---
+    const towerX = townCenterX - 20;
+    const towerW = 30, towerH = 110;
+    ctx.fillStyle = '#4b3222';
+    ctx.fillRect(towerX - towerW / 2, baseY - towerH, towerW, towerH);
+    ctx.fillStyle = '#2c1e14';
+    ctx.beginPath();
+    ctx.moveTo(towerX - towerW / 2 - 6, baseY - towerH);
+    ctx.lineTo(towerX, baseY - towerH - 34);
+    ctx.lineTo(towerX + towerW / 2 + 6, baseY - towerH);
+    ctx.closePath();
+    ctx.fill();
+    // çan boşluğu
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(towerX - 8, baseY - towerH + 20, 16, 20);
+    // çan
+    ctx.fillStyle = '#caa24a';
+    ctx.beginPath();
+    ctx.moveTo(towerX - 5, baseY - towerH + 26);
+    ctx.quadraticCurveTo(towerX, baseY - towerH + 20, towerX + 5, baseY - towerH + 26);
+    ctx.lineTo(towerX + 4, baseY - towerH + 36);
+    ctx.lineTo(towerX - 4, baseY - towerH + 36);
+    ctx.closePath();
+    ctx.fill();
+    // saat
+    ctx.fillStyle = '#ecf0f1';
+    ctx.beginPath();
+    ctx.arc(towerX, baseY - towerH + 60, 9, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#2c1e14';
+    ctx.lineWidth = 1.4;
+    ctx.stroke();
+
+    // --- Değirmen (yanında) ---
+    const millX = townCenterX + 195;
+    const millW = 34, millH = 70;
+    ctx.fillStyle = '#8d6e4a';
+    ctx.beginPath();
+    ctx.moveTo(millX - millW / 2, baseY);
+    ctx.lineTo(millX - millW / 2 + 6, baseY - millH);
+    ctx.lineTo(millX + millW / 2 - 6, baseY - millH);
+    ctx.lineTo(millX + millW / 2, baseY);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#5c4531';
+    ctx.beginPath();
+    ctx.moveTo(millX - millW / 2 + 2, baseY - millH);
+    ctx.lineTo(millX, baseY - millH - 22);
+    ctx.lineTo(millX + millW / 2 - 2, baseY - millH);
+    ctx.closePath();
+    ctx.fill();
+    // dönen kanatlar
+    ctx.save();
+    ctx.translate(millX, baseY - millH - 6);
+    ctx.rotate((frames || 0) * 0.01);
+    ctx.strokeStyle = '#d7c9a3';
+    ctx.lineWidth = 5;
+    ctx.lineCap = 'round';
+    for (let i = 0; i < 4; i++) {
+        ctx.save();
+        ctx.rotate((Math.PI / 2) * i);
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(0, -32);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(-6, -22);
+        ctx.lineTo(6, -22);
+        ctx.stroke();
+        ctx.restore();
+    }
+    ctx.restore();
+}
+
         function drawEnvironment(ctx) {
             let skyHeight = canvas.height - GROUND_HEIGHT;
             let grad = ctx.createLinearGradient(0, 0, 0, skyHeight);
@@ -408,11 +514,16 @@
             ctx.fillStyle = grad;
             ctx.fillRect(0, 0, worldWidth, skyHeight);
 
-            ctx.fillStyle = '#f1c40f';
+                        ctx.fillStyle = '#f1c40f';
             ctx.beginPath();
             ctx.arc(worldWidth - 220, 140, 90, 0, Math.PI * 2);
             ctx.fill();
 
+            if (level === 1 && typeof drawTownBackground === 'function') {
+                drawTownBackground(ctx);
+            }
+
+            ctx.fillStyle = '#27ae60';
             ctx.fillStyle = '#27ae60';
             ctx.fillRect(0, skyHeight, worldWidth, GROUND_HEIGHT);
             ctx.fillStyle = '#1e8449';
@@ -493,4 +604,3 @@
                 });
             });
         }
-
