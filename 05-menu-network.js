@@ -880,10 +880,8 @@ function ensureMusicHud() {
 }
 
 function musicUrl(name) {
-    try { return new URL('music/' + name, window.location.href).href; }
-    catch (_) { return 'music/' + name; }
+    return name; // Artık 'music/' klasörüne bakmaz, doğrudan kök dosyayı çağırır.
 }
-
 function ensureTracks() {
     if (!audioMenu) {
         audioMenu = new Audio(musicUrl('menu.mp3'));
