@@ -36,6 +36,7 @@
             const hipY = -10 + bob;
             const shoulderY = -34 + bob;
             const lean = swing * 4;
+            const shoulderX = lean * 0.3;
 
             // Bacaklar
             ctx.strokeStyle = body;
@@ -60,62 +61,68 @@
             ctx.lineWidth = 8;
             ctx.beginPath();
             ctx.moveTo(0, hipY);
-            ctx.lineTo(lean * 0.3, shoulderY);
+            ctx.lineTo(shoulderX, shoulderY);
             ctx.stroke();
 
             // Kafa
-            const hx = lean * 0.4;
-            const hy = shoulderY - 11;
+            const headX = lean * 0.4;
+            const headY = shoulderY - 11;
             ctx.fillStyle = body;
             ctx.beginPath();
-            ctx.arc(hx, hy, 10, 0, Math.PI * 2);
+            ctx.arc(headX, headY, 10, 0, Math.PI * 2);
             ctx.fill();
 
-            // Yüz: 2 kırmızı çizik
+            // Yüz: 3 dikey pençe çizik (kullanıcı modeli)
+            ctx.save();
+            ctx.translate(headX, headY);
             ctx.strokeStyle = '#c0392b';
-            ctx.lineWidth = 2;
+            ctx.lineWidth = 2.5;
             ctx.lineCap = 'round';
             ctx.beginPath();
-            ctx.moveTo(hx + 1.5, hy - 2);
-            ctx.lineTo(hx + 8, hy - 3.5);
-            ctx.moveTo(hx + 1.5, hy + 2);
-            ctx.lineTo(hx + 8, hy + 0.5);
+            ctx.moveTo(4, -7); ctx.lineTo(3, 8);
+            ctx.moveTo(8, -9); ctx.lineTo(8, 10);
+            ctx.moveTo(12, -6); ctx.lineTo(13, 6);
             ctx.stroke();
+            ctx.restore();
 
             // Kollar
-            const gripX = 8 + lean + swing * 10;
-            const gripY = shoulderY + 10 - swing * 6 - windup * 4;
-            const backGripX = 2 + lean * 0.5;
-            const backGripY = shoulderY + 12 - windup * 2;
+            const handX = 8 + lean + swing * 10;
+            const handY = shoulderY + 10 - swing * 6 - windup * 4;
+            const backHandX = 2 + lean * 0.5;
+            const backHandY = shoulderY + 12 - windup * 2;
 
             ctx.strokeStyle = body;
             ctx.lineWidth = 6.5;
             ctx.beginPath();
-            ctx.moveTo(lean * 0.3, shoulderY);
-            ctx.lineTo(backGripX, backGripY);
-            ctx.moveTo(lean * 0.3, shoulderY);
-            ctx.lineTo(gripX, gripY);
+            ctx.moveTo(shoulderX, shoulderY);
+            ctx.lineTo(backHandX, backHandY);
+            ctx.moveTo(shoulderX, shoulderY);
+            ctx.lineTo(handX, handY);
             ctx.stroke();
 
-            // Sol kol (ekranda üst/arka kol): 2 çizik
-            ctx.strokeStyle = '#922b21';
-            ctx.lineWidth = 1.7;
-            const armMidX = (lean * 0.3 + backGripX) / 2 - 1;
-            const armMidY = (shoulderY + backGripY) / 2;
-            ctx.beginPath();
-            ctx.moveTo(armMidX - 3, armMidY - 2);
-            ctx.lineTo(armMidX + 4, armMidY - 3);
-            ctx.moveTo(armMidX - 3, armMidY + 2);
-            ctx.lineTo(armMidX + 4, armMidY + 1);
-            ctx.stroke();
-
-            // Orak (daha güzel)
+            // Kol çizikleri (omuz → el, %35 noktasında)
+            const armDX = handX - shoulderX;
+            const armDY = handY - shoulderY;
+            const armAng = Math.atan2(armDY, armDX);
             ctx.save();
-            ctx.translate((gripX + backGripX) / 2, (gripY + backGripY) / 2);
+            ctx.translate(shoulderX + armDX * 0.35, shoulderY + armDY * 0.35);
+            ctx.rotate(armAng);
+            ctx.strokeStyle = '#c0392b';
+            ctx.lineWidth = 2;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(-4, -4); ctx.lineTo(1, 2);
+            ctx.moveTo(0, -4); ctx.lineTo(5, 2);
+            ctx.moveTo(4, -4); ctx.lineTo(9, 2);
+            ctx.stroke();
+            ctx.restore();
+
+            // Orak
+            ctx.save();
+            ctx.translate((handX + backHandX) / 2, (handY + backHandY) / 2);
             const baseAng = -0.95 + swing * 1.4 - windup * 0.3;
             ctx.rotate(baseAng);
 
-            // sap gövdesi
             ctx.strokeStyle = '#2c2c2c';
             ctx.lineWidth = 4.5;
             ctx.lineCap = 'round';
@@ -123,7 +130,6 @@
             ctx.moveTo(0, 11);
             ctx.lineTo(0, -14);
             ctx.stroke();
-            // metal uç (alt)
             ctx.strokeStyle = '#7f8c8d';
             ctx.lineWidth = 3.5;
             ctx.beginPath();
@@ -131,7 +137,6 @@
             ctx.lineTo(0, 12);
             ctx.stroke();
 
-            // kırmızı sargı (katmanlı, sargılı görünüm)
             for (let i = 0; i < 5; i++) {
                 const yy = 1 - i * 3.2;
                 ctx.strokeStyle = i % 2 === 0 ? '#c0392b' : '#922b21';
@@ -142,19 +147,16 @@
                 ctx.stroke();
             }
 
-            // orak bıçağı — dolgun kavis + parlak kenar
             ctx.strokeStyle = '#95a5a6';
             ctx.lineWidth = 6;
             ctx.beginPath();
             ctx.arc(4, -24, 19, -0.45 * Math.PI, 1.0 * Math.PI, false);
             ctx.stroke();
-            // iç gümüş
             ctx.strokeStyle = '#d5dbe0';
             ctx.lineWidth = 3.5;
             ctx.beginPath();
             ctx.arc(4, -24, 19, -0.42 * Math.PI, 0.95 * Math.PI, false);
             ctx.stroke();
-            // keskin parlak kenar
             ctx.strokeStyle = '#ffffff';
             ctx.lineWidth = 1.6;
             ctx.globalAlpha = 0.85;
@@ -162,7 +164,6 @@
             ctx.arc(4, -24, 20.5, -0.4 * Math.PI, 0.55 * Math.PI, false);
             ctx.stroke();
             ctx.globalAlpha = 1;
-            // sivri uç
             ctx.fillStyle = '#ecf0f1';
             ctx.beginPath();
             ctx.moveTo(4 - 17, -30);
@@ -170,7 +171,6 @@
             ctx.lineTo(4 - 12, -32);
             ctx.closePath();
             ctx.fill();
-            // gölge çizgi bıçak üzerinde
             ctx.strokeStyle = 'rgba(0,0,0,0.25)';
             ctx.lineWidth = 2;
             ctx.beginPath();
@@ -583,36 +583,89 @@ function drawStuckArrows(ctx, unit) {
                     ctx.restore();
                 } else if (weapon === 'club') {
                     const swingT = animFrame > 30 && animFrame < 55 ? (animFrame - 30) / 25 : 0;
-                    const clubLen = 30 + swingT * 12;
                     ctx.save();
                     ctx.translate(handX, handY);
                     const clubAngle = (-0.5 + armRot * 0.014) + swingT * 0.3;
                     ctx.rotate(clubAngle);
-                    ctx.strokeStyle = color;
-                    ctx.lineWidth = 6;
-                    ctx.lineCap = 'round';
+                    ctx.fillStyle = '#2c3e50';
+                    ctx.fillRect(-3, 0, 6, 18);
+                    ctx.fillStyle = '#bdc3c7';
                     ctx.beginPath();
-                    ctx.moveTo(0, 0);
-                    ctx.lineTo(0, -clubLen);
-                    ctx.stroke();
-                    ctx.fillStyle = color;
-                    ctx.beginPath();
-                    ctx.ellipse(0, -clubLen - 2, 5, 7, 0, 0, Math.PI * 2);
+                    ctx.arc(0, 20, 5, 0, Math.PI * 2);
                     ctx.fill();
-                    ctx.fillStyle = '#ecf0f1';
-                    const tip = -clubLen;
-                    const spikes = [
-                        [-6, tip + 2], [6, tip + 2], [-7, tip - 4], [7, tip - 4],
-                        [-5, tip - 8], [5, tip - 8], [0, tip - 12]
-                    ];
-                    spikes.forEach(([sx, sy]) => {
+                    ctx.strokeStyle = '#7f8c8d';
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                    ctx.fillStyle = '#8b0000';
+                    ctx.fillRect(-4, -25, 8, 25);
+                    ctx.strokeStyle = '#4a0000';
+                    ctx.lineWidth = 1;
+                    for (let i = 0; i < 6; i++) {
                         ctx.beginPath();
-                        ctx.moveTo(sx, sy);
-                        ctx.lineTo(sx * 0.3, sy + 5);
-                        ctx.lineTo(sx + (sx > 0 ? 2 : -2), sy + 2);
-                        ctx.closePath();
+                        ctx.moveTo(-4, -2 - i * 4);
+                        ctx.lineTo(4, 2 - i * 4);
+                        ctx.stroke();
+                    }
+                    ctx.fillStyle = '#34495e';
+                    ctx.fillRect(-3, -65, 6, 40);
+                    const headBottom = -65;
+                    const headTop = -115;
+                    ctx.fillStyle = '#95a5a6';
+                    ctx.beginPath();
+                    ctx.moveTo(-16, headBottom);
+                    ctx.lineTo(16, headBottom);
+                    ctx.lineTo(20, headTop + 10);
+                    ctx.lineTo(12, headTop);
+                    ctx.lineTo(-12, headTop);
+                    ctx.lineTo(-20, headTop + 10);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.strokeStyle = '#7f8c8d';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                    ctx.beginPath();
+                    ctx.moveTo(-7, headBottom); ctx.lineTo(-9, headTop + 5);
+                    ctx.moveTo(7, headBottom); ctx.lineTo(9, headTop + 5);
+                    ctx.stroke();
+                    const drawSpike = (sx, sy, angle, size) => {
+                        ctx.save();
+                        ctx.translate(sx, sy);
+                        ctx.rotate(angle);
+                        ctx.fillStyle = '#ecf0f1';
+                        ctx.beginPath();
+                        ctx.moveTo(0, 0); ctx.lineTo(-size * 0.35, 0); ctx.lineTo(0, -size);
                         ctx.fill();
-                    });
+                        ctx.fillStyle = '#7f8c8d';
+                        ctx.beginPath();
+                        ctx.moveTo(0, 0); ctx.lineTo(size * 0.35, 0); ctx.lineTo(0, -size);
+                        ctx.fill();
+                        ctx.strokeStyle = '#2c3e50';
+                        ctx.lineWidth = 1;
+                        ctx.beginPath();
+                        ctx.moveTo(-size * 0.35, 0); ctx.lineTo(0, -size); ctx.lineTo(size * 0.35, 0);
+                        ctx.closePath();
+                        ctx.stroke();
+                        ctx.restore();
+                    };
+                    drawSpike(0, headTop, 0, 30);
+                    drawSpike(-18, -75, -Math.PI / 2.2, 22);
+                    drawSpike(-19, -90, -Math.PI / 2, 26);
+                    drawSpike(-17, -105, -Math.PI / 1.8, 22);
+                    drawSpike(18, -75, Math.PI / 2.2, 22);
+                    drawSpike(19, -90, Math.PI / 2, 26);
+                    drawSpike(17, -105, Math.PI / 1.8, 22);
+                    drawSpike(-12, headTop + 3, -Math.PI / 4, 20);
+                    drawSpike(12, headTop + 3, Math.PI / 4, 20);
+                    const drawFrontSpike = (fx, fy) => {
+                        ctx.fillStyle = '#ecf0f1';
+                        ctx.beginPath(); ctx.arc(fx, fy, 4, 0, Math.PI * 2); ctx.fill();
+                        ctx.strokeStyle = '#2c3e50'; ctx.lineWidth = 1; ctx.stroke();
+                        ctx.fillStyle = '#7f8c8d';
+                        ctx.beginPath(); ctx.arc(fx + 1.5, fy - 1.5, 1.5, 0, Math.PI * 2); ctx.fill();
+                    };
+                    drawFrontSpike(0, -75);
+                    drawFrontSpike(0, -90);
+                    drawFrontSpike(0, -105);
                     ctx.restore();
                 } else if (weapon === 'bow') {
                     ctx.save();
