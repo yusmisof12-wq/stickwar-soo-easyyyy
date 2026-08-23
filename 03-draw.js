@@ -236,7 +236,22 @@
                 if (isMining) {
                     armRot = -50 + (1 - armRaise) * 100 + swingAngle * 25;
                     backArmRot = 5;
-                } else if (weapon === 'club' || weapon === 'sickle') {
+                } else if (weapon === 'sickle') {
+                    // Fotoğraf: iki elle önde tutuş, orak yukarı-sola
+                    if (animFrame > 0) {
+                        if (animFrame < 28) {
+                            armRot = -50 - (animFrame / 28) * 40;
+                        } else if (animFrame < 50) {
+                            armRot = -90 + ((animFrame - 28) / 22) * 130;
+                        } else {
+                            armRot = 40 - Math.min(1, (animFrame - 50) / 40) * 70;
+                        }
+                        backArmRot = 30;
+                    } else {
+                        armRot = -55;
+                        backArmRot = -40;
+                    }
+                } else if (weapon === 'club') {
                     if (animFrame > 0) {
                         if (animFrame < 30) {
                             const t = animFrame / 30;
@@ -261,7 +276,21 @@
                     backArmRot = Math.sin(frames * 0.22 + Math.PI) * 25;
                 }
                 let backHandX, backHandY, handX, handY;
-                if (weapon === 'club' || weapon === 'sickle') {
+                if (weapon === 'sickle') {
+                    // İki el sapta, gövdenin önünde (fotoğraf)
+                    if (animFrame > 0) {
+                        const swingT = animFrame > 28 && animFrame < 50 ? (animFrame - 28) / 22 : 0;
+                        backHandX = shoulderX - 6;
+                        backHandY = shoulderY + 10;
+                        handX = shoulderX + 8 + swingT * 12;
+                        handY = shoulderY + 4 - swingT * 6;
+                    } else {
+                        backHandX = shoulderX + 2;
+                        backHandY = shoulderY + 8;
+                        handX = shoulderX + 10;
+                        handY = shoulderY + 6;
+                    }
+                } else if (weapon === 'club') {
                     backHandX = shoulderX - 8;
                     backHandY = shoulderY + 12;
                     const swingT = animFrame > 30 && animFrame < 55 ? (animFrame - 30) / 25 : 0;
@@ -321,42 +350,55 @@
                     ctx.stroke();
                     ctx.restore();
                 } else if (weapon === 'sickle') {
-                    const swingT = animFrame > 30 && animFrame < 55 ? (animFrame - 30) / 25 : 0;
+                    // Fotoğraf: sap önde, kırmızı sargı, kavisli bıçak yukarı-geri
+                    const swingT = animFrame > 28 && animFrame < 50 ? (animFrame - 28) / 22 : 0;
                     ctx.save();
-                    ctx.translate(handX, handY);
-                    ctx.rotate((-0.55 + armRot * 0.012) + swingT * 0.4);
-                    // sap
-                    ctx.strokeStyle = '#4a3728';
-                    ctx.lineWidth = 3.5;
+                    // Orak iki elin ortasında
+                    const gx = (handX + backHandX) / 2;
+                    const gy = (handY + backHandY) / 2;
+                    ctx.translate(gx, gy);
+                    // idle: hafif eğik; vuruşta daha açık
+                    ctx.rotate(-0.85 + swingT * 1.1 + (animFrame > 0 ? armRot * 0.008 : 0));
+                    // sap (kısa, gri uç altta)
+                    ctx.strokeStyle = '#3d3d3d';
+                    ctx.lineWidth = 4;
                     ctx.lineCap = 'round';
                     ctx.beginPath();
-                    ctx.moveTo(0, 4);
-                    ctx.lineTo(0, -16);
+                    ctx.moveTo(0, 10);
+                    ctx.lineTo(0, -8);
                     ctx.stroke();
-                    // kırmızı sargı
-                    ctx.strokeStyle = '#c0392b';
-                    ctx.lineWidth = 5.5;
+                    // kırmızı sargı (kalın)
+                    ctx.strokeStyle = '#b71c1c';
+                    ctx.lineWidth = 6.5;
                     ctx.beginPath();
-                    ctx.moveTo(0, -2);
-                    ctx.lineTo(0, -14);
+                    ctx.moveTo(0, 2);
+                    ctx.lineTo(0, -12);
                     ctx.stroke();
-                    // orak bıçağı (büyük kavis)
-                    ctx.strokeStyle = '#b0b7bf';
-                    ctx.lineWidth = 4.5;
+                    ctx.strokeStyle = '#e74c3c';
+                    ctx.lineWidth = 3;
                     ctx.beginPath();
-                    ctx.arc(4, -26, 16, -0.2 * Math.PI, 1.05 * Math.PI, false);
+                    ctx.moveTo(-1, 0);
+                    ctx.lineTo(-1, -10);
                     ctx.stroke();
-                    ctx.strokeStyle = '#ecf0f1';
+                    // orak bıçağı — büyük kavis (fotoğraf)
+                    ctx.strokeStyle = '#c5cdd4';
+                    ctx.lineWidth = 5;
+                    ctx.beginPath();
+                    ctx.arc(6, -22, 18, -0.35 * Math.PI, 0.95 * Math.PI, false);
+                    ctx.stroke();
+                    // parlak kenar
+                    ctx.strokeStyle = '#f5f6fa';
                     ctx.lineWidth = 2.2;
                     ctx.beginPath();
-                    ctx.arc(4, -26, 16, -0.15 * Math.PI, 1.0 * Math.PI, false);
+                    ctx.arc(6, -22, 18, -0.3 * Math.PI, 0.9 * Math.PI, false);
                     ctx.stroke();
                     // sivri uç
-                    ctx.fillStyle = '#95a5a6';
+                    ctx.fillStyle = '#dfe4ea';
                     ctx.beginPath();
-                    ctx.moveTo(4 - 16, -26);
-                    ctx.lineTo(4 - 20, -30);
-                    ctx.lineTo(4 - 12, -28);
+                    ctx.moveTo(6 - 16, -28);
+                    ctx.lineTo(6 - 22, -34);
+                    ctx.lineTo(6 - 12, -30);
+                    ctx.closePath();
                     ctx.fill();
                     ctx.restore();
                 } else if (weapon === 'club') {
