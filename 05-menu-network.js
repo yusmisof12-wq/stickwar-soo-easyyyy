@@ -96,6 +96,17 @@ let coopBroadcastCounter = 0;
 let coopVictoryHandled = false;
 let coopNextLevelRequested = false;
 
+// ✅ EKSİK FONKSİYONLAR (hata vermemeleri için boş tanımlandı)
+function broadcastHostState() {
+    // Client-authoritative olduğu için sunucuya durum göndermeye gerek yok
+}
+function startPingLoop() {
+    // Ping sistemi kullanılmıyorsa boş
+}
+function updatePingUI() {
+    // Ping UI güncellemesi yoksa boş
+}
+
 function isCoopPlayNow() { return !!(typeof coopSession !== 'undefined' && coopSession && coopSession.roomId); }
 function myCoopSlot() { return coopSession ? (coopSession.slot|0) : 0; }
 function isSimPeer() { return isCoopPlayNow(); }
@@ -588,7 +599,7 @@ function showScreen(which) {
 function stopGameLoop() {
     isGameOver = true;
     if (animationFrameId !== null) {
-        cancelAnimationFrame(animationFrameId);
+        clearInterval(animationFrameId);
         animationFrameId = null;
     }
     modal.classList.add('hidden');
