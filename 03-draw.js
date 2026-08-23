@@ -12,14 +12,12 @@
             ctx.lineCap = 'round';
             ctx.lineJoin = 'round';
 
-            // Yürüme fazı
             const walkPh = (typeof frames !== 'undefined' ? frames : 0) * 0.38;
             const legA = isWalking ? Math.sin(walkPh) * 11 : 0;
             const legB = isWalking ? Math.sin(walkPh + Math.PI) * 11 : 0;
             const bob = isWalking ? Math.abs(Math.sin(walkPh)) * 1.5 : 0;
 
-            // Vuruş animasyonu
-            let swing = 0; // 0 idle, 1 full swing forward
+            let swing = 0;
             let windup = 0;
             if (animFrame > 0) {
                 if (animFrame < 28) {
@@ -39,7 +37,7 @@
             const shoulderY = -34 + bob;
             const lean = swing * 4;
 
-            // --- Bacaklar (kalın, fotoğraf gibi) ---
+            // Bacaklar
             ctx.strokeStyle = body;
             ctx.lineWidth = 7;
             ctx.beginPath();
@@ -50,7 +48,6 @@
             ctx.lineTo(5 + legB * 0.35, -2);
             ctx.lineTo(7 + legB, 4);
             ctx.stroke();
-            // ayak
             ctx.lineWidth = 6;
             ctx.beginPath();
             ctx.moveTo(-6 + legA, 4);
@@ -59,34 +56,33 @@
             ctx.lineTo(11 + legB, 5);
             ctx.stroke();
 
-            // --- Gövde ---
+            // Gövde
             ctx.lineWidth = 8;
             ctx.beginPath();
             ctx.moveTo(0, hipY);
             ctx.lineTo(lean * 0.3, shoulderY);
             ctx.stroke();
 
-            // --- Kafa ---
+            // Kafa
             const hx = lean * 0.4;
             const hy = shoulderY - 11;
             ctx.fillStyle = body;
             ctx.beginPath();
             ctx.arc(hx, hy, 10, 0, Math.PI * 2);
             ctx.fill();
-            // kırmızı yara izleri (fotoğraf)
-            ctx.strokeStyle = '#c0392b';
-            ctx.lineWidth = 1.8;
-            ctx.lineCap = 'round';
-            for (let i = 0; i < 3; i++) {
-                const oy = hy - 3 + i * 3.5;
-                ctx.beginPath();
-                ctx.moveTo(hx + 2, oy);
-                ctx.lineTo(hx + 8, oy - 1.2);
-                ctx.stroke();
-            }
 
-            // --- Kollar: iki el orak sapında (idle fotoğraf pozu) ---
-            // El pozisyonları idle + swing
+            // Yüz: 2 kırmızı çizik
+            ctx.strokeStyle = '#c0392b';
+            ctx.lineWidth = 2;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(hx + 1.5, hy - 2);
+            ctx.lineTo(hx + 8, hy - 3.5);
+            ctx.moveTo(hx + 1.5, hy + 2);
+            ctx.lineTo(hx + 8, hy + 0.5);
+            ctx.stroke();
+
+            // Kollar
             const gripX = 8 + lean + swing * 10;
             const gripY = shoulderY + 10 - swing * 6 - windup * 4;
             const backGripX = 2 + lean * 0.5;
@@ -101,55 +97,87 @@
             ctx.lineTo(gripX, gripY);
             ctx.stroke();
 
-            // --- Orak silahı ---
+            // Sol kol (ekranda üst/arka kol): 2 çizik
+            ctx.strokeStyle = '#922b21';
+            ctx.lineWidth = 1.7;
+            const armMidX = (lean * 0.3 + backGripX) / 2 - 1;
+            const armMidY = (shoulderY + backGripY) / 2;
+            ctx.beginPath();
+            ctx.moveTo(armMidX - 3, armMidY - 2);
+            ctx.lineTo(armMidX + 4, armMidY - 3);
+            ctx.moveTo(armMidX - 3, armMidY + 2);
+            ctx.lineTo(armMidX + 4, armMidY + 1);
+            ctx.stroke();
+
+            // Orak (daha güzel)
             ctx.save();
             ctx.translate((gripX + backGripX) / 2, (gripY + backGripY) / 2);
-            // idle: orak yukarı-geri; vuruşta öne döner
             const baseAng = -0.95 + swing * 1.4 - windup * 0.3;
             ctx.rotate(baseAng);
 
-            // sap
-            ctx.strokeStyle = '#3d3d3d';
-            ctx.lineWidth = 4;
+            // sap gövdesi
+            ctx.strokeStyle = '#2c2c2c';
+            ctx.lineWidth = 4.5;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(0, 11);
+            ctx.lineTo(0, -14);
+            ctx.stroke();
+            // metal uç (alt)
+            ctx.strokeStyle = '#7f8c8d';
+            ctx.lineWidth = 3.5;
             ctx.beginPath();
             ctx.moveTo(0, 8);
-            ctx.lineTo(0, -10);
-            ctx.stroke();
-            // kırmızı sargı
-            ctx.strokeStyle = '#b71c1c';
-            ctx.lineWidth = 7;
-            ctx.beginPath();
-            ctx.moveTo(0, 2);
-            ctx.lineTo(0, -12);
-            ctx.stroke();
-            ctx.strokeStyle = '#e74c3c';
-            ctx.lineWidth = 3;
-            ctx.beginPath();
-            ctx.moveTo(-1.5, 1);
-            ctx.lineTo(-1.5, -11);
+            ctx.lineTo(0, 12);
             ctx.stroke();
 
-            // kavisli bıçak
-            ctx.strokeStyle = '#b0b8c0';
-            ctx.lineWidth = 5;
+            // kırmızı sargı (katmanlı, sargılı görünüm)
+            for (let i = 0; i < 5; i++) {
+                const yy = 1 - i * 3.2;
+                ctx.strokeStyle = i % 2 === 0 ? '#c0392b' : '#922b21';
+                ctx.lineWidth = 6.5;
+                ctx.beginPath();
+                ctx.moveTo(-0.5, yy);
+                ctx.lineTo(-0.5, yy - 2.8);
+                ctx.stroke();
+            }
+
+            // orak bıçağı — dolgun kavis + parlak kenar
+            ctx.strokeStyle = '#95a5a6';
+            ctx.lineWidth = 6;
             ctx.beginPath();
-            ctx.arc(5, -22, 17, -0.4 * Math.PI, 0.95 * Math.PI, false);
+            ctx.arc(4, -24, 19, -0.45 * Math.PI, 1.0 * Math.PI, false);
             ctx.stroke();
-            ctx.strokeStyle = '#ecf0f1';
-            ctx.lineWidth = 2.2;
+            // iç gümüş
+            ctx.strokeStyle = '#d5dbe0';
+            ctx.lineWidth = 3.5;
             ctx.beginPath();
-            ctx.arc(5, -22, 17, -0.35 * Math.PI, 0.9 * Math.PI, false);
+            ctx.arc(4, -24, 19, -0.42 * Math.PI, 0.95 * Math.PI, false);
             ctx.stroke();
+            // keskin parlak kenar
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 1.6;
+            ctx.globalAlpha = 0.85;
+            ctx.beginPath();
+            ctx.arc(4, -24, 20.5, -0.4 * Math.PI, 0.55 * Math.PI, false);
+            ctx.stroke();
+            ctx.globalAlpha = 1;
             // sivri uç
-            ctx.fillStyle = '#dfe4ea';
+            ctx.fillStyle = '#ecf0f1';
             ctx.beginPath();
-            ctx.moveTo(5 - 15, -28);
-            ctx.lineTo(5 - 22, -35);
-            ctx.lineTo(5 - 11, -30);
+            ctx.moveTo(4 - 17, -30);
+            ctx.lineTo(4 - 26, -38);
+            ctx.lineTo(4 - 12, -32);
             ctx.closePath();
             ctx.fill();
-            ctx.restore();
+            // gölge çizgi bıçak üzerinde
+            ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(4, -24, 16, -0.2 * Math.PI, 0.7 * Math.PI, false);
+            ctx.stroke();
 
+            ctx.restore();
             ctx.restore();
         }
 
