@@ -31,11 +31,19 @@ function ensureUserShape(u) {
     if (!Array.isArray(u.outgoing)) u.outgoing = [];
     if (typeof u.maxUnlocked !== 'number') u.maxUnlocked = 1;
     if (!Array.isArray(u.cleared)) u.cleared = [];
+    if (!Array.isArray(u.tokens)) u.tokens = [];
     return u;
 }
 Object.keys(users).forEach(name => ensureUserShape(users[name]));
 
 const sessions = new Map();
+// Render restart sonrası oturumları users.json'dan yükle
+Object.keys(users).forEach(name => {
+    (users[name].tokens || []).forEach(tok => {
+        if (tok) sessions.set(tok, name);
+    });
+});
+console.log('[auth] sessions restored from disk:', sessions.size);
 
 function hashPassword(password, salt) {
     return crypto.scryptSync(password, salt, 64).toString('hex');
@@ -43,6 +51,29 @@ function hashPassword(password, salt) {
 function makeSalt() { return crypto.randomBytes(16).toString('hex'); }
 function makeToken() { return crypto.randomBytes(32).toString('hex'); }
 function makeRoomId() { return crypto.randomBytes(8).toString('hex'); }
+
+function issueToken(username) {
+    const token = makeToken();
+    sessions.set(token, username);
+    const u = users[username];
+    if (u) {
+        if (!Array.isArray(u.tokens)) u.tokens = [];
+        u.tokens.push(token);
+        // Son 8 oturum tut (eski cihazlar)
+        if (u.tokens.length > 8) u.tokens = u.tokens.slice(-8);
+        saveUsers(users);
+    }
+    return token;
+}
+function revokeToken(token) {
+    const name = sessions.get(token);
+    sessions.delete(token);
+    if (name && users[name] && Array.isArray(users[name].tokens)) {
+        users[name].tokens = users[name].tokens.filter(t => t !== token);
+        saveUsers(users);
+    }
+}
+
 
 const app = express();
 app.use(cors());
@@ -94,7 +125,17 @@ app.use((req, res, next) => {
 function requireAuth(req, res, next) {
     const authHeader = req.headers['authorization'] || '';
     const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
-    const username = token && sessions.get(token);
+    let username = token && sessions.get(token);
+    // Bellek boşsa (restart) users.json içindeki tokens ile doğrula
+    if (token && !username) {
+        for (const name of Object.keys(users)) {
+            if ((users[name].tokens || []).includes(token)) {
+                username = name;
+                sessions.set(token, name); // sessions rehydrate
+                break;
+            }
+        }
+    }
     if (!username || !users[username]) return res.status(401).json({ error: 'Yetkisiz istek' });
     req.username = username;
     req.token = token;
@@ -116,8 +157,7 @@ app.post('/api/register', (req, res) => {
     const salt = makeSalt();
     users[name] = ensureUserShape({ salt, hash: hashPassword(password, salt), maxUnlocked: 1, cleared: [] });
     saveUsers(users);
-    const token = makeToken();
-    sessions.set(token, name);
+    const token = issueToken(name);
     res.json({ token, ...publicUser(name) });
 });
 
@@ -130,13 +170,12 @@ app.post('/api/login', (req, res) => {
     if (!u) return res.status(401).json({ error: 'Kullanıcı adı veya şifre hatalı' });
     if (hashPassword(password, u.salt) !== u.hash)
         return res.status(401).json({ error: 'Kullanıcı adı veya şifre hatalı' });
-    const token = makeToken();
-    sessions.set(token, name);
+    const token = issueToken(name);
     res.json({ token, ...publicUser(name) });
 });
 
 app.post('/api/logout', requireAuth, (req, res) => {
-    sessions.delete(req.token);
+    revokeToken(req.token);
     res.json({ ok: true });
 });
 app.get('/api/me', requireAuth, (req, res) => res.json(publicUser(req.username)));
