@@ -26,7 +26,6 @@ function drawStuckArrows(ctx, unit) {
         ctx.restore();
     }
 }
-
 function drawMiningSparks(ctx) {
     miningSparks.forEach(s => {
         const alpha = Math.max(0, s.life / s.maxLife);
@@ -46,7 +45,6 @@ function drawMiningSparks(ctx) {
         ctx.restore();
     });
 }
-
 function drawMinerBackpack(ctx, x, y, isFlipped, bagGold, inHand = false) {
     ctx.save();
     ctx.translate(x, y);
@@ -92,7 +90,6 @@ function drawMinerBackpack(ctx, x, y, isFlipped, bagGold, inHand = false) {
     }
     ctx.restore();
 }
-
 function drawStickman(ctx, x, y, color, weapon, animFrame, isWalking, isFlipped = false, swingAngle = 0, bodyLean = 0, armRaise = 0, holdingRock = false, isMinerStyle = false, isPlayerFace = true) {
     ctx.save();
     ctx.translate(x, y);
@@ -341,11 +338,8 @@ function drawStickman(ctx, x, y, color, weapon, animFrame, isWalking, isFlipped 
     }
     ctx.restore();
 }
-
 function drawEnvironment(ctx) {
     let skyHeight = canvas.height - GROUND_HEIGHT;
-    
-    // Gökyüzü Gradiyanı 
     let grad = ctx.createLinearGradient(0, 0, 0, skyHeight);
     grad.addColorStop(0, '#2c3e50');
     grad.addColorStop(0.4, '#8e44ad');
@@ -353,104 +347,10 @@ function drawEnvironment(ctx) {
     grad.addColorStop(1, '#f39c12');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, worldWidth, skyHeight);
-
-    // Güneş
     ctx.fillStyle = '#f1c40f';
     ctx.beginPath();
     ctx.arc(worldWidth - 220, 140, 90, 0, Math.PI * 2);
     ctx.fill();
-
-    // Bölüm (Era) Seçimine Göre Arka Planlar
-    let era = typeof currentEra !== 'undefined' ? currentEra : 1;
-
-    if (era === 1) {
-        // 1. BÖLÜM: Uzakta küçük kasaba silüeti
-        ctx.fillStyle = 'rgba(30, 25, 40, 0.75)'; // Ufukta koyu renkli yarı saydam silüet
-        for (let i = 50; i < worldWidth; i += 400) {
-            // Küçük Ev
-            ctx.fillRect(i, skyHeight - 25, 50, 25); 
-            ctx.beginPath(); // Çatı
-            ctx.moveTo(i - 10, skyHeight - 25);
-            ctx.lineTo(i + 25, skyHeight - 50);
-            ctx.lineTo(i + 60, skyHeight - 25);
-            ctx.fill();
-
-            // Yel Değirmeni / Kule
-            let kuleX = i + 140;
-            ctx.fillRect(kuleX, skyHeight - 70, 24, 70); 
-            ctx.beginPath(); 
-            ctx.moveTo(kuleX - 6, skyHeight - 70);
-            ctx.lineTo(kuleX + 12, skyHeight - 100);
-            ctx.lineTo(kuleX + 30, skyHeight - 70);
-            ctx.fill();
-
-            // Dönen Pervane (frames değişkenine göre)
-            let timer = typeof frames !== 'undefined' ? frames : 0;
-            ctx.save();
-            ctx.translate(kuleX + 12, skyHeight - 70);
-            ctx.rotate(timer * 0.005);
-            ctx.fillRect(-35, -2, 70, 4);
-            ctx.fillRect(-2, -35, 4, 70);
-            ctx.restore();
-        }
-    } else if (era === 2) {
-        // 2. BÖLÜM: Ormanlık alan ve okçu eğitim alanı
-        for (let i = 80; i < worldWidth; i += 350) {
-            // Arka plandaki Ağaçlar
-            ctx.fillStyle = '#3e2723'; // Ağaç Gövdesi
-            ctx.fillRect(i, skyHeight - 90, 24, 90);
-            
-            ctx.fillStyle = 'rgba(27, 94, 32, 0.9)'; // Koyu yeşil yapraklar
-            ctx.beginPath();
-            ctx.arc(i + 12, skyHeight - 100, 50, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.beginPath();
-            ctx.arc(i - 25, skyHeight - 65, 40, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.beginPath();
-            ctx.arc(i + 50, skyHeight - 65, 40, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Hedef Tahtası (Okçular için)
-            let targetX = i + 160;
-            let targetY = skyHeight - 40;
-            
-            // Ahşap Ayaklar
-            ctx.strokeStyle = '#5d4037';
-            ctx.lineWidth = 4;
-            ctx.beginPath();
-            ctx.moveTo(targetX, targetY - 10);
-            ctx.lineTo(targetX - 15, skyHeight);
-            ctx.moveTo(targetX, targetY - 10);
-            ctx.lineTo(targetX + 15, skyHeight);
-            ctx.stroke();
-
-            // Hedef Panosu (İç içe halkalar)
-            let colors = ['#ffffff', '#e53935', '#ffffff', '#e53935'];
-            let radii = [20, 14, 8, 3];
-            for (let r = 0; r < 4; r++) {
-                ctx.fillStyle = colors[r];
-                ctx.beginPath();
-                ctx.arc(targetX, targetY, radii[r], 0, Math.PI * 2);
-                ctx.fill();
-            }
-
-            // Dekoratife saplanmış bir ok
-            ctx.strokeStyle = '#2c3e50';
-            ctx.lineWidth = 1.5;
-            ctx.beginPath();
-            ctx.moveTo(targetX - 22, targetY - 15);
-            ctx.lineTo(targetX - 4, targetY - 3);
-            ctx.stroke();
-            
-            ctx.fillStyle = '#bdc3c7';
-            ctx.beginPath();
-            ctx.arc(targetX - 22, targetY - 15, 2, 0, Math.PI * 2);
-            ctx.fill();
-        }
-    }
-
-    // Zemin
     ctx.fillStyle = '#27ae60';
     ctx.fillRect(0, skyHeight, worldWidth, GROUND_HEIGHT);
     ctx.fillStyle = '#1e8449';
@@ -460,7 +360,6 @@ function drawEnvironment(ctx) {
         ctx.fillRect(i * patternWidth + 12, skyHeight + 65, 4, 20);
     }
 }
-
 function drawBase(ctx, isPlayer) {
     let b = isPlayer ? player.base : enemy.base;
     let bx = b.x;
@@ -484,7 +383,6 @@ function drawBase(ctx, isPlayer) {
     ctx.textAlign = 'center';
     ctx.fillText(Math.floor(b.hp) + "/" + b.maxHp, bx, by - 210);
 }
-
 function drawMines(ctx) {
     let allSlots = [...playerMineSlots, ...enemyMineSlots];
     allSlots.forEach(slot => {
@@ -525,29 +423,23 @@ function drawMines(ctx) {
         });
     });
 }
-
 function draw() {
     if (!ctx || !canvas) return;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.save();
     ctx.translate(-cameraX, 0);
-    
     drawEnvironment(ctx);
     drawMines(ctx);
     drawBase(ctx, true);
     drawBase(ctx, false);
-    
     units.forEach(u => {
         if (u && typeof u.draw === 'function') u.draw(ctx);
     });
-    
     projectiles.forEach(p => {
         if (p && typeof p.draw === 'function') p.draw(ctx);
     });
-    
     drawMiningSparks(ctx);
-    
     floatingTexts.forEach(f => {
         ctx.save();
         ctx.globalAlpha = Math.max(0, Math.min(1, (f.life || 0) / 60));
@@ -557,10 +449,8 @@ function draw() {
         ctx.fillText(f.text, f.x, f.y);
         ctx.restore();
     });
-    
     retreatArchers.forEach(a => {
         if (a && typeof a.draw === 'function') a.draw(ctx);
     });
-    
     ctx.restore();
 }
