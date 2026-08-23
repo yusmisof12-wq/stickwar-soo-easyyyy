@@ -672,28 +672,33 @@ function updateFloatingTexts() {
     }
 }
 
+// ========== OYUN DÖNGÜSÜ (setInterval ile, arka planda da çalışır) ==========
 function startGameLoop() {
     if (typeof setMusicMode === 'function') setMusicMode('battle');
 
     if (animationFrameId !== null) return;
     lastFrameTime = 0;
     accumulatedTime = 0;
-    animationFrameId = requestAnimationFrame(loop);
+    // requestAnimationFrame yerine setInterval kullan (arka planda da çalışır)
+    animationFrameId = setInterval(() => {
+        if (isGameOver) {
+            clearInterval(animationFrameId);
+            animationFrameId = null;
+            return;
+        }
+        const timestamp = performance.now();
+        if (!lastFrameTime) lastFrameTime = timestamp;
+        accumulatedTime += Math.min(100, timestamp - lastFrameTime);
+        lastFrameTime = timestamp;
+        while (accumulatedTime >= FIXED_TIMESTEP && !isGameOver) {
+            update();
+            updateFloatingTexts();
+            updateMiningSparks();
+            accumulatedTime -= FIXED_TIMESTEP;
+        }
+        draw();
+    }, 1000 / 60);
 }
 
-function loop(timestamp) {
-    animationFrameId = null;
-    if (isGameOver) return;
-
-    if (!lastFrameTime) lastFrameTime = timestamp;
-    accumulatedTime += Math.min(100, timestamp - lastFrameTime);
-    lastFrameTime = timestamp;
-    while (accumulatedTime >= FIXED_TIMESTEP && !isGameOver) {
-        update();
-        updateFloatingTexts();
-        updateMiningSparks();
-        accumulatedTime -= FIXED_TIMESTEP;
-    }
-    draw();
-    if (!isGameOver) animationFrameId = requestAnimationFrame(loop);
-}
+// loop fonksiyonu ARTIK YOK (kaldırıldı)
+// =============================================
