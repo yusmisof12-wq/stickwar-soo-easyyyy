@@ -788,9 +788,14 @@ function startCampaignLevel(lv) {
     startGameLoop();
 }
 
-function onLevelVictory() {
+// ✅ DÜZELTİLDİ: artık completedLevel parametre olarak alınıyor.
+// Önceden global `level` değişkeni okunuyordu, ama çağıran yerde `level++`
+// ÖNCE yapıldığı için burası zaten bir sonraki bölümü "tamamlanmış" sayıyordu
+// (1. bölümü bitirince 3. bölüm açılıyordu). Artık victory anındaki gerçek
+// bölüm numarası parametre ile geliyor.
+function onLevelVictory(completedLevel) {
     if (!currentUser) return;
-    const completed = Math.max(1, level);
+    const completed = Math.max(1, completedLevel || level);
     if (!currentUser.cleared.includes(completed)) currentUser.cleared.push(completed);
     if (completed >= currentUser.maxUnlocked && currentUser.maxUnlocked < 3) {
         currentUser.maxUnlocked = completed + 1;
@@ -870,6 +875,114 @@ modalBtn.onclick = () => {
     }
     showScreen('auth');
 })();
+
+// ==================== "P" TUŞU: TÜM SEFERLERİ AÇ (dev kısayolu) ====================
+document.addEventListener('keydown', (e) => {
+    if (e.key !== 'p' && e.key !== 'P') return;
+    // Yazı kutusuna yazarken tetiklenmesin
+    const tag = (document.activeElement && document.activeElement.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea') return;
+    if (!currentUser) return;
+    currentUser.maxUnlocked = 3;
+    saveCurrentUser();
+    if (campaignScreen && !campaignScreen.classList.contains('hidden')) {
+        refreshCampaignNodes();
+    }
+    showToast('🔓 Tüm bölümler açıldı');
+});
+
+// ==================== VERİ YEDEKLEME / KURTARMA (admin) ====================
+// Render gibi platformlarda deploy/güncelleme sonrası disk sıfırlanabiliyor
+// (kalıcı disk eklenmediyse). Bu panel tüm kullanıcı verisini (users.json)
+// dışa aktarıp/geri yükleyerek bu veri kaybını önler.
+const ADMIN_BACKUP_KEY_STORAGE = 'copAdamAdminKey_v1';
+
+function getAdminKey(forcePrompt) {
+    let key = localStorage.getItem(ADMIN_BACKUP_KEY_STORAGE) || '';
+    if (!key || forcePrompt) {
+        key = prompt('Admin anahtarı (ADMIN_KEY):', key || '') || '';
+        if (key) localStorage.setItem(ADMIN_BACKUP_KEY_STORAGE, key);
+    }
+    return key;
+}
+
+async function adminExportData() {
+    const key = getAdminKey(false);
+    if (!key) return;
+    try {
+        const res = await fetch(API_BASE + '/api/admin/export', {
+            headers: { 'x-admin-key': key }
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            if (res.status === 403) { showToast('❌ Admin anahtarı hatalı'); localStorage.removeItem(ADMIN_BACKUP_KEY_STORAGE); }
+            else showToast('❌ Yedekleme başarısız: ' + (data.error || res.status));
+            return;
+        }
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'cop-adam-yedek-' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.json';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        showToast('✅ Yedek indirildi');
+    } catch (e) {
+        showToast('❌ Yedekleme hatası: ' + e.message);
+    }
+}
+
+function adminImportData() {
+    const key = getAdminKey(false);
+    if (!key) return;
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'application/json';
+    input.onchange = async () => {
+        const file = input.files[0];
+        if (!file) return;
+        if (!confirm('Sunucudaki TÜM kullanıcı verisi bu dosyadaki verilerle DEĞİŞTİRİLECEK. Emin misin?')) return;
+        try {
+            const text = await file.text();
+            const parsed = JSON.parse(text);
+            const res = await fetch(API_BASE + '/api/admin/import', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-admin-key': key },
+                body: JSON.stringify(parsed),
+            });
+            const result = await res.json();
+            if (!res.ok) {
+                if (res.status === 403) { showToast('❌ Admin anahtarı hatalı'); localStorage.removeItem(ADMIN_BACKUP_KEY_STORAGE); }
+                else showToast('❌ Kurtarma başarısız: ' + (result.error || res.status));
+                return;
+            }
+            showToast('✅ Kurtarıldı: ' + result.count + ' kullanıcı');
+        } catch (e) {
+            showToast('❌ Kurtarma hatası: ' + e.message);
+        }
+    };
+    input.click();
+}
+
+function ensureAdminBackupUI() {
+    let panel = document.getElementById('adminBackupPanel');
+    if (panel) return panel;
+    panel = document.createElement('div');
+    panel.id = 'adminBackupPanel';
+    panel.style.cssText = 'position:fixed;left:10px;bottom:10px;z-index:9999;display:flex;gap:6px;opacity:0.85;';
+    panel.innerHTML =
+        '<button type="button" id="btnAdminExport" title="Tüm veriyi indir (yedekle)" ' +
+        'style="padding:6px 10px;font-size:12px;border-radius:6px;border:1px solid #444;background:#1a1a1a;color:#fff;cursor:pointer;">💾 Yedekle</button>' +
+        '<button type="button" id="btnAdminImport" title="Yedekten geri yükle" ' +
+        'style="padding:6px 10px;font-size:12px;border-radius:6px;border:1px solid #444;background:#1a1a1a;color:#fff;cursor:pointer;">📤 Kurtar</button>';
+    document.body.appendChild(panel);
+    document.getElementById('btnAdminExport').onclick = adminExportData;
+    document.getElementById('btnAdminImport').onclick = adminImportData;
+    return panel;
+}
+ensureAdminBackupUI();
 
 // ==================== MÜZİK ====================
 const MUSIC_KEY = 'copAdamMusicMuted_v1';
