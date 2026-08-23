@@ -879,9 +879,11 @@ function ensureMusicHud() {
     return hud;
 }
 
+// ✅ DÜZELTİLEN KISIM: 'music/' ön eki kaldırıldı, doğrudan dosya adını döndürüyor.
 function musicUrl(name) {
-    return name; // Artık 'music/' klasörüne bakmaz, doğrudan kök dosyayı çağırır.
+    return name;
 }
+
 function ensureTracks() {
     if (!audioMenu) {
         audioMenu = new Audio(musicUrl('menu.mp3'));
