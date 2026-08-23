@@ -12,6 +12,10 @@ const PORT = process.env.PORT || 3847;
 const HTML_FILE = process.env.HTML_FILE || 'index.html';
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
+// Yedekleme/kurtarma uçları için basit anahtar. Render'da Environment
+// sekmesinden ADMIN_KEY adında bir ortam değişkeni tanımla — tanımlamazsan
+// varsayılan 'changeme' kullanılır (GÜVENLİ DEĞİL, mutlaka değiştir).
+const ADMIN_KEY = process.env.ADMIN_KEY || 'changeme';
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 function loadUsers() {
     try { return JSON.parse(fs.readFileSync(USERS_FILE, 'utf8')); }
@@ -122,6 +126,11 @@ function requireAuth(req, res, next) {
     req.token = token;
     next();
 }
+function requireAdmin(req, res, next) {
+    const key = req.headers['x-admin-key'] || req.query.key || '';
+    if (!key || key !== ADMIN_KEY) return res.status(403).json({ error: 'Yetkisiz (admin anahtarı hatalı)' });
+    next();
+}
 function publicUser(username) {
     const u = users[username];
     return { username, maxUnlocked: u.maxUnlocked || 1, cleared: u.cleared || [] };
@@ -170,6 +179,30 @@ app.post('/api/progress', requireAuth, (req, res) => {
     saveUsers(users);
     res.json(publicUser(req.username));
 });
+
+// ==================== VERİ YEDEKLEME / KURTARMA (admin) ====================
+// Render gibi platformlarda kalıcı disk (persistent disk) eklenmediyse,
+// her deploy/güncelleme sonrası /data klasörü sıfırlanır ve tüm kullanıcı
+// verisi (users.json) kaybolur. Bu iki uç, tüm veriyi indirip yeniden
+// yükleyerek bu kaybı önler. x-admin-key header'ı ADMIN_KEY ortam
+// değişkenine eşit olmalı.
+app.get('/api/admin/export', requireAdmin, (req, res) => {
+    res.json({ exportedAt: new Date().toISOString(), users });
+});
+app.post('/api/admin/import', requireAdmin, (req, res) => {
+    const incoming = req.body && req.body.users;
+    if (!incoming || typeof incoming !== 'object' || Array.isArray(incoming)) {
+        return res.status(400).json({ error: 'Geçersiz veri: "users" alanı bekleniyor' });
+    }
+    Object.keys(incoming).forEach(name => ensureUserShape(incoming[name]));
+    users = incoming;
+    saveUsers(users);
+    // Eski oturumlar artık tutarsız olabilir (kullanıcı silinmiş/değişmiş olabilir),
+    // temiz başlangıç için hepsini geçersiz kıl.
+    sessions.clear();
+    res.json({ ok: true, count: Object.keys(users).length });
+});
+
 const onlineSockets = new Map();
 function isOnline(username) { return onlineSockets.has(username); }
 function friendsPayload(username) {
@@ -374,6 +407,9 @@ wss.on('connection', (ws) => {
 server.listen(PORT, () => {
     console.log(`Çöp Adam Savaşları: http://localhost:${PORT}`);
     console.log(`Oyun: ${HTML_FILE} | Veri: ${DATA_DIR}`);
+    if (ADMIN_KEY === 'changeme') {
+        console.log(' ⚠️  ADMIN_KEY ortam değişkeni ayarlanmamış — varsayılan "changeme" kullanılıyor. Render\'da mutlaka değiştir!');
+    }
     const need = [
         HTML_FILE,
         'style.css',
