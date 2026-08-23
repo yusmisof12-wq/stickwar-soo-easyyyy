@@ -833,7 +833,7 @@
                     this.attackRecover--;
                 }
                 // 'sickle' → drawStickman içinde sopalı modeli + 2 yüz / 2 el çizik
-                drawStickman(ctx, this.x, this.y, col, 'sickle', anim, this._isActuallyWalking && anim === 0, isFlipped, 0);
+                drawStickman(ctx, this.x, this.y, col, 'sickle', anim, this._isActuallyWalking && anim === 0, isFlipped, 0, 0, 0, false, false, !!this.isPlayer);
                 drawStuckArrows(ctx, this);
                 ctx.fillStyle = 'red';
                 ctx.fillRect(this.x - 15, this.y - 65, 30, 4);
