@@ -772,8 +772,8 @@
                 if (cmd === CMD_RETREAT) {
                     if (Math.hypot(this.x - targetFrontlineX, this.y - targetFrontlineY) > 5) {
                         let angle = Math.atan2(targetFrontlineY - this.y, targetFrontlineX - this.x);
-                        this.x += Math.cos(angle) * 2.1 * SPEED_MULT * slowMul;
-                        this.y += Math.sin(angle) * 1.5 * SPEED_MULT * slowMul;
+                        this.x += Math.cos(angle) * 1.5 * SPEED_MULT * slowMul;
+                        this.y += Math.sin(angle) * 1.1 * SPEED_MULT * slowMul;
                         actualMoved = true;
                     }
                     this.attackTimer = 0;
@@ -794,16 +794,16 @@
                     }
                 } else if (this.target) {
                     let angle = Math.atan2(this.target.y - this.y, this.target.x - this.x);
-                    this.x += Math.cos(angle) * 2.4 * SPEED_MULT * slowMul;
-                    this.y += Math.sin(angle) * 1.7 * SPEED_MULT * slowMul;
+                    this.x += Math.cos(angle) * 1.7 * SPEED_MULT * slowMul;
+                    this.y += Math.sin(angle) * 1.2 * SPEED_MULT * slowMul;
                     this.attackTimer = 0;
                     actualMoved = true;
                 } else {
                     let dist = Math.hypot(this.x - targetFrontlineX, this.y - targetFrontlineY);
                     if (dist > 10) {
                         let angle = Math.atan2(targetFrontlineY - this.y, targetFrontlineX - this.x);
-                        this.x += Math.cos(angle) * 2.2 * SPEED_MULT * slowMul;
-                        this.y += Math.sin(angle) * 1.5 * SPEED_MULT * slowMul;
+                        this.x += Math.cos(angle) * 1.6 * SPEED_MULT * slowMul;
+                        this.y += Math.sin(angle) * 1.1 * SPEED_MULT * slowMul;
                         actualMoved = true;
                     }
                 }
