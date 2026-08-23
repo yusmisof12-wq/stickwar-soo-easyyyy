@@ -382,24 +382,28 @@ function updateAI() {
 }
 
 function updateArchers() {
-    // Geri çekilme okçusu SADECE co-op (arkadaşla oyun)
-    const ensurePlayerArcher = (ownerIndex, offsetX) => {
+    // Geri çekilme okçusu: SOLO ve CO-OP'ta oyuncuya 2 okçu, düşmana da 2 okçu gelir
+    const ensurePlayerArchers = (ownerIndex, baseOffsetX) => {
         const st = getOwnerState(ownerIndex);
         const retreating = st.command === CMD_RETREAT;
-        const has = retreatArchers.some(a => a.isPlayer && (a.ownerIndex || 0) === ownerIndex);
-        if (retreating && !has) {
-            retreatArchers.push(new BaseArcherUnit(true, offsetX, ownerIndex === 1 ? 12 : -12, 1.2, ownerIndex));
+        const mine = () => retreatArchers.filter(a => a.isPlayer && (a.ownerIndex || 0) === ownerIndex);
+        if (retreating && mine().length === 0) {
+            retreatArchers.push(
+                new BaseArcherUnit(true, baseOffsetX - 15, -15, 1.2, ownerIndex),
+                new BaseArcherUnit(true, baseOffsetX + 15, 15, 1.2, ownerIndex)
+            );
         }
         if (!retreating) {
             retreatArchers = retreatArchers.filter(a => !(a.isPlayer && (a.ownerIndex || 0) === ownerIndex));
         }
     };
+
     if (typeof isCoopActive === 'function' && isCoopActive()) {
-        ensurePlayerArcher(0, -28);
-        ensurePlayerArcher(1, 28);
+        ensurePlayerArchers(0, -28);
+        ensurePlayerArchers(1, 28);
     } else {
-        // Solo: geri çekilmede okçu yok
-        retreatArchers = retreatArchers.filter(a => !a.isPlayer);
+        // Solo: oyuncu tarafına da 2 okçu gelsin
+        ensurePlayerArchers(0, -25);
     }
 
     // Düşman: 2 okçu
