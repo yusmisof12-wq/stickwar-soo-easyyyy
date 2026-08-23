@@ -26,6 +26,7 @@ function drawStuckArrows(ctx, unit) {
         ctx.restore();
     }
 }
+
 function drawMiningSparks(ctx) {
     miningSparks.forEach(s => {
         const alpha = Math.max(0, s.life / s.maxLife);
@@ -45,6 +46,7 @@ function drawMiningSparks(ctx) {
         ctx.restore();
     });
 }
+
 function drawMinerBackpack(ctx, x, y, isFlipped, bagGold, inHand = false) {
     ctx.save();
     ctx.translate(x, y);
@@ -90,6 +92,7 @@ function drawMinerBackpack(ctx, x, y, isFlipped, bagGold, inHand = false) {
     }
     ctx.restore();
 }
+
 function drawStickman(ctx, x, y, color, weapon, animFrame, isWalking, isFlipped = false, swingAngle = 0, bodyLean = 0, armRaise = 0, holdingRock = false, isMinerStyle = false, isPlayerFace = true) {
     ctx.save();
     ctx.translate(x, y);
@@ -338,28 +341,137 @@ function drawStickman(ctx, x, y, color, weapon, animFrame, isWalking, isFlipped 
     }
     ctx.restore();
 }
+
 function drawEnvironment(ctx) {
-    let skyHeight = canvas.height - GROUND_HEIGHT;
-    let grad = ctx.createLinearGradient(0, 0, 0, skyHeight);
-    grad.addColorStop(0, '#2c3e50');
-    grad.addColorStop(0.4, '#8e44ad');
-    grad.addColorStop(0.7, '#c0392b');
-    grad.addColorStop(1, '#f39c12');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, worldWidth, skyHeight);
-    ctx.fillStyle = '#f1c40f';
+    let w = typeof worldWidth !== 'undefined' ? worldWidth : canvas.width * 2;
+    let skyHeight = canvas.height - (typeof GROUND_HEIGHT !== 'undefined' ? GROUND_HEIGHT : 100);
+
+    // 1. Gökyüzü Gradiyanı (Mor ve pembe/şeftali tonları)
+    let skyGrad = ctx.createLinearGradient(0, 0, 0, skyHeight);
+    skyGrad.addColorStop(0, '#c39bd3');
+    skyGrad.addColorStop(0.6, '#f5cba7');
+    skyGrad.addColorStop(1, '#fcedbb');
+    ctx.fillStyle = skyGrad;
+    ctx.fillRect(0, 0, w, skyHeight);
+
+    // 2. Devasa Beyaz Güneş/Ay 
+    ctx.fillStyle = '#ffffff';
     ctx.beginPath();
-    ctx.arc(worldWidth - 220, 140, 90, 0, Math.PI * 2);
+    ctx.arc(300, skyHeight - 160, 200, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = '#27ae60';
-    ctx.fillRect(0, skyHeight, worldWidth, GROUND_HEIGHT);
-    ctx.fillStyle = '#1e8449';
+
+    // Arka plan elemanlarını harita boyunca tekrar etme
+    let sectionW = 900;
+    let sections = Math.ceil(w / sectionW);
+
+    for (let i = 0; i < sections; i++) {
+        let ox = i * sectionW;
+
+        // 3. Arka Tepeler (Koyu Yeşillik)
+        ctx.fillStyle = '#689f38';
+        ctx.beginPath();
+        ctx.moveTo(ox, skyHeight - 60);
+        ctx.quadraticCurveTo(ox + 250, skyHeight - 170, ox + 500, skyHeight - 70);
+        ctx.quadraticCurveTo(ox + 700, skyHeight - 130, ox + sectionW, skyHeight - 60);
+        ctx.lineTo(ox + sectionW, skyHeight);
+        ctx.lineTo(ox, skyHeight);
+        ctx.fill();
+
+        // 4. Kasaba / Kale Kalıntısı
+        let tx = ox + 180; 
+        let ty = skyHeight - 110; 
+        
+        ctx.fillStyle = '#8d6e63'; 
+        ctx.fillRect(tx, ty - 70, 45, 70); // Ana kule
+        ctx.fillRect(tx - 35, ty - 30, 35, 30); // Yan binalar
+        ctx.fillRect(tx + 45, ty - 45, 40, 45);
+        ctx.fillRect(tx - 30, ty - 40, 10, 10); // Çatılar
+        ctx.fillRect(tx - 10, ty - 40, 10, 10);
+        ctx.fillRect(tx + 5, ty - 80, 10, 10);
+        ctx.fillRect(tx + 25, ty - 80, 10, 10);
+        ctx.fillRect(tx + 50, ty - 55, 10, 10);
+        ctx.fillRect(tx + 70, ty - 55, 10, 10);
+        
+        ctx.fillStyle = '#3e2723'; // Pencereler
+        ctx.fillRect(tx + 15, ty - 45, 10, 15);
+        ctx.fillRect(tx - 15, ty - 15, 8, 15);
+        ctx.fillRect(tx + 65, ty - 25, 8, 12);
+
+        // 5. Ön Tepeler (Açık Yeşillik)
+        ctx.fillStyle = '#7cb342';
+        ctx.beginPath();
+        ctx.moveTo(ox, skyHeight - 30);
+        ctx.quadraticCurveTo(ox + 350, skyHeight - 120, ox + 600, skyHeight - 40);
+        ctx.quadraticCurveTo(ox + 750, skyHeight - 90, ox + sectionW, skyHeight - 30);
+        ctx.lineTo(ox + sectionW, skyHeight);
+        ctx.lineTo(ox, skyHeight);
+        ctx.fill();
+
+        // 6. Çam Ağaçları
+        ctx.fillStyle = '#2e7d32'; 
+        let treePositions = [
+            {x: ox + 90, y: skyHeight - 65},
+            {x: ox + 130, y: skyHeight - 80},
+            {x: ox + 350, y: skyHeight - 95},
+            {x: ox + 380, y: skyHeight - 85},
+            {x: ox + 650, y: skyHeight - 65},
+            {x: ox + 820, y: skyHeight - 75},
+            {x: ox + 850, y: skyHeight - 65}
+        ];
+        treePositions.forEach(t => {
+            ctx.beginPath();
+            ctx.moveTo(t.x, t.y - 35); 
+            ctx.lineTo(t.x - 12, t.y); 
+            ctx.lineTo(t.x + 12, t.y); 
+            ctx.fill();
+        });
+
+        // 7. Kumsal Katmanı
+        ctx.fillStyle = '#e5c479';
+        ctx.fillRect(ox, skyHeight - 45, sectionW, 45);
+
+        // 8. Nehir / Gölet
+        ctx.fillStyle = '#4c87c4';
+        ctx.beginPath();
+        ctx.moveTo(ox, skyHeight - 25);
+        ctx.quadraticCurveTo(ox + 450, skyHeight - 5, ox + sectionW, skyHeight - 35);
+        ctx.lineTo(ox + sectionW, skyHeight);
+        ctx.lineTo(ox, skyHeight);
+        ctx.fill();
+
+        ctx.fillStyle = '#ebf5fb'; // Yansımalar
+        ctx.globalAlpha = 0.7;
+        ctx.fillRect(ox + 250, skyHeight - 15, 80, 2.5);
+        ctx.fillRect(ox + 290, skyHeight - 9, 50, 2);
+        ctx.fillRect(ox + 680, skyHeight - 20, 90, 2.5);
+        ctx.globalAlpha = 1.0;
+
+        // 9. Kumsaldaki Taşlar/Kayalar
+        ctx.fillStyle = '#555555';
+        let rockPos = [
+            {x: ox + 220, y: skyHeight - 35, r: 18},
+            {x: ox + 245, y: skyHeight - 38, r: 10},
+            {x: ox + 550, y: skyHeight - 40, r: 15},
+            {x: ox + 575, y: skyHeight - 37, r: 8}
+        ];
+        rockPos.forEach(rk => {
+            ctx.beginPath();
+            ctx.arc(rk.x, rk.y, rk.r, Math.PI, 0);
+            ctx.fill();
+        });
+    }
+
+    // 10. Ön Plan (Savaş Alanı)
+    ctx.fillStyle = '#548235'; 
+    ctx.fillRect(0, skyHeight, w, typeof GROUND_HEIGHT !== 'undefined' ? GROUND_HEIGHT : 100);
+    ctx.fillStyle = '#385723'; 
     let patternWidth = 40;
-    for (let i = 0; i < worldWidth / patternWidth + 5; i++) {
+    for (let i = 0; i < w / patternWidth + 5; i++) {
         ctx.fillRect(i * patternWidth, skyHeight + 25, 4, 30);
         ctx.fillRect(i * patternWidth + 12, skyHeight + 65, 4, 20);
     }
 }
+
 function drawBase(ctx, isPlayer) {
     let b = isPlayer ? player.base : enemy.base;
     let bx = b.x;
@@ -383,6 +495,7 @@ function drawBase(ctx, isPlayer) {
     ctx.textAlign = 'center';
     ctx.fillText(Math.floor(b.hp) + "/" + b.maxHp, bx, by - 210);
 }
+
 function drawMines(ctx) {
     let allSlots = [...playerMineSlots, ...enemyMineSlots];
     allSlots.forEach(slot => {
@@ -423,23 +536,29 @@ function drawMines(ctx) {
         });
     });
 }
+
 function draw() {
     if (!ctx || !canvas) return;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.save();
     ctx.translate(-cameraX, 0);
+    
     drawEnvironment(ctx);
     drawMines(ctx);
     drawBase(ctx, true);
     drawBase(ctx, false);
+    
     units.forEach(u => {
         if (u && typeof u.draw === 'function') u.draw(ctx);
     });
+    
     projectiles.forEach(p => {
         if (p && typeof p.draw === 'function') p.draw(ctx);
     });
+    
     drawMiningSparks(ctx);
+    
     floatingTexts.forEach(f => {
         ctx.save();
         ctx.globalAlpha = Math.max(0, Math.min(1, (f.life || 0) / 60));
@@ -449,8 +568,10 @@ function draw() {
         ctx.fillText(f.text, f.x, f.y);
         ctx.restore();
     });
+    
     retreatArchers.forEach(a => {
         if (a && typeof a.draw === 'function') a.draw(ctx);
     });
+    
     ctx.restore();
 }
