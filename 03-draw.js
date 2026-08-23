@@ -210,6 +210,21 @@ function drawStuckArrows(ctx, unit) {
             }
         }
 
+        function spawnMiningSparks(x, y) {
+            if (typeof miningSparks === 'undefined') return;
+            for (let i = 0; i < 6; i++) {
+                miningSparks.push({
+                    x: x + (Math.random() - 0.5) * 10,
+                    y: y + (Math.random() - 0.5) * 8,
+                    vx: (Math.random() - 0.5) * 2.5,
+                    vy: -1.5 - Math.random() * 2,
+                    size: 2 + Math.random() * 2.5,
+                    life: 18 + Math.random() * 14,
+                    maxLife: 32,
+                });
+            }
+        }
+
         function updateMiningSparks() {
             if (!miningSparks || !miningSparks.length) return;
             for (let i = miningSparks.length - 1; i >= 0; i--) {
