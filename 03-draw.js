@@ -324,16 +324,16 @@ function drawStuckArrows(ctx, unit) {
                 ctx.strokeStyle = color;
                 ctx.lineWidth = 2;
                 ctx.stroke();
-                // Orakçı: yüzde 2 çizik
+                // Orakçı: yüzde 2 çizik (kafa içinde; düşman = siyah)
                 if (isSickle) {
-                    ctx.strokeStyle = '#c0392b';
-                    ctx.lineWidth = 2;
+                    ctx.strokeStyle = isPlayerFace ? '#c0392b' : '#0a0a0a';
+                    ctx.lineWidth = 1.8;
                     ctx.lineCap = 'round';
                     ctx.beginPath();
-                    ctx.moveTo(hx + 2, hy - 3);
-                    ctx.lineTo(hx + 8, hy - 5);
-                    ctx.moveTo(hx + 2, hy + 2);
-                    ctx.lineTo(hx + 8, hy);
+                    ctx.moveTo(hx + 1, hy - 2);
+                    ctx.lineTo(hx + 5, hy - 3.5);
+                    ctx.moveTo(hx + 1, hy + 2);
+                    ctx.lineTo(hx + 5, hy + 0.5);
                     ctx.stroke();
                 }
             }
@@ -417,7 +417,17 @@ function drawStuckArrows(ctx, unit) {
                     backArmRot = Math.sin(frames * 0.22 + Math.PI) * 25;
                 }
                 let backHandX, backHandY, handX, handY;
-                if (weapon === 'club' || weapon === 'sickle') {
+                if (weapon === 'sickle') {
+                    // İki el sapta
+                    const swingT = animFrame > 30 && animFrame < 55 ? (animFrame - 30) / 25 : 0;
+                    const rad = armRot * Math.PI / 180;
+                    const gx = shoulderX + 6 + swingT * 8 + Math.sin(rad) * 4;
+                    const gy = shoulderY + 10 - swingT * 4;
+                    handX = gx + 3;
+                    handY = gy;
+                    backHandX = gx - 4;
+                    backHandY = gy + 3;
+                } else if (weapon === 'club') {
                     backHandX = shoulderX - 8;
                     backHandY = shoulderY + 12;
                     const swingT = animFrame > 30 && animFrame < 55 ? (animFrame - 30) / 25 : 0;
@@ -476,15 +486,13 @@ function drawStuckArrows(ctx, unit) {
                     ctx.lineTo(16, -18);
                     ctx.stroke();
                     ctx.restore();
-                } else if (weapon === 'club' || weapon === 'sickle') {
-                    // Normal ölçekli dikenli sopa (stickman ile orantılı)
+                } else if (weapon === 'club') {
                     const swingT = animFrame > 30 && animFrame < 55 ? (animFrame - 30) / 25 : 0;
                     const clubLen = 28 + swingT * 8;
                     ctx.save();
                     ctx.translate(handX, handY);
                     const clubAngle = (-0.5 + armRot * 0.014) + swingT * 0.3;
                     ctx.rotate(clubAngle);
-                    // sap
                     ctx.strokeStyle = color;
                     ctx.lineWidth = 5;
                     ctx.lineCap = 'round';
@@ -492,21 +500,13 @@ function drawStuckArrows(ctx, unit) {
                     ctx.moveTo(0, 0);
                     ctx.lineTo(0, -clubLen);
                     ctx.stroke();
-                    // baş
                     ctx.fillStyle = color;
                     ctx.beginPath();
                     ctx.ellipse(0, -clubLen - 1, 4.5, 6, 0, 0, Math.PI * 2);
                     ctx.fill();
-                    // dikenler (küçük)
                     ctx.fillStyle = '#ecf0f1';
                     const tip = -clubLen;
-                    const spikes = [
-                        [-5, tip + 1], [5, tip + 1],
-                        [-6, tip - 4], [6, tip - 4],
-                        [-4, tip - 8], [4, tip - 8],
-                        [0, tip - 11]
-                    ];
-                    spikes.forEach(([sx, sy]) => {
+                    [[-5, tip + 1], [5, tip + 1], [-6, tip - 4], [6, tip - 4], [-4, tip - 8], [4, tip - 8], [0, tip - 11]].forEach(([sx, sy]) => {
                         ctx.beginPath();
                         ctx.moveTo(sx, sy);
                         ctx.lineTo(sx * 0.25, sy + 4);
@@ -515,18 +515,51 @@ function drawStuckArrows(ctx, unit) {
                         ctx.fill();
                     });
                     ctx.restore();
-                    // Orakçı: elde 2 çizik
-                    if (isSickle) {
+                } else if (weapon === 'sickle') {
+                    // Orak resmi (orijinal sağa bakıyor; karakter isFlipped ile döner)
+                    const swingT = animFrame > 30 && animFrame < 55 ? (animFrame - 30) / 25 : 0;
+                    const gripX = (handX + backHandX) / 2;
+                    const gripY = (handY + backHandY) / 2;
+                    const img = typeof sickleWeaponImg !== 'undefined' ? sickleWeaponImg : null;
+                    if (img && img.complete && img.naturalWidth > 0) {
+                        const iw = 42 + swingT * 6;
+                        const ih = iw * (img.naturalHeight / img.naturalWidth);
+                        ctx.save();
+                        ctx.translate(gripX, gripY);
+                        // idle hafif açılı; vuruşta savrulma
+                        const ang = -0.9 + armRot * 0.012 + swingT * 0.85;
+                        ctx.rotate(ang);
+                        // tutamak altta, bıçak yukarı-sağa (resim sağa bakıyor)
+                        ctx.drawImage(img, -iw * 0.22, -ih * 0.55, iw, ih);
+                        ctx.restore();
+                    } else {
+                        // yedek çizim
+                        ctx.save();
+                        ctx.translate(gripX, gripY);
+                        ctx.rotate(-0.9 + swingT * 0.8);
                         ctx.strokeStyle = '#c0392b';
-                        ctx.lineWidth = 2;
-                        ctx.lineCap = 'round';
+                        ctx.lineWidth = 5;
                         ctx.beginPath();
-                        ctx.moveTo(handX - 2, handY - 3);
-                        ctx.lineTo(handX + 5, handY - 1);
-                        ctx.moveTo(handX - 1, handY + 1);
-                        ctx.lineTo(handX + 6, handY + 3);
+                        ctx.moveTo(0, 6);
+                        ctx.lineTo(0, -12);
                         ctx.stroke();
+                        ctx.strokeStyle = '#bdc3c7';
+                        ctx.lineWidth = 4;
+                        ctx.beginPath();
+                        ctx.arc(4, -18, 14, -0.3 * Math.PI, 0.95 * Math.PI, false);
+                        ctx.stroke();
+                        ctx.restore();
                     }
+                    // Elde 2 çizik (düşman = siyah)
+                    ctx.strokeStyle = isPlayerFace ? '#c0392b' : '#0a0a0a';
+                    ctx.lineWidth = 1.8;
+                    ctx.lineCap = 'round';
+                    ctx.beginPath();
+                    ctx.moveTo(handX - 1, handY - 2);
+                    ctx.lineTo(handX + 4, handY - 1);
+                    ctx.moveTo(handX - 1, handY + 2);
+                    ctx.lineTo(handX + 4, handY + 3);
+                    ctx.stroke();
                 } else if (weapon === 'bow') {
                     ctx.save();
                     ctx.translate(handX, handY);
