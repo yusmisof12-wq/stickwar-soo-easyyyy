@@ -1,7 +1,159 @@
 // ==================== 03-draw.js ====================
 // Tüm çizim fonksiyonları burada toplanmıştır.
 
-        function drawStuckArrows(ctx, unit) {
+        
+        // Orakçı — fotoğrafa yakın model, gerçek yürüme + vuruş animasyonu
+        function drawSicklewrath(ctx, x, y, color, animFrame, isWalking, isFlipped) {
+            ctx.save();
+            ctx.translate(x, y);
+            if (isFlipped) ctx.scale(-1, 1);
+
+            const body = color || '#1a1a1a';
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+
+            // Yürüme fazı
+            const walkPh = (typeof frames !== 'undefined' ? frames : 0) * 0.38;
+            const legA = isWalking ? Math.sin(walkPh) * 11 : 0;
+            const legB = isWalking ? Math.sin(walkPh + Math.PI) * 11 : 0;
+            const bob = isWalking ? Math.abs(Math.sin(walkPh)) * 1.5 : 0;
+
+            // Vuruş animasyonu
+            let swing = 0; // 0 idle, 1 full swing forward
+            let windup = 0;
+            if (animFrame > 0) {
+                if (animFrame < 28) {
+                    windup = animFrame / 28;
+                    swing = -0.35 * windup;
+                } else if (animFrame < 52) {
+                    const t = (animFrame - 28) / 24;
+                    swing = -0.35 + t * 1.35;
+                    windup = 1 - t;
+                } else {
+                    const t = Math.min(1, (animFrame - 52) / 40);
+                    swing = 1.0 * (1 - t);
+                }
+            }
+
+            const hipY = -10 + bob;
+            const shoulderY = -34 + bob;
+            const lean = swing * 4;
+
+            // --- Bacaklar (kalın, fotoğraf gibi) ---
+            ctx.strokeStyle = body;
+            ctx.lineWidth = 7;
+            ctx.beginPath();
+            ctx.moveTo(0, hipY);
+            ctx.lineTo(-5 + legA * 0.35, -2);
+            ctx.lineTo(-6 + legA, 4);
+            ctx.moveTo(0, hipY);
+            ctx.lineTo(5 + legB * 0.35, -2);
+            ctx.lineTo(7 + legB, 4);
+            ctx.stroke();
+            // ayak
+            ctx.lineWidth = 6;
+            ctx.beginPath();
+            ctx.moveTo(-6 + legA, 4);
+            ctx.lineTo(-10 + legA, 5);
+            ctx.moveTo(7 + legB, 4);
+            ctx.lineTo(11 + legB, 5);
+            ctx.stroke();
+
+            // --- Gövde ---
+            ctx.lineWidth = 8;
+            ctx.beginPath();
+            ctx.moveTo(0, hipY);
+            ctx.lineTo(lean * 0.3, shoulderY);
+            ctx.stroke();
+
+            // --- Kafa ---
+            const hx = lean * 0.4;
+            const hy = shoulderY - 11;
+            ctx.fillStyle = body;
+            ctx.beginPath();
+            ctx.arc(hx, hy, 10, 0, Math.PI * 2);
+            ctx.fill();
+            // kırmızı yara izleri (fotoğraf)
+            ctx.strokeStyle = '#c0392b';
+            ctx.lineWidth = 1.8;
+            ctx.lineCap = 'round';
+            for (let i = 0; i < 3; i++) {
+                const oy = hy - 3 + i * 3.5;
+                ctx.beginPath();
+                ctx.moveTo(hx + 2, oy);
+                ctx.lineTo(hx + 8, oy - 1.2);
+                ctx.stroke();
+            }
+
+            // --- Kollar: iki el orak sapında (idle fotoğraf pozu) ---
+            // El pozisyonları idle + swing
+            const gripX = 8 + lean + swing * 10;
+            const gripY = shoulderY + 10 - swing * 6 - windup * 4;
+            const backGripX = 2 + lean * 0.5;
+            const backGripY = shoulderY + 12 - windup * 2;
+
+            ctx.strokeStyle = body;
+            ctx.lineWidth = 6.5;
+            ctx.beginPath();
+            ctx.moveTo(lean * 0.3, shoulderY);
+            ctx.lineTo(backGripX, backGripY);
+            ctx.moveTo(lean * 0.3, shoulderY);
+            ctx.lineTo(gripX, gripY);
+            ctx.stroke();
+
+            // --- Orak silahı ---
+            ctx.save();
+            ctx.translate((gripX + backGripX) / 2, (gripY + backGripY) / 2);
+            // idle: orak yukarı-geri; vuruşta öne döner
+            const baseAng = -0.95 + swing * 1.4 - windup * 0.3;
+            ctx.rotate(baseAng);
+
+            // sap
+            ctx.strokeStyle = '#3d3d3d';
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(0, 8);
+            ctx.lineTo(0, -10);
+            ctx.stroke();
+            // kırmızı sargı
+            ctx.strokeStyle = '#b71c1c';
+            ctx.lineWidth = 7;
+            ctx.beginPath();
+            ctx.moveTo(0, 2);
+            ctx.lineTo(0, -12);
+            ctx.stroke();
+            ctx.strokeStyle = '#e74c3c';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(-1.5, 1);
+            ctx.lineTo(-1.5, -11);
+            ctx.stroke();
+
+            // kavisli bıçak
+            ctx.strokeStyle = '#b0b8c0';
+            ctx.lineWidth = 5;
+            ctx.beginPath();
+            ctx.arc(5, -22, 17, -0.4 * Math.PI, 0.95 * Math.PI, false);
+            ctx.stroke();
+            ctx.strokeStyle = '#ecf0f1';
+            ctx.lineWidth = 2.2;
+            ctx.beginPath();
+            ctx.arc(5, -22, 17, -0.35 * Math.PI, 0.9 * Math.PI, false);
+            ctx.stroke();
+            // sivri uç
+            ctx.fillStyle = '#dfe4ea';
+            ctx.beginPath();
+            ctx.moveTo(5 - 15, -28);
+            ctx.lineTo(5 - 22, -35);
+            ctx.lineTo(5 - 11, -30);
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+
+            ctx.restore();
+        }
+
+function drawStuckArrows(ctx, unit) {
             if (!unit.stuckArrows || unit.stuckArrows.length === 0) return;
             for (let i = unit.stuckArrows.length - 1; i >= 0; i--) {
                 const a = unit.stuckArrows[i];
