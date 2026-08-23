@@ -224,16 +224,17 @@ function setPlayerCommand(cmd) {
                 enemy.command = CMD_ATTACK;
                 enemy.aiState = 'attack';
                 const sickleCount = units.filter(u => !u.isPlayer && u instanceof Sicklewrath && u.hp > 0).length;
-                const maxS = diff.maxSickle || 40;
-                // Süre ilerledikçe spawn hızlanır (saniye başı kabaca)
+                const maxS = 18; // aynı anda max canlı orakçı
+                // 3 dk boyunca kademeli: başta yavaş, sonda orta
+                // ~her 2.5sn bir → sonra ~1.4sn bir (frame@60)
                 const progress = Math.min(1, ambushTimer / (AMBUSH_DURATION_FRAMES || 10800));
-                const spawnInterval = Math.max(25, Math.floor(90 - progress * 60)); // tick cooldown
-                if (typeof enemy.sickleCooldown !== 'number') enemy.sickleCooldown = 0;
+                const spawnInterval = Math.max(85, Math.floor(160 - progress * 75));
+                if (typeof enemy.sickleCooldown !== 'number') enemy.sickleCooldown = 90;
                 if (enemy.sickleCooldown > 0) enemy.sickleCooldown--;
                 if (enemy.sickleCooldown <= 0 && sickleCount < maxS) {
-                    // 1 veya ileride 2 birim
-                    const burst = progress > 0.6 ? 2 : 1;
-                    for (let i = 0; i < burst && units.filter(u => !u.isPlayer && u instanceof Sicklewrath).length < maxS; i++) {
+                    units.push(new Sicklewrath(false));
+                    // son 1 dk'da ara sıra 2. birim
+                    if (progress > 0.7 && sickleCount + 1 < maxS && Math.random() < 0.35) {
                         units.push(new Sicklewrath(false));
                     }
                     enemy.sickleCooldown = spawnInterval;
@@ -388,26 +389,25 @@ function setPlayerCommand(cmd) {
         }
 
         function updateArchers() {
-            // Geri çekilme okçusu SADECE co-op (arkadaşla oyun)
-            const ensurePlayerArcher = (ownerIndex, offsetX) => {
+            // Solo ve co-op: geri çekilmede oyuncuya 2 okçu
+            const ensurePlayerArchers = (ownerIndex, baseOffsetX) => {
                 const st = getOwnerState(ownerIndex);
                 const retreating = st.command === CMD_RETREAT;
-                const has = retreatArchers.some(a => a.isPlayer && (a.ownerIndex || 0) === ownerIndex);
-                if (retreating && !has) {
-                    retreatArchers.push(new BaseArcherUnit(true, offsetX, ownerIndex === 1 ? 12 : -12, 1.2, ownerIndex));
+                const mine = () => retreatArchers.filter(a => a.isPlayer && (a.ownerIndex || 0) === ownerIndex);
+                if (retreating && mine().length === 0) {
+                    retreatArchers.push(
+                        new BaseArcherUnit(true, baseOffsetX - 15, -15, 1.2, ownerIndex),
+                        new BaseArcherUnit(true, baseOffsetX + 15, 15, 1.2, ownerIndex)
+                    );
                 }
                 if (!retreating) {
                     retreatArchers = retreatArchers.filter(a => !(a.isPlayer && (a.ownerIndex || 0) === ownerIndex));
                 }
             };
+            ensurePlayerArchers(0, -25);
             if (typeof isCoopActive === 'function' && isCoopActive()) {
-                ensurePlayerArcher(0, -28);
-                ensurePlayerArcher(1, 28);
-            } else {
-                // Solo: geri çekilmede okçu yok
-                retreatArchers = retreatArchers.filter(a => !a.isPlayer);
+                ensurePlayerArchers(1, 28);
             }
-
             // Düşman: 2 okçu
             {
                 const isRetreating = enemy.command === CMD_RETREAT;
