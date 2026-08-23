@@ -8,15 +8,14 @@ const http = require('http');
 const { WebSocketServer } = require('ws');
 let GameRoom = null, TICK_MS = 50;
 try { ({ GameRoom, TICK_MS } = require('./server-game')); } catch (_) {}
+
 const PORT = process.env.PORT || 3847;
 const HTML_FILE = process.env.HTML_FILE || 'index.html';
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
-// Yedekleme/kurtarma uçları için basit anahtar. Render'da Environment
-// sekmesinden ADMIN_KEY adında bir ortam değişkeni tanımla — tanımlamazsan
-// varsayılan 'changeme' kullanılır (GÜVENLİ DEĞİL, mutlaka değiştir).
-const ADMIN_KEY = process.env.ADMIN_KEY || 'changeme';
+
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+
 function loadUsers() {
     try { return JSON.parse(fs.readFileSync(USERS_FILE, 'utf8')); }
     catch (e) { return {}; }
@@ -24,6 +23,7 @@ function loadUsers() {
 function saveUsers(users) {
     fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2), 'utf8');
 }
+
 let users = loadUsers();
 function ensureUserShape(u) {
     if (!Array.isArray(u.friends)) u.friends = [];
@@ -34,42 +34,32 @@ function ensureUserShape(u) {
     return u;
 }
 Object.keys(users).forEach(name => ensureUserShape(users[name]));
+
 const sessions = new Map();
+
 function hashPassword(password, salt) {
     return crypto.scryptSync(password, salt, 64).toString('hex');
 }
 function makeSalt() { return crypto.randomBytes(16).toString('hex'); }
 function makeToken() { return crypto.randomBytes(32).toString('hex'); }
 function makeRoomId() { return crypto.randomBytes(8).toString('hex'); }
-function jitter(n) { return Math.round((Math.random() * 2 - 1) * n); }
-function makeCoopLayout() {
-    const worldWidth = 2600;
-    const spots = [
-        { x: 220, y: -50 },
-        { x: 220, y: 50 },
-        { x: 180, y: -80 },
-        { x: 180, y: 80 }
-    ];
-    return {
-        worldWidth,
-        playerBaseX: 130,
-        enemyBaseX: worldWidth - 130,
-        pMines: spots.map(p => ({ x: p.x + jitter(10), y: p.y + jitter(10) })),
-        eMines: spots.map(p => ({ x: -p.x + jitter(10), y: p.y + jitter(10) })),
-    };
-}
+
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// Statik dosyalar (css/, js/) — Render'da mutlaka bu klasörler de deploy edilmeli
 const publicRoot = __dirname;
 app.use(express.static(publicRoot, {
     index: false,
+    // Doğru MIME tipleri
     setHeaders(res, filePath) {
         if (filePath.endsWith('.js')) res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
         if (filePath.endsWith('.css')) res.setHeader('Content-Type', 'text/css; charset=utf-8');
         if (filePath.endsWith('.mp3')) res.setHeader('Content-Type', 'audio/mpeg');
     }
 }));
+
 app.get('/', (req, res) => {
     const filePath = path.join(publicRoot, HTML_FILE);
     if (fs.existsSync(filePath)) return res.sendFile(filePath);
@@ -79,44 +69,28 @@ app.get('/', (req, res) => {
         `Dosyalar: ${fs.readdirSync(publicRoot).join(', ')}`
     );
 });
+
 app.get('/healthz', (req, res) => {
     const cssOk = fs.existsSync(path.join(publicRoot, 'style.css'));
     const jsOk = fs.existsSync(path.join(publicRoot, '01-core.js'));
-    const musicDir = path.join(publicRoot, 'music');
-    const musicDirExists = fs.existsSync(musicDir) && fs.statSync(musicDir).isDirectory();
-    let musicFiles = [];
-    if (musicDirExists) {
-        try { musicFiles = fs.readdirSync(musicDir); } catch (e) { musicFiles = ['okuma hatası: ' + e.message]; }
-    }
-    const menuMp3 = fs.existsSync(path.join(musicDir, 'menu.mp3'));
-    const battleMp3 = fs.existsSync(path.join(musicDir, 'battle.mp3'));
     res.json({
         ok: true,
         html: fs.existsSync(path.join(publicRoot, HTML_FILE)),
         css: cssOk,
         js: jsOk,
-        publicRoot,
         files: fs.readdirSync(publicRoot),
-        music: {
-            klasorVar: musicDirExists,
-            klasorIcerigi: musicFiles,
-            'menu.mp3': menuMp3,
-            'battle.mp3': battleMp3
-        }
     });
 });
+
+// Eksik statik dosya için net 404 (HTML sayfası dönmesin)
 app.use((req, res, next) => {
     if (req.path.endsWith('.css') || req.path.endsWith('.js')) {
-        return res.status(404).type('text/plain').send('Dosya yok: ' + req.path);
-    }
-    if (req.path.endsWith('.mp3')) {
-        return res.status(404).type('text/plain').send(
-            'Ses dosyası bulunamadı: ' + req.path +
-            '\nBeklenen tam yol: ' + path.join(publicRoot, req.path)
-        );
+        return res.status(404).type('text/plain').send('Dosya yok: ' + req.path +
+            '\nRender\'da css/ ve js/ klasörlerinin de yüklendiğinden emin ol.');
     }
     next();
 });
+
 function requireAuth(req, res, next) {
     const authHeader = req.headers['authorization'] || '';
     const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
@@ -126,15 +100,11 @@ function requireAuth(req, res, next) {
     req.token = token;
     next();
 }
-function requireAdmin(req, res, next) {
-    const key = req.headers['x-admin-key'] || req.query.key || '';
-    if (!key || key !== ADMIN_KEY) return res.status(403).json({ error: 'Yetkisiz (admin anahtarı hatalı)' });
-    next();
-}
 function publicUser(username) {
     const u = users[username];
     return { username, maxUnlocked: u.maxUnlocked || 1, cleared: u.cleared || [] };
 }
+
 app.post('/api/register', (req, res) => {
     const { username, password } = req.body || {};
     if (typeof username !== 'string' || username.trim().length < 3)
@@ -150,6 +120,7 @@ app.post('/api/register', (req, res) => {
     sessions.set(token, name);
     res.json({ token, ...publicUser(name) });
 });
+
 app.post('/api/login', (req, res) => {
     const { username, password } = req.body || {};
     if (typeof username !== 'string' || typeof password !== 'string')
@@ -163,11 +134,13 @@ app.post('/api/login', (req, res) => {
     sessions.set(token, name);
     res.json({ token, ...publicUser(name) });
 });
+
 app.post('/api/logout', requireAuth, (req, res) => {
     sessions.delete(req.token);
     res.json({ ok: true });
 });
 app.get('/api/me', requireAuth, (req, res) => res.json(publicUser(req.username)));
+
 app.post('/api/progress', requireAuth, (req, res) => {
     const { maxUnlocked, cleared } = req.body || {};
     const u = users[req.username];
@@ -180,25 +153,28 @@ app.post('/api/progress', requireAuth, (req, res) => {
     res.json(publicUser(req.username));
 });
 
-// ==================== VERİ YEDEKLEME / KURTARMA (admin) ====================
-// Render gibi platformlarda kalıcı disk (persistent disk) eklenmediyse,
-// her deploy/güncelleme sonrası /data klasörü sıfırlanır ve tüm kullanıcı
-// verisi (users.json) kaybolur. Bu iki uç, tüm veriyi indirip yeniden
-// yükleyerek bu kaybı önler. x-admin-key header'ı ADMIN_KEY ortam
-// değişkenine eşit olmalı.
+
+const ADMIN_KEY = process.env.ADMIN_KEY || 'changeme';
+function requireAdmin(req, res, next) {
+    const key = req.headers['x-admin-key'] || req.query.key || '';
+    // Varsayılan "changeme" ile asla izin verme — Render'da ADMIN_KEY zorunlu
+    if (!ADMIN_KEY || ADMIN_KEY === 'changeme') {
+        return res.status(403).json({ error: "Admin kapalı: Render ortaminda ADMIN_KEY ayarla" });
+    }
+    if (!key || key !== ADMIN_KEY) return res.status(403).json({ error: 'Yetkisiz' });
+    next();
+}
 app.get('/api/admin/export', requireAdmin, (req, res) => {
     res.json({ exportedAt: new Date().toISOString(), users });
 });
 app.post('/api/admin/import', requireAdmin, (req, res) => {
     const incoming = req.body && req.body.users;
     if (!incoming || typeof incoming !== 'object' || Array.isArray(incoming)) {
-        return res.status(400).json({ error: 'Geçersiz veri: "users" alanı bekleniyor' });
+        return res.status(400).json({ error: 'Geçersiz veri' });
     }
     Object.keys(incoming).forEach(name => ensureUserShape(incoming[name]));
     users = incoming;
     saveUsers(users);
-    // Eski oturumlar artık tutarsız olabilir (kullanıcı silinmiş/değişmiş olabilir),
-    // temiz başlangıç için hepsini geçersiz kıl.
     sessions.clear();
     res.json({ ok: true, count: Object.keys(users).length });
 });
@@ -219,7 +195,9 @@ function sendTo(username, obj) {
         try { ws.send(JSON.stringify(obj)); } catch (e) {}
     }
 }
+
 app.get('/api/friends', requireAuth, (req, res) => res.json(friendsPayload(req.username)));
+
 app.post('/api/friends/request', requireAuth, (req, res) => {
     const target = ((req.body && req.body.username) || '').trim();
     const me = req.username;
@@ -241,6 +219,7 @@ app.post('/api/friends/request', requireAuth, (req, res) => {
     sendTo(target, { type: 'friend_request', username: me });
     res.json({ status: 'sent', ...friendsPayload(me) });
 });
+
 app.post('/api/friends/accept', requireAuth, (req, res) => {
     const from = ((req.body && req.body.username) || '').trim();
     const me = req.username, meRec = users[me];
@@ -254,6 +233,7 @@ app.post('/api/friends/accept', requireAuth, (req, res) => {
     sendTo(from, { type: 'friend_accepted', username: me });
     res.json(friendsPayload(me));
 });
+
 app.post('/api/friends/decline', requireAuth, (req, res) => {
     const from = ((req.body && req.body.username) || '').trim();
     const me = req.username, meRec = users[me];
@@ -264,6 +244,7 @@ app.post('/api/friends/decline', requireAuth, (req, res) => {
     }
     res.json(friendsPayload(me));
 });
+
 app.post('/api/friends/remove', requireAuth, (req, res) => {
     const target = ((req.body && req.body.username) || '').trim();
     const me = req.username;
@@ -272,9 +253,11 @@ app.post('/api/friends/remove', requireAuth, (req, res) => {
     saveUsers(users);
     res.json(friendsPayload(me));
 });
+
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server, path: '/ws' });
-const rooms = new Map();
+const rooms = new Map(); // roomId -> { members: [name0, name1], slots: {name:0|1}, game: GameRoom, interval }
+
 function leaveRoomForUser(username, ws) {
     const roomId = ws && ws.roomId;
     if (!roomId) return;
@@ -289,11 +272,13 @@ function leaveRoomForUser(username, ws) {
     ws.roomId = null;
     ws.slot = null;
 }
+
 function broadcastRoom(roomId, obj) {
     const room = rooms.get(roomId);
     if (!room) return;
     room.members.forEach(m => sendTo(m, obj));
 }
+
 function startRoomLoop(roomId) {
     const room = rooms.get(roomId);
     if (!room || !room.game) return;
@@ -308,6 +293,7 @@ function startRoomLoop(roomId) {
         }
     }, TICK_MS);
 }
+
 wss.on('connection', (ws) => {
     ws.username = null;
     ws.roomId = null;
@@ -315,6 +301,7 @@ wss.on('connection', (ws) => {
         let msg;
         try { msg = JSON.parse(raw); } catch (e) { return; }
         if (!msg || typeof msg.type !== 'string') return;
+
         if (msg.type === 'auth') {
             const username = sessions.get(msg.token);
             if (!username || !users[username]) {
@@ -330,6 +317,7 @@ wss.on('connection', (ws) => {
             return;
         }
         if (!ws.username) return;
+
         if (msg.type === 'coop_invite') {
             const to = msg.to;
             const meRec = users[ws.username];
@@ -351,24 +339,23 @@ wss.on('connection', (ws) => {
                 sendTo(to, { type: 'coop_declined', from: ws.username });
                 return;
             }
+            // Çift yerel motor: her iki istemci solo gibi çalışır, sunucu sadece komut iletir
             const roomId = makeRoomId();
             const level = msg.level || 1;
-            const layout = makeCoopLayout();
             const room = {
                 members: [to, ws.username],
                 slots: { [to]: 0, [ws.username]: 1 },
                 game: null,
                 interval: null,
                 inputSeq: 0,
-                layout,
             };
             rooms.set(roomId, room);
             const inviterWs = onlineSockets.get(to);
             if (inviterWs) { inviterWs.roomId = roomId; inviterWs.slot = 0; }
             ws.roomId = roomId;
             ws.slot = 1;
-            sendTo(to, { type: 'coop_start', roomId, slot: 0, level, partner: ws.username, layout });
-            ws.send(JSON.stringify({ type: 'coop_start', roomId, slot: 1, level, partner: to, layout }));
+            sendTo(to, { type: 'coop_start', roomId, slot: 0, level, partner: ws.username });
+            ws.send(JSON.stringify({ type: 'coop_start', roomId, slot: 1, level, partner: to }));
             return;
         }
         if (msg.type === 'room_input') {
@@ -378,11 +365,20 @@ wss.on('connection', (ws) => {
             if (slot === undefined) return;
             room.inputSeq = (room.inputSeq || 0) + 1;
             const payload = { kind: 'input', action: msg.action, slot, seq: room.inputSeq };
+            // Her iki oyuncuya da gönder (gönderen dahil) — aynı sırada uygulansın
             room.members.forEach(m => sendTo(m, { type: 'room_relay', payload }));
             return;
         }
         if (msg.type === 'ping') {
+            const room = rooms.get(ws.roomId);
             const now = Date.now();
+            if (room && room.game && room.slots[ws.username] !== undefined) {
+                const slot = room.slots[ws.username];
+                room.game.lastMsgAt[slot] = now;
+                if (typeof msg.t === 'number') {
+                    // client RTT reported optionally
+                }
+            }
             ws.send(JSON.stringify({ type: 'pong', t: msg.t, serverTime: now }));
             return;
         }
@@ -404,12 +400,10 @@ wss.on('connection', (ws) => {
         }
     });
 });
+
 server.listen(PORT, () => {
     console.log(`Çöp Adam Savaşları: http://localhost:${PORT}`);
     console.log(`Oyun: ${HTML_FILE} | Veri: ${DATA_DIR}`);
-    if (ADMIN_KEY === 'changeme') {
-        console.log(' ⚠️  ADMIN_KEY ortam değişkeni ayarlanmamış — varsayılan "changeme" kullanılıyor. Render\'da mutlaka değiştir!');
-    }
     const need = [
         HTML_FILE,
         'style.css',
@@ -421,11 +415,6 @@ server.listen(PORT, () => {
     ];
     need.forEach(f => {
         const full = path.join(__dirname, f);
-        console.log(fs.existsSync(full) ? ` ✓ ${f}` : ` ✗ EKSİK: ${f}`);
-    });
-    const musicNeed = ['music/menu.mp3', 'music/battle.mp3'];
-    musicNeed.forEach(f => {
-        const full = path.join(__dirname, f);
-        console.log(fs.existsSync(full) ? ` ✓ ${f}` : ` ✗ EKSİK: ${f}`);
+        console.log(fs.existsSync(full) ? `  ✓ ${f}` : `  ✗ EKSİK: ${f}`);
     });
 });
