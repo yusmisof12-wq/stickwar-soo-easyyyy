@@ -3,11 +3,6 @@ const UNIT_COST = { miner: 150, club: 125, archer: 140 };
 const UNIT_TRAIN = { miner: 8 * 60, club: 6 * 60, archer: 7 * 60 };
 const MAX_QUEUE = 8;
 
-// true: düşman artık kendi rastgele YZ'siyle değil, oyuncu(lar)ın yaptığı
-// satın alma ve komutları birebir taklit ederek oynar.
-// false yaparsan eski rastgele zorluk-tabanlı YZ'ye geri dönersin.
-const MIRROR_ENEMY_ACTIONS = true;
-
 function countTeam(isPlayer, Ctor) {
     return units.filter(u => u.isPlayer === isPlayer && u instanceof Ctor && u.hp > 0).length;
 }
@@ -119,27 +114,7 @@ function queueUnit(type, slot) {
         }
     }
     updateActionButtonsUI();
-    if (MIRROR_ENEMY_ACTIONS) mirrorEnemyBuy(type);
     return true;
-}
-
-// Oyuncu (veya co-op'ta oyunculardan biri) bir birim satın aldığında
-// düşmanın de aynı tipte bir birim üretmesini sağlar.
-function mirrorEnemyBuy(type) {
-    // Önce düşmanın kendi altınıyla normal satın alma denesin (ekonomi tamamen bozulmasın).
-    if (enemyTryBuy(type)) return;
-    // Altını yetmese bile üst birim limitlerine takılmadıkça oyuncuyla "aynı hamleyi" yapması için
-    // bedava üretsin — amaç düşmanın oyuncuyla birebir aynı birimleri kurmasıdır.
-    if (type === 'miner' && countTeam(false, Miner) >= MAX_MINERS_PER_TEAM) return;
-    if (type === 'club' && countTeam(false, Clubman) >= MAX_CLUBMEN_PER_TEAM) return;
-    if (type === 'archer' && countTeam(false, Archer) >= MAX_ARCHERS_PER_TEAM) return;
-    spawnUnit(type, false, 0);
-}
-
-// Oyuncu bir komut (saldır/savun/geri çekil) verdiğinde düşmana da aynı komutu uygular.
-function mirrorEnemyCommand(cmd) {
-    enemy.command = cmd;
-    enemy.lastCommand = cmd;
 }
 
 function processOwnerQueues(owner, slot) {
@@ -176,18 +151,13 @@ function processOwnerQueues(owner, slot) {
 
 function setLocalCommand(cmd) {
     const slot = localOwnerIndex();
-    const coopNow = typeof isCoopPlayNow === 'function' && isCoopPlayNow();
-    if (coopNow && typeof sendRoomInput === 'function') {
+    if (typeof isCoopPlayNow === 'function' && isCoopPlayNow() && typeof sendRoomInput === 'function') {
         const name = cmd === CMD_ATTACK ? 'attack' : (cmd === CMD_RETREAT ? 'retreat' : 'defend');
         sendRoomInput(name);
     }
     const owner = getOwnerState(slot);
     owner.command = cmd;
     owner.lastCommand = cmd;
-    // Co-op'ta mirror işlemi, sunucudan gelen room_relay üzerinden applyCoopInput içinde
-    // tetiklenir (böylece iki istemcide de birebir aynı sırada olur, senkron bozulmaz).
-    // Solo modda burada direkt tetikleniyor.
-    if (!coopNow && MIRROR_ENEMY_ACTIONS) mirrorEnemyCommand(cmd);
     updateActionButtonsUI();
 }
 
@@ -275,22 +245,14 @@ function enemyTryBuy(type) {
 function updateEnemyAI() {
     const diff = getAiDifficulty();
     enemy.aiTimer++;
-
-    if (frames % 60 === 0) {
-        enemy.gold += Math.max(1, Math.floor(6 * diff.passiveGoldMult * coopEnemyGoldMult()));
-    }
-
-    if (MIRROR_ENEMY_ACTIONS) {
-        // Düşman artık taklit modunda: satın almalar mirrorEnemyBuy() içinde,
-        // komutlar mirrorEnemyCommand() / applyCoopInput() içinde tetikleniyor.
-        // Eski rastgele zorluk-tabanlı YZ burada devre dışı — sadece altın birikmeye devam ediyor.
-        return;
-    }
-
     if (enemy.minerCooldown > 0) enemy.minerCooldown--;
     if (enemy.clubCooldown > 0) enemy.clubCooldown--;
     if (enemy.archerCooldown > 0) enemy.archerCooldown--;
     if (enemy.retreatCooldown > 0) enemy.retreatCooldown--;
+
+    if (frames % 60 === 0) {
+        enemy.gold += Math.max(1, Math.floor(6 * diff.passiveGoldMult * coopEnemyGoldMult()));
+    }
 
     const spawnMul = coopEnemySpawnMult();
     const minerWait = Math.floor(180 * diff.cooldownMult / spawnMul);
