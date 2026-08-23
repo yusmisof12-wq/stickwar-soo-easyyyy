@@ -1,4 +1,4 @@
-        function setPlayerCommand(cmd) {
+function setPlayerCommand(cmd) {
             const oi = localOwnerIndex();
             getOwnerState(oi).command = cmd;
             // Solo veya host: player.command senkron (AI tehdit hesabı için host tarafı)
@@ -205,16 +205,42 @@
 
             if (level === 1) enemy.base.maxHp = 280;
             else if (level === 2) enemy.base.maxHp = 900;
-            else if (level === 3) enemy.base.maxHp = 1800;
+            else if (level === 3) enemy.base.maxHp = 99999;
 
             enemy.base.hp = enemy.base.maxHp;
             frames = 0;
+            ambushTimer = 0;
+            if (typeof enemy.sickleCooldown === 'number') enemy.sickleCooldown = 40;
+            else enemy.sickleCooldown = 40;
             cameraX = 0;
         }
 
         function updateAI() {
             enemy.aiTimer++;
             const diff = getAiDifficulty();
+
+            // ===== 3. BÖLÜM PUSU: sadece Orakçı, bedava, gittikçe daha sık, hep saldırı =====
+            if (typeof isAmbushLevel === 'function' && isAmbushLevel()) {
+                enemy.command = CMD_ATTACK;
+                enemy.aiState = 'attack';
+                const sickleCount = units.filter(u => !u.isPlayer && u instanceof Sicklewrath && u.hp > 0).length;
+                const maxS = diff.maxSickle || 40;
+                // Süre ilerledikçe spawn hızlanır (saniye başı kabaca)
+                const progress = Math.min(1, ambushTimer / (AMBUSH_DURATION_FRAMES || 10800));
+                const spawnInterval = Math.max(25, Math.floor(90 - progress * 60)); // tick cooldown
+                if (typeof enemy.sickleCooldown !== 'number') enemy.sickleCooldown = 0;
+                if (enemy.sickleCooldown > 0) enemy.sickleCooldown--;
+                if (enemy.sickleCooldown <= 0 && sickleCount < maxS) {
+                    // 1 veya ileride 2 birim
+                    const burst = progress > 0.6 ? 2 : 1;
+                    for (let i = 0; i < burst && units.filter(u => !u.isPlayer && u instanceof Sicklewrath).length < maxS; i++) {
+                        units.push(new Sicklewrath(false));
+                    }
+                    enemy.sickleCooldown = spawnInterval;
+                }
+                return;
+            }
+
             const passiveGoldInterval = enemy.command === CMD_RETREAT ? 150 : 300;
 
             if (enemy.retreatCooldown > 0) enemy.retreatCooldown--;
@@ -464,6 +490,7 @@
         function getUnitType(u) {
             if (u instanceof Miner) return 'miner';
             if (u instanceof Clubman) return 'clubman';
+            if (typeof Sicklewrath !== 'undefined' && u instanceof Sicklewrath) return 'sickle';
             if (u instanceof Archer) return 'archer';
             return 'other';
         }
@@ -492,7 +519,15 @@
             setCircularCooldown(archerCdFill, combatHead === 'archer' ? st.combatTimer : 0, combatHead === 'archer' ? (st.combatTimerMax || 1) : 1);
 
             goldEl.innerText = Math.floor(st.gold);
-            levelEl.innerText = Math.min(level, 3) + "/3";
+            if (typeof isAmbushLevel === 'function' && isAmbushLevel()) {
+                const left = Math.max(0, (AMBUSH_DURATION_FRAMES || 10800) - (ambushTimer || 0));
+                const sec = Math.ceil(left / 60);
+                const mm = Math.floor(sec / 60);
+                const ss = String(sec % 60).padStart(2, '0');
+                levelEl.innerText = 'Pusu ' + mm + ':' + ss;
+            } else {
+                levelEl.innerText = Math.min(level, 3) + "/3";
+            }
             if (typeof isCoopPlayNow === 'function' && isCoopPlayNow()) {
                 const slot = typeof myCoopSlot === 'function' ? myCoopSlot() : 0;
                 goldEl.parentElement && (goldEl.parentElement.title = slot === 1 ? 'Senin altının (Oyuncu 2)' : 'Senin altının (Oyuncu 1)');
@@ -578,7 +613,22 @@
             if (enemy.base.hp < 0) enemy.base.hp = 0;
             if (player.base.hp < 0) player.base.hp = 0;
 
-            if (enemy.base.hp <= 0 && !isGameOver) {
+            // 3. bölüm: güneş batana kadar dayan (3 dk)
+            if (typeof isAmbushLevel === 'function' && isAmbushLevel() && !isGameOver) {
+                ambushTimer++;
+                if (ambushTimer >= AMBUSH_DURATION_FRAMES) {
+                    isGameOver = true;
+                    coopVictoryHandled = true;
+                    const completedLevel = level;
+                    if (typeof onLevelVictory === 'function') onLevelVictory(completedLevel);
+                    level++;
+                    modalTitle.innerText = 'Güneş battı! Pusu savuşturuldu!';
+                    modalBtn.innerText = level > 3 ? 'Sefer Haritasına Dön' : 'Sonraki Bölüm';
+                    modal.classList.remove('hidden');
+                }
+            }
+
+            if (!(typeof isAmbushLevel === 'function' && isAmbushLevel()) && enemy.base.hp <= 0 && !isGameOver) {
                 enemy.base.hp = 0;
                 isGameOver = true;
                 coopVictoryHandled = true;
