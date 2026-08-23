@@ -1290,7 +1290,7 @@
             setTimeout(kick, 300);
             setTimeout(kick, 1000);
             setTimeout(kick, 2000);
-        })()
+        })();
 
 (async function bootMenu() {
             // Sunucu var mı diye hafif kontrol (token yoksa /api/me çağırma → 401 spam olmasın)
