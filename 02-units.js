@@ -770,18 +770,27 @@ class Archer {
                 : myClubmen.reduce((a, b) => b.x < a.x ? b : a);
         }
 
+        // Formasyon ofseti: okçular birbirinin içine girmesin, mesafeli sıralansın
+        // (formationIndex başına dikey/yatay ızgara pozisyonu)
+        const rowsPerCol = 4;
+        const fIdx = (this.formationIndex || 1) - 1;
+        const row = ((fIdx % rowsPerCol) + rowsPerCol) % rowsPerCol;
+        const col = Math.floor(fIdx / rowsPerCol);
+        const formationOffsetY = (row - (rowsPerCol - 1) / 2) * 34;
+        const formationOffsetX = col * 30 * (this.isPlayer ? -1 : 1);
+
         let desiredX;
-        let desiredY = this.baseY;
+        let desiredY = this.baseY + formationOffsetY;
         if (cmd === CMD_ATTACK) {
-            desiredX = enemyBase.x + (this.isPlayer ? -260 : 260);
+            desiredX = enemyBase.x + (this.isPlayer ? -260 : 260) + formationOffsetX;
         } else {
-            desiredX = myBase.x + (this.isPlayer ? 220 : -220);
+            desiredX = myBase.x + (this.isPlayer ? 220 : -220) + formationOffsetX;
         }
         if (frontClubman) {
             desiredX = this.isPlayer
                 ? Math.min(desiredX, frontClubman.x - this.safeGap)
                 : Math.max(desiredX, frontClubman.x + this.safeGap);
-            desiredY = frontClubman.y;
+            desiredY = frontClubman.y + formationOffsetY;
         }
         if (this.target) {
             const distToTarget = Math.hypot(this.target.x - this.x, this.target.y - this.y);
@@ -795,15 +804,6 @@ class Archer {
                 }
                 desiredX = adjX;
             }
-        }
-
-        let actualMoved = false;
-        const distToDesired = Math.hypot(desiredX - this.x, desiredY - this.y);
-        if (distToDesired > 8) {
-            let angle = Math.atan2(desiredY - this.y, desiredX - this.x);
-            this.x += Math.cos(angle) * 1.6 * SPEED_MULT * slowMul;
-            this.y += Math.sin(angle) * 1.2 * SPEED_MULT * slowMul;
-            actualMoved = true;
         }
 
         // Hedef canlı ve menzildeyse ateş animasyonu; yoksa animasyon yok
@@ -828,6 +828,17 @@ class Archer {
         } else {
             this.attackTimer = 0;
             this.drawAmount = Math.max(0, this.drawAmount - 0.15);
+        }
+
+        // Ok çekerken/atarken yavaş yürüsün
+        let actualMoved = false;
+        const distToDesired = Math.hypot(desiredX - this.x, desiredY - this.y);
+        const shootSlowMul = this.drawAmount > 0 ? 0.35 : 1;
+        if (distToDesired > 8) {
+            let angle = Math.atan2(desiredY - this.y, desiredX - this.x);
+            this.x += Math.cos(angle) * 1.6 * SPEED_MULT * slowMul * shootSlowMul;
+            this.y += Math.sin(angle) * 1.2 * SPEED_MULT * slowMul * shootSlowMul;
+            actualMoved = true;
         }
 
         this._isActuallyWalking = actualMoved && !this.target;
