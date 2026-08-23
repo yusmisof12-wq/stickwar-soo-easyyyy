@@ -83,11 +83,13 @@
                     this.isWandering = false;
                     this.combatMode = false;
                 } else {
-                    this.state = 'attacking';
-                    this.combatMode = true;
-                    this.damage = 4;
-                    this.isWandering = false;
-                    this.findTarget();
+                    // Savaş yok: maden yoksa üs civarında dolaş
+                    this.state = 'idle';
+                    this.combatMode = false;
+                    this.isWandering = true;
+                    this.wanderTargetX = this.baseX + (this.isPlayer ? 80 : -80) + (Math.random() * 60 - 30);
+                    this.wanderTargetY = this.baseY + (Math.random() * 40 - 20);
+                    this.wanderTimer = 0;
                 }
             }
 
@@ -152,12 +154,28 @@
                 if (cmd === CMD_RETREAT) {
                     this.releaseSlot();
                     this.isWandering = false;
+                    this.combatMode = false;
+                    // Envanterdeki madeni anında paraya çevir
+                    if (this.bagGold > 0) {
+                        const goldGain = this.bagGold * 13;
+                        if (this.isPlayer) {
+                            const st = unitOwnerState(this);
+                            st.gold += goldGain;
+                        } else {
+                            enemy.gold += goldGain;
+                        }
+                        if (typeof addFloatingText === 'function') {
+                            addFloatingText(this.x, this.y - 40, '+' + goldGain, '#f1c40f');
+                        }
+                        this.bagGold = 0;
+                    }
                     let targetX = this.isPlayer ? -150 : worldWidth + 150;
                     let targetY = this.baseY;
                     if (Math.hypot(this.x - targetX, this.y - targetY) > 3) {
                         let angle = Math.atan2(targetY - this.y, targetX - this.x);
-                        this.x += Math.cos(angle) * 1.5 * SPEED_MULT * slowMul;
-                        this.y += Math.sin(angle) * 1.2 * SPEED_MULT * slowMul;
+                        // Geri çekilmede daha hızlı
+                        this.x += Math.cos(angle) * 3.2 * SPEED_MULT * slowMul;
+                        this.y += Math.sin(angle) * 2.4 * SPEED_MULT * slowMul;
                         this.state = 'retreating';
                         this._isActuallyWalking = true;
                     } else {
@@ -176,37 +194,9 @@
                 }
 
                 if (this.state === 'attacking') {
-                    this.damage = 4;
-                    if (!this.target || this.target.hp <= 0 || this.target.isInvulnerable) {
-                        this.findTarget();
-                    }
-                    const nearbyThreat = units.some(u =>
-                        u.isPlayer !== this.isPlayer && u.hp > 0 && !u.isInvulnerable &&
-                        Math.hypot(u.x - this.x, u.y - this.y) < 180
-                    );
-                    if (!nearbyThreat && !this.combatMode && (!this.target || this.target.hp <= 0 || this.target.maxHp > 200)) {
-                        this.assignSlot();
-                    } else if (this.target) {
-                        let dist = Math.hypot(this.target.x - this.x, this.target.y - this.y);
-                        if (dist <= this.range) {
-                            this.attackTimer++;
-                            if (this.attackTimer === 45) {
-                                this.target.hp -= this.damage;
-                                if (this.target.stunTimer !== undefined) this.target.stunTimer = 40;
-                                addFloatingText(this.target.x, this.target.y, '-' + this.damage, '#e74c3c');
-                            }
-                            if (this.attackTimer >= this.attackCooldown) {
-                                this.attackTimer = 0;
-                            }
-                        } else {
-                            let angle = Math.atan2(this.target.y - this.y, this.target.x - this.x);
-                            this.x += Math.cos(angle) * 1.3 * SPEED_MULT * slowMul;
-                            this.y += Math.sin(angle) * 1.1 * SPEED_MULT * slowMul;
-                            this.attackTimer = 0;
-                        }
-                    } else if (this.combatMode) {
-                        this.assignSlot();
-                    }
+                    // Madenci savaşmaz → madene veya üsse dön
+                    this.combatMode = false;
+                    this.assignSlot();
                     let grassTop = canvas.height - GROUND_HEIGHT;
                     let minY = grassTop + 20;
                     let maxY = canvas.height - 20;
@@ -690,9 +680,9 @@
                 this.hp = 70;
                 this.maxHp = 70;
                 this.damage = 15;
-                this.attackCooldown = 90;
+                this.attackCooldown = 48;
                 this.attackTimer = 0;
-                this.range = 48;
+                this.range = 52;
                 this.isAttacking = false;
                 this.didHitThisSwing = false;
                 this.attackRecover = 0;
@@ -780,9 +770,9 @@
                 } else if (this.target && distToTarget <= this.range) {
                     this.isAttacking = true;
                     this.attackTimer++;
-                    if (this.attackTimer === 42 && !this.didHitThisSwing) {
+                    if (this.attackTimer === 18 && !this.didHitThisSwing) {
                         this.target.hp -= this.damage;
-                        if (this.target.stunTimer !== undefined) this.target.stunTimer = 35;
+                        if (this.target.stunTimer !== undefined) this.target.stunTimer = 28;
                         addFloatingText(this.target.x, this.target.y || 320, '-' + this.damage, this.isPlayer ? '#e74c3c' : '#c0392b');
                         this.didHitThisSwing = true;
                     }
@@ -790,7 +780,7 @@
                         this.attackTimer = 0;
                         this.didHitThisSwing = false;
                         this.isAttacking = false;
-                        this.attackRecover = 14;
+                        this.attackRecover = 8;
                     }
                 } else if (this.target) {
                     let angle = Math.atan2(this.target.y - this.y, this.target.x - this.x);
