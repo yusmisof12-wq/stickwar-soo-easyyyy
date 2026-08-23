@@ -1,4 +1,4 @@
-// ==================== SABİTLER VE DEĞİŞKENLER ====================
+a// ==================== SABİTLER VE DEĞİŞKENLER ====================
 const canvas = document.getElementById('gameCanvas');
 const minerFaceImg = new Image();
 minerFaceImg.src = ''; // yüz fotoğrafı kapalı (geçersiz URL hatasını önler)
