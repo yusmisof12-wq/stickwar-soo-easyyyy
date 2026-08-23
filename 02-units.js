@@ -1,4 +1,4 @@
- // ==================== SINIFLAR ====================
+// ==================== SINIFLAR ====================
         class Miner {
             constructor(isPlayer, ownerIndex = 0) {
                 this.isPlayer = isPlayer;
@@ -812,7 +812,6 @@
 
             draw(ctx) {
                 if (this.x < -50 || this.x > worldWidth + 50) return;
-                // Sopalı ile AYNI model + animasyon (sadece çizikler farklı)
                 let isFlipped = !this.isPlayer;
                 const dx = this.x - this.prevX;
                 if (Math.abs(dx) > 0.3) {
@@ -833,35 +832,15 @@
                     anim = Math.max(0, 100 - (18 - this.attackRecover) * 5);
                     this.attackRecover--;
                 }
-                // Aynı sopa modeli
-                drawStickman(ctx, this.x, this.y, col, 'club', anim, this._isActuallyWalking && anim === 0, isFlipped, 0);
-
-                // Sadece orakçı: 2 yüz + 2 el/kol çizik
-                ctx.save();
-                ctx.translate(this.x, this.y);
-                if (isFlipped) ctx.scale(-1, 1);
-                ctx.strokeStyle = '#c0392b';
-                ctx.lineWidth = 2;
-                ctx.lineCap = 'round';
-                // Yüz (kafa ~ 0, -46)
-                const hy = -46;
-                ctx.beginPath();
-                ctx.moveTo(3, hy - 4); ctx.lineTo(9, hy - 6);
-                ctx.moveTo(3, hy + 2); ctx.lineTo(9, hy);
-                ctx.stroke();
-                // El / ön kol bölgesi (~ 10, -28)
-                ctx.beginPath();
-                ctx.moveTo(6, -30); ctx.lineTo(12, -28);
-                ctx.moveTo(7, -26); ctx.lineTo(13, -24);
-                ctx.stroke();
-                ctx.restore();
-
+                // 'sickle' → drawStickman içinde sopalı modeli + 2 yüz / 2 el çizik
+                drawStickman(ctx, this.x, this.y, col, 'sickle', anim, this._isActuallyWalking && anim === 0, isFlipped, 0);
                 drawStuckArrows(ctx, this);
                 ctx.fillStyle = 'red';
                 ctx.fillRect(this.x - 15, this.y - 65, 30, 4);
                 ctx.fillStyle = '#2ecc71';
                 ctx.fillRect(this.x - 15, this.y - 65, 30 * (this.hp / this.maxHp), 4);
             }
+
 
 
 
