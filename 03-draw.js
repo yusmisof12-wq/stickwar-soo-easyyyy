@@ -1,5 +1,65 @@
-
-    
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stickman Savaşı - 2 Bölüm</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background: #1a1a2e;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }
+        #gameContainer {
+            border: 3px solid #e67e22;
+            border-radius: 12px;
+            box-shadow: 0 0 40px rgba(230, 126, 34, 0.3);
+            overflow: hidden;
+            position: relative;
+        }
+        canvas {
+            display: block;
+            width: 1000px;
+            height: 600px;
+            background: #2c3e50;
+            cursor: crosshair;
+        }
+        #ui {
+            position: absolute;
+            bottom: 12px;
+            left: 0;
+            right: 0;
+            display: flex;
+            justify-content: space-between;
+            padding: 0 20px;
+            pointer-events: none;
+            color: #ecf0f1;
+            font-size: 14px;
+            font-weight: bold;
+            text-shadow: 0 0 10px rgba(0, 0, 0, 0.8);
+        }
+        #ui span {
+            background: rgba(0, 0, 0, 0.5);
+            padding: 4px 14px;
+            border-radius: 20px;
+            backdrop-filter: blur(4px);
+        }
+        #ui .gold {
+            color: #f1c40f;
+        }
+        #ui .hp {
+            color: #e74c3c;
+        }
+        .controls {
             position: absolute;
             top: 12px;
             left: 50%;
