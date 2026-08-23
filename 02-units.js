@@ -1,4 +1,4 @@
-   // ==================== SINIFLAR ====================
+ // ==================== SINIFLAR ====================
         class Miner {
             constructor(isPlayer, ownerIndex = 0) {
                 this.isPlayer = isPlayer;
@@ -682,7 +682,11 @@
                 this.baseY = isPlayer ? player.base.y : enemy.base.y;
                 this.x = this.baseX + (isPlayer ? -60 : 60);
                 this.y = this.baseY + (Math.random() * 40 - 20);
-                this.formationIndex = (enemy.sickleFormationCounter = (enemy.sickleFormationCounter || 0) + 1);
+                const formOwner = isPlayer
+                    ? ((ownerIndex === 1 && typeof player2 !== 'undefined') ? player2 : player)
+                    : enemy;
+                if (typeof formOwner.clubFormationCounter !== 'number') formOwner.clubFormationCounter = 0;
+                this.formationIndex = formOwner.clubFormationCounter++;
                 this.hp = 70;
                 this.maxHp = 70;
                 this.damage = 15;
