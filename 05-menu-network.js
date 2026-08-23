@@ -1,4 +1,4 @@
-// ==================== HESAP + MENÜ + SEFER ====================
+// ==================== HESAP + MENÜ + SEFER (05-menu-network.js) ====================
 const TOKEN_KEY = 'copAdamToken_v1';
 const LOCAL_USERS_KEY = 'copAdamUsersHashed_v1';
 const LOCAL_SESSION_KEY = 'copAdamLocalSession_v1';
@@ -99,8 +99,14 @@ let coopNextLevelRequested = false;
 function isCoopPlayNow() { return !!(typeof coopSession !== 'undefined' && coopSession && coopSession.roomId); }
 function myCoopSlot() { return coopSession ? (coopSession.slot|0) : 0; }
 function isSimPeer() { return isCoopPlayNow(); }
-function isCoopGuestNow() { return false; }
-function isCoopHostNow() { return false; }
+
+// ✅ DÜZELTİLEN KISIM: Sadece odanın sahibi (slot 0) host sayılsın
+function isCoopHostNow() {
+    return !!(typeof coopSession !== 'undefined' && coopSession && coopSession.slot === 0);
+}
+function isCoopGuestNow() {
+    return !!(typeof coopSession !== 'undefined' && coopSession && coopSession.slot === 1);
+}
 
 function wsUrl() {
     const loc = window.location;
@@ -489,8 +495,6 @@ function applyCoopInput(slot, action) {
     else if (action === 'attack') {
         if (slot === 1) player2.command = CMD_ATTACK;
         else player.command = CMD_ATTACK;
-        // Co-op'ta iki oyuncudan hangisi komut verirse versin düşman aynı komutu alır.
-        // room_relay ile her iki istemciye de aynı sırada geldiği için senkron bozulmaz.
         if (typeof mirrorEnemyCommand === 'function') mirrorEnemyCommand(CMD_ATTACK);
     } else if (action === 'defend') {
         if (slot === 1) player2.command = CMD_DEFEND;
@@ -879,7 +883,7 @@ function ensureMusicHud() {
     return hud;
 }
 
-// ✅ DÜZELTİLEN KISIM: 'music/' ön eki kaldırıldı, doğrudan dosya adını döndürüyor.
+// ✅ DÜZELTİLEN KISIM: 'music/' ön eki kaldırıldı
 function musicUrl(name) {
     return name;
 }
