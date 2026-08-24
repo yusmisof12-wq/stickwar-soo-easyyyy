@@ -10,7 +10,7 @@ class Miner {
         const offset = minerSpawnOffsets[index];
         this.x = this.baseX + (isPlayer ? offset.dx : -offset.dx);
         this.y = this.baseY + offset.dy;
-        this.hp = 100;
+        this.hp = 100;F
         this.maxHp = 100;
         this.state = 'assigning_slot';
         this.targetSlot = null;
@@ -347,6 +347,7 @@ class Clubman {
         this.attackCooldown = 100;
         this.attackTimer = 0;
         this.range = 52;
+        this.visionRange = 450; // Görüş mesafesi
         this.isAttacking = false;
         this.didHitThisSwing = false;
         this.attackRecover = 0;
