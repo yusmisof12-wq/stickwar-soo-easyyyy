@@ -1,4 +1,4 @@
-// ==================== MADENCİ ====================
+// ==================== MADENCİ ====================a
 class Miner {
     constructor(isPlayer, ownerIndex = 0) {
         this.isPlayer = isPlayer;
