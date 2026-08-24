@@ -475,7 +475,7 @@ class Clubman {
         this.stuckArrows = [];
     }
 
-  --archer  update() {
+   update() {
         if (typeof cinematicHoldUnit === 'function' && cinematicHoldUnit(this)) return;
         let cmd = this.isPlayer ? unitOwnerState(this).command : enemy.command;
         let enemies = units.filter(u => u.isPlayer !== this.isPlayer && u.hp > 0 && !u.isInvulnerable);
