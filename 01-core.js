@@ -311,6 +311,20 @@ const cmdBtns = {
 function addFloatingText(x, y, text, color, isBig = false) {
     function meleeCanSwing(unit) {
     if (!unit.target || unit.target.hp <= 0) return false;
+
+        function meleeCanSwing(unit) {
+    if (!unit.target || unit.target.hp <= 0) return false;
+    
+    const attackers = units.filter(u =>
+        u !== unit &&
+        u.target === unit.target &&
+        u.isAttacking &&
+        u.hp > 0
+    );
+    
+    const MAX_SIMULTANEOUS_ATTACKERS = 3;
+    return attackers.length < MAX_SIMULTANEOUS_ATTACKERS;
+}
     
     const attackers = units.filter(u =>
         u !== unit &&
