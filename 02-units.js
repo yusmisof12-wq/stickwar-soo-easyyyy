@@ -1,4 +1,4 @@
-// ==================== SINIFLAR ====================
+// ==================== MADENCİ ====================
 class Miner {
     constructor(isPlayer, ownerIndex = 0) {
         this.isPlayer = isPlayer;
@@ -59,55 +59,48 @@ class Miner {
         this.baseX = this.isPlayer ? player.base.x : enemy.base.x;
         this.baseY = this.isPlayer ? player.base.y : enemy.base.y;
 
+        // Önce kendi tarafındaki maden slotlarını dene
         let mySlots = this.isPlayer ? playerMineSlots : enemyMineSlots;
         let available = mySlots.find(slot => slot.miners.length < 2);
 
-        if (available) {
-            this.targetSlot = available;
-            available.miners.push(this);
-            const offsets = [
-                { dx: -32, dy: 4 },
-                { dx: 32, dy: 4 },
-                { dx: -32, dy: -12 },
-                { dx: 32, dy: -12 }
-            ];
-            let usedOffsets = available.miners.slice(0, -1).map(m => m.localOffset);
-            let freeOffset = offsets.find(o => !usedOffsets.some(u => u.dx === o.dx && u.dy === o.dy));
-            if (!freeOffset) {
-                freeOffset = offsets[available.miners.length % offsets.length];
+        // Kendi slotlarında yer yoksa karşı tarafın slotlarına git
+        if (!available) {
+            let enemySlots = this.isPlayer ? enemyMineSlots : playerMineSlots;
+            available = enemySlots.find(slot => slot.miners.length < 2);
+            // Eğer karşı tarafta da yer yoksa boşta kal
+            if (!available) {
+                this.state = 'idle';
+                this.combatMode = false;
+                this.isWandering = false;
+                return;
             }
-            this.localOffset = freeOffset;
-            this.mineX = available.x + freeOffset.dx;
-            this.mineY = available.y + freeOffset.dy;
-            this.state = 'going_mine';
-            this.isWandering = false;
-            this.combatMode = false;
-        } else {
-            this.state = 'attacking';
-            this.combatMode = true;
-            this.damage = 4;
-            this.isWandering = false;
-            this.findTarget();
         }
+
+        // Uygun slot bulundu (kendi veya karşı)
+        this.targetSlot = available;
+        available.miners.push(this);
+        const offsets = [
+            { dx: -32, dy: 4 },
+            { dx: 32, dy: 4 },
+            { dx: -32, dy: -12 },
+            { dx: 32, dy: -12 }
+        ];
+        let usedOffsets = available.miners.slice(0, -1).map(m => m.localOffset);
+        let freeOffset = offsets.find(o => !usedOffsets.some(u => u.dx === o.dx && u.dy === o.dy));
+        if (!freeOffset) {
+            freeOffset = offsets[available.miners.length % offsets.length];
+        }
+        this.localOffset = freeOffset;
+        this.mineX = available.x + freeOffset.dx;
+        this.mineY = available.y + freeOffset.dy;
+        this.state = 'going_mine';
+        this.isWandering = false;
+        this.combatMode = false;
     }
 
+    // Madenciler savaşmadığı için findTarget kullanılmıyor
     findTarget() {
-        let enemies = units.filter(u => u.isPlayer !== this.isPlayer && u.hp > 0 && !u.isInvulnerable);
-        if (enemies.length > 0) {
-            let closest = null;
-            let minDist = Infinity;
-            for (let e of enemies) {
-                let dist = Math.hypot(e.x - this.x, e.y - this.y);
-                if (dist < minDist) {
-                    minDist = dist;
-                    closest = e;
-                }
-            }
-            this.target = closest;
-        } else {
-            let enemyBase = this.isPlayer ? enemy.base : player.base;
-            this.target = enemyBase;
-        }
+        // Boş bırakıldı
     }
 
     updateWander() {
@@ -175,52 +168,6 @@ class Miner {
             this.assignSlot();
         }
 
-        if (this.state === 'attacking') {
-            this.damage = 1;
-            if (!this.target || this.target.hp <= 0 || this.target.isInvulnerable) {
-                this.findTarget();
-            }
-            const nearbyThreat = units.some(u =>
-                u.isPlayer !== this.isPlayer && u.hp > 0 && !u.isInvulnerable &&
-                Math.hypot(u.x - this.x, u.y - this.y) < 180
-            );
-            if (!nearbyThreat && !this.combatMode && (!this.target || this.target.hp <= 0 || this.target.maxHp > 200)) {
-                this.assignSlot();
-            } else if (this.target) {
-                let dist = Math.hypot(this.target.x - this.x, this.target.y - this.y);
-                if (dist <= this.range) {
-                    const myTurn = typeof meleeCanSwing !== 'function' || meleeCanSwing(this);
-                    if (!myTurn) {
-                        this.attackTimer = 0;
-                    } else {
-                        this.attackTimer++;
-                        if (this.attackTimer === 45) {
-                            this.target.hp -= this.damage;
-                            if (this.target.stunTimer !== undefined) this.target.stunTimer = 40;
-                            addFloatingText(this.target.x, this.target.y, '-' + this.damage, '#e74c3c');
-                        }
-                        if (this.attackTimer >= this.attackCooldown) {
-                            this.attackTimer = 0;
-                            if (typeof meleeFinishSwing === 'function') meleeFinishSwing(this);
-                        }
-                    }
-                } else {
-                    let angle = Math.atan2(this.target.y - this.y, this.target.x - this.x);
-                    this.x += Math.cos(angle) * 1.3 * SPEED_MULT * slowMul;
-                    this.y += Math.sin(angle) * 1.1 * SPEED_MULT * slowMul;
-                    this.attackTimer = 0;
-                }
-            } else if (this.combatMode) {
-                this.assignSlot();
-            }
-            let grassTop = canvas.height - GROUND_HEIGHT;
-            let minY = grassTop + 20;
-            let maxY = canvas.height - 20;
-            if (this.y < minY) this.y = minY;
-            if (this.y > maxY) this.y = maxY;
-            return;
-        }
-
         if (this.state === 'going_mine') {
             let dist = Math.hypot(this.mineX - this.x, this.mineY - this.y);
             if (dist > 4) {
@@ -241,20 +188,6 @@ class Miner {
                 this.bagGold = 0;
             }
         } else if (this.state === 'mining') {
-            const attacker = units.find(u =>
-                u.isPlayer !== this.isPlayer && u.hp > 0 && !u.isInvulnerable &&
-                Math.hypot(u.x - this.x, u.y - this.y) < 90
-            );
-            if (attacker) {
-                this.releaseSlot();
-                this.state = 'attacking';
-                this.combatMode = false;
-                this.damage = 4;
-                this.target = attacker;
-                this.attackTimer = 0;
-                this.bodyLean = 0;
-                this.armRaise = 0;
-            } else {
             this.actionTimer++;
             const CYCLE = 70;
             const cycle = this.actionTimer % CYCLE;
@@ -306,7 +239,6 @@ class Miner {
                     this.armRaise = 0;
                     this.holdingRock = false;
                 }
-            }
             }
         } else if (this.state === 'going_base') {
             let dist = Math.hypot(this.baseX - this.x, this.baseY - this.y);
@@ -406,8 +338,6 @@ class Miner {
             const mdx = this.x - this.prevX;
             if (Math.abs(mdx) > 0.3) {
                 isFlipped = mdx < 0;
-            } else if (this.state === 'attacking' && this.target) {
-                isFlipped = (this.target.x < this.x);
             } else if (this.state === 'going_base' || this.state === 'delivering') {
                 isFlipped = !this.isPlayer;
             } else {
@@ -416,7 +346,6 @@ class Miner {
         }
 
         const isDeliver = this.state === 'delivering';
-        const isAtk = this.state === 'attacking';
         const moved = Math.hypot(this.x - this.prevX, 0) > 0.35;
         let isWalking = moved && this.state !== 'mining' && !isDeliver;
         let swingAngle = this.state === 'mining' ? this.miningSwing : 0;
@@ -427,8 +356,7 @@ class Miner {
         drawMinerBackpack(ctx, this.x + (isFlipped ? -bagOX : bagOX), this.y + bagOY, isFlipped, this.bagGold || 0, isDeliver && this.bagHold);
 
         const minerColor = unitTeamColor(this);
-        const striking = isAtk && this.attackTimer > 0 && !moved;
-        const animFrame = this.state === 'mining' ? this.actionTimer : (striking ? this.attackTimer : 0);
+        const animFrame = this.state === 'mining' ? this.actionTimer : 0;
         drawStickman(ctx, this.x, this.y, minerColor, isDeliver ? 'none' : 'pickaxe',
                      animFrame, isWalking, isFlipped, swingAngle,
                      lean, raise, false, false, this.isPlayer);
@@ -441,6 +369,7 @@ class Miner {
     }
 }
 
+// ==================== KULÜP ADAMI ====================
 class Clubman {
     constructor(isPlayer, ownerIndex = 0) {
         this.isPlayer = isPlayer;
@@ -475,7 +404,7 @@ class Clubman {
         this.stuckArrows = [];
     }
 
-   update() {
+    update() {
         if (typeof cinematicHoldUnit === 'function' && cinematicHoldUnit(this)) return;
         let cmd = this.isPlayer ? unitOwnerState(this).command : enemy.command;
         let enemies = units.filter(u => u.isPlayer !== this.isPlayer && u.hp > 0 && !u.isInvulnerable);
@@ -524,7 +453,12 @@ class Clubman {
         const hasValidTarget = this.target && this.target !== enemyBase &&
             this.target.hp > 0 && visibleEnemies.includes(this.target);
 
-        if (!hasValidTarget) this.target = null;
+        if (!hasValidTarget) {
+            this.target = null;
+            this.isAttacking = false;
+            this.attackTimer = 0;
+            this.didHitThisSwing = false;
+        }
 
         if (!this.target) {
             if (typeof pickFrontEnemy === 'function') {
@@ -550,10 +484,21 @@ class Clubman {
         } else if (cmd !== CMD_ATTACK && this.target === enemyBase) {
             this.target = null;
             distToTarget = Infinity;
+            this.isAttacking = false;
+            this.attackTimer = 0;
+        }
+
+        if (this.target && this.target.hp <= 0) {
+            this.target = null;
+            this.isAttacking = false;
+            this.attackTimer = 0;
+            this.didHitThisSwing = false;
+            distToTarget = Infinity;
         }
 
         this.isAttacking = false;
         let actualMoved = false;
+
         if (cmd === CMD_RETREAT) {
             if (Math.hypot(this.x - targetFrontlineX, this.y - targetFrontlineY) > 5) {
                 let angle = Math.atan2(targetFrontlineY - this.y, targetFrontlineX - this.x);
@@ -565,6 +510,7 @@ class Clubman {
                 this.y = targetFrontlineY;
             }
             this.attackTimer = 0;
+            this.isAttacking = false;
         } else {
             if (this.target && distToTarget <= this.range) {
                 const foe = this.target;
@@ -591,16 +537,15 @@ class Clubman {
                     }
                 }
             } else if (this.target) {
-                this.combatTurn = undefined;
                 let speedX = (cmd === CMD_ATTACK) ? 2.2 : 1.8;
                 let speedY = (cmd === CMD_ATTACK) ? 1.6 : 1.3;
                 let angle = Math.atan2(this.target.y - this.y, this.target.x - this.x);
                 this.x += Math.cos(angle) * speedX * SPEED_MULT * slowMul;
                 this.y += Math.sin(angle) * speedY * SPEED_MULT * slowMul;
                 this.attackTimer = 0;
+                this.isAttacking = false;
                 actualMoved = true;
             } else {
-                this.combatTurn = undefined;
                 let distToFrontline = Math.hypot(this.x - targetFrontlineX, this.y - targetFrontlineY);
                 if (distToFrontline > 10) {
                     let speedX = (cmd === CMD_ATTACK) ? 2.2 : 1.7;
@@ -614,10 +559,17 @@ class Clubman {
                     this.y = targetFrontlineY;
                 }
                 this.attackTimer = 0;
+                this.isAttacking = false;
             }
         }
 
-        this._isActuallyWalking = actualMoved && (Math.hypot(this.x - this.prevX, 0) > 0.4) && !this.isAttacking;
+        const movedCheck = Math.hypot(this.x - this.prevX, 0) > 0.4;
+        this._isActuallyWalking = actualMoved && movedCheck && !this.isAttacking;
+
+        if ((!this.target || this.target.hp <= 0) && this.isAttacking) {
+            this.isAttacking = false;
+            this.attackTimer = 0;
+        }
     }
 
     draw(ctx) {
@@ -626,7 +578,7 @@ class Clubman {
         const dx = this.x - this.prevX;
         if (Math.abs(dx) > 0.3) {
             isFlipped = dx < 0;
-        } else if (this.isAttacking && this.target) {
+        } else if (this.isAttacking && this.target && this.target.hp > 0) {
             isFlipped = (this.target.x < this.x);
         } else {
             let cmd = this.isPlayer ? unitOwnerState(this).command : enemy.command;
@@ -652,6 +604,7 @@ class Clubman {
     }
 }
 
+// ==================== SICKLEWRATH (Clubman'dan türetilmiş) ====================
 class Sicklewrath extends Clubman {
     constructor(isPlayer, ownerIndex = 0) {
         super(isPlayer, ownerIndex);
@@ -664,6 +617,7 @@ class Sicklewrath extends Clubman {
     }
 }
 
+// ==================== OKÇU ====================
 class Archer {
     constructor(isPlayer, ownerIndex = 0) {
         this.isPlayer = isPlayer;
@@ -677,6 +631,9 @@ class Archer {
         this.formationIndex = isPlayer
             ? (player.archerFormationCounter = (player.archerFormationCounter || 0) + 1)
             : (enemy.archerFormationCounter = (enemy.archerFormationCounter || 0) + 1);
+
+        // Sıra düzeni için dikey ofset (her okçu arasında 25 piksel boşluk)
+        this.formationOffsetY = (this.formationIndex - 2) * 25;
 
         this.hp = 50;
         this.maxHp = 50;
@@ -723,8 +680,8 @@ class Archer {
             let targetX = this.isPlayer ? -150 : worldWidth + 150;
             if (Math.hypot(this.x - targetX, this.y - this.baseY) > 5) {
                 let angle = Math.atan2(this.baseY - this.y, targetX - this.x);
-                this.x += Math.cos(angle) * 1.2 * SPEED_MULT * slowMul;   // hız düşürüldü
-                this.y += Math.sin(angle) * 0.9 * SPEED_MULT * slowMul;   // hız düşürüldü
+                this.x += Math.cos(angle) * 1.2 * SPEED_MULT * slowMul;
+                this.y += Math.sin(angle) * 0.9 * SPEED_MULT * slowMul;
                 this._isActuallyWalking = true;
             } else {
                 this.x = targetX;
@@ -755,7 +712,7 @@ class Archer {
         const onMap = this.x > -50 && this.x < worldWidth + 50;
         if (!onMap) this.target = null;
 
-        // HEDEF VARSA HAREKET ETME (dur ve vur)
+        // Hedef varsa kesinlikle hareket etme (dur ve vur)
         if (!this.target) {
             // Hedef yoksa komuta göre pozisyon al
             const myClubmen = units.filter(u => u.isPlayer === this.isPlayer && u instanceof Clubman && u.hp > 0);
@@ -767,7 +724,7 @@ class Archer {
             }
 
             let desiredX;
-            let desiredY = this.baseY;
+            let desiredY = this.baseY + this.formationOffsetY;
             if (cmd === CMD_ATTACK) {
                 desiredX = enemyBase.x + (this.isPlayer ? -260 : 260);
             } else {
@@ -777,14 +734,13 @@ class Archer {
                 desiredX = this.isPlayer
                     ? Math.min(desiredX, frontClubman.x - this.safeGap)
                     : Math.max(desiredX, frontClubman.x + this.safeGap);
-                desiredY = frontClubman.y;
+                desiredY = frontClubman.y + this.formationOffsetY;
             }
 
             let actualMoved = false;
             const distToDesired = Math.hypot(desiredX - this.x, desiredY - this.y);
             if (distToDesired > 8) {
                 let angle = Math.atan2(desiredY - this.y, desiredX - this.x);
-                // Okçular için hız biraz azaltıldı
                 this.x += Math.cos(angle) * 1.2 * SPEED_MULT * slowMul;
                 this.y += Math.sin(angle) * 0.9 * SPEED_MULT * slowMul;
                 actualMoved = true;
@@ -849,6 +805,7 @@ class Archer {
     }
 }
 
+// ==================== KALE OKÇUSU (KULEDEKİ OKÇU) ====================
 class BaseArcherUnit {
     constructor(isPlayer, offsetX, offsetY, climbSpeed, ownerIndex = 0) {
         this.isPlayer = isPlayer;
@@ -890,7 +847,6 @@ class BaseArcherUnit {
                 this.isWalking = false;
             }
         } else if (this.state === 'active') {
-            // Sadece menzilde hedef varken yay çek / ateş animasyonu
             let enemies = units.filter(u => u.isPlayer !== this.isPlayer && u.hp > 0 && !u.isInvulnerable);
             let target = null;
             if (enemies.length > 0) {
@@ -910,13 +866,17 @@ class BaseArcherUnit {
                     this.drawAmount = 0;
                 } else if (this.attackTimer < SHOOT_AT) {
                     this.drawAmount = (this.attackTimer - DRAW_START) / (SHOOT_AT - DRAW_START);
+                    this.drawAmount = Math.min(1, this.drawAmount);
                 } else {
                     this.drawAmount = 0;
                 }
                 if (this.attackTimer === SHOOT_AT) {
                     projectiles.push(new Arrow(this.x, this.y - 30, target, this.isPlayer));
                 }
-                if (this.attackTimer >= CYCLE) this.attackTimer = 0;
+                if (this.attackTimer >= CYCLE) {
+                    this.attackTimer = 0;
+                    this.drawAmount = 0;
+                }
             }
             this.isWalking = false;
         }
@@ -941,6 +901,7 @@ class BaseArcherUnit {
     }
 }
 
+// ==================== OK ====================
 class Arrow {
     constructor(startX, startY, targetUnit, isPlayer) {
         this.x = startX;
