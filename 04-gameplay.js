@@ -1,4 +1,4 @@
-// ==================== 04-gameplay.js ====================
+// ==================== 04-gameplay.js ==================== ve
 // Oyun mantığı, sinematik, AI, spawn sistemleri
 
 function setPlayerCommand(cmd) {
