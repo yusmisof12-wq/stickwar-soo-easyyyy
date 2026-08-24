@@ -24,6 +24,7 @@ class Miner {
         this.attackTimer = 0;
         this.range = 30;
         this.damage = 8;
+        this.visionRange = 200; // Düşmanı fark etme mesafesi
         this.target = null;
         this.isInvulnerable = false;
         this.combatMode = false;
@@ -400,9 +401,11 @@ class Clubman {
             targetFrontlineX = enemyBase.x + (this.isPlayer ? -100 : 100);
             targetFrontlineY = enemyBase.y;
         }
-        const visibleEnemies = enemies.filter(e =>
-            cmd === CMD_ATTACK || (cmd === CMD_DEFEND && Math.abs(e.x - myBase.x) < 550)
-        );
+      const visibleEnemies = enemies.filter(e => {
+    const dist = Math.hypot(e.x - this.x, e.y - this.y);
+    return dist <= this.visionRange && 
+           (cmd === CMD_ATTACK || (cmd === CMD_DEFEND && Math.abs(e.x - myBase.x) < 550));
+});
         // Kule/heykel (enemyBase) de geçerli hedef — aksi halde her kare attackTimer sıfırlanır, hasar gitmez
         const targetingBase = this.target === enemyBase && enemyBase.hp > 0 && cmd === CMD_ATTACK;
         const hasValidTarget = targetingBase || (this.target && this.target !== enemyBase &&
@@ -581,6 +584,7 @@ class Archer {
         this.hp = 50;
         this.maxHp = 50;
         this.range = 520;
+        this.visionRange = 800; // Görüş mesafesi
         this.safeGap = 32;
         this.tooClose = 240;
         this.attackCooldown = 130;
@@ -632,9 +636,11 @@ class Archer {
             this.target = null;
             return;
         }
-        const visibleEnemies = enemies.filter(e =>
-            cmd === CMD_ATTACK || (cmd === CMD_DEFEND && Math.abs(e.x - myBase.x) < AI_VISION_RANGE)
-        );
+       const visibleEnemies = enemies.filter(e => {
+    const dist = Math.hypot(e.x - this.x, e.y - this.y);
+    return dist <= this.visionRange && 
+           (cmd === CMD_ATTACK || (cmd === CMD_DEFEND && Math.abs(e.x - myBase.x) < AI_VISION_RANGE));
+});
         let closest = null, minDist = Infinity;
         for (let e of visibleEnemies) {
             let d = Math.hypot(e.x - this.x, e.y - this.y);
@@ -737,6 +743,7 @@ class BaseArcherUnit {
         this.attackTimer = 0;
         this.drawAmount = 0;
         this.active = true;
+        this.visionRange = 700; // Kule görüş mesafesi
         this.isWalking = false;
         this.climbAnim = 0;
     }
@@ -765,7 +772,7 @@ class BaseArcherUnit {
             if (enemies.length > 0) {
                 target = enemies.reduce((prev, curr) =>
                     Math.abs(curr.x - this.x) < Math.abs(prev.x - this.x) ? curr : prev);
-                if (Math.abs(target.x - this.x) >= 700) target = null;
+              if (Math.abs(target.x - this.x) >= this.visionRange) target = null;
             }
             if (!target) {
                 this.attackTimer = 0;
