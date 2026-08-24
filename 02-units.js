@@ -427,31 +427,29 @@ const visibleEnemies = enemies.filter(e => {
     }
 });
         // Kule/heykel (enemyBase) de geçerli hedef — aksi halde her kare attackTimer sıfırlanır, hasar gitmez
-        const targetingBase = this.target === enemyBase && enemyBase.hp > 0 && cmd === CMD_ATTACK;
-        const hasValidTarget = targetingBase || (this.target && this.target !== enemyBase &&
-            this.target.hp > 0 && visibleEnemies.includes(this.target));
-        if (!hasValidTarget) {
-            this.target = null;
-            this.isAttacking = false;
-            this.attackTimer = 0;
-            this.didHitThisSwing = false;
-        }
-        if (!this.target) {
-            if (typeof pickFrontEnemy === 'function') {
-                this.target = pickFrontEnemy(this, visibleEnemies);
-            } else {
-                let bestScore = Infinity;
-                for (let e of visibleEnemies) {
-                    let dist = Math.hypot(e.x - this.x, e.y - this.y);
-                    let currentAttackers = units.filter(u => u.isPlayer === this.isPlayer && u instanceof Clubman && u.target === e).length;
-                    let score = dist + (currentAttackers * 120);
-                    if (score < bestScore) {
-                        bestScore = score;
-                        this.target = e;
-                    }
-                }
-            }
-        }
+   // Görünür düşmanlar arasında en yakın olanı seç
+let newTarget = null;
+let bestDist = Infinity;
+for (let e of visibleEnemies) {
+    let d = Math.hypot(e.x - this.x, e.y - this.y);
+    if (d < bestDist) {
+        bestDist = d;
+        newTarget = e;
+    }
+}
+
+// Eğer görünür düşman yoksa ve komut saldırıysa heykeli hedefle
+if (!newTarget && cmd === CMD_ATTACK) {
+    newTarget = enemyBase;
+}
+
+// Hedef değiştiyse saldırı durumunu sıfırla
+if (this.target !== newTarget) {
+    this.isAttacking = false;
+    this.attackTimer = 0;
+    this.didHitThisSwing = false;
+}
+this.target = newTarget;
         let distToTarget = this.target ? Math.hypot(this.target.x - this.x, this.target.y - this.y) : Infinity;
         if (cmd === CMD_ATTACK && !this.target) {
             this.target = enemyBase;
