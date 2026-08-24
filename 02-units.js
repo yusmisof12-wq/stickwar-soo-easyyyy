@@ -415,10 +415,16 @@ class Clubman {
             targetFrontlineX = enemyBase.x + (this.isPlayer ? -100 : 100);
             targetFrontlineY = enemyBase.y;
         }
-      const visibleEnemies = enemies.filter(e => {
-    const dist = Math.hypot(e.x - this.x, e.y - this.y);
-    return dist <= this.visionRange && 
-           (cmd === CMD_ATTACK || (cmd === CMD_DEFEND && Math.abs(e.x - myBase.x) < 550));
+    const isAmbush = typeof isAmbushLevel === 'function' && isAmbushLevel();
+const visibleEnemies = enemies.filter(e => {
+    if (isAmbush) {
+        // Pusu bölümünde tüm oyuncu birimlerini gör (mesafe sınırı yok)
+        return cmd === CMD_ATTACK || (cmd === CMD_DEFEND && Math.abs(e.x - myBase.x) < 550);
+    } else {
+        const dist = Math.hypot(e.x - this.x, e.y - this.y);
+        return dist <= this.visionRange && 
+               (cmd === CMD_ATTACK || (cmd === CMD_DEFEND && Math.abs(e.x - myBase.x) < 550));
+    }
 });
         // Kule/heykel (enemyBase) de geçerli hedef — aksi halde her kare attackTimer sıfırlanır, hasar gitmez
         const targetingBase = this.target === enemyBase && enemyBase.hp > 0 && cmd === CMD_ATTACK;
