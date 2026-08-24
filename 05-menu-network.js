@@ -885,6 +885,15 @@
         }
 
         function showScreen(which) {
+            if (which === 'menu') {
+                if (typeof startMenuBgAnim === 'function') startMenuBgAnim();
+            } else {
+                if (typeof stopMenuBgAnim === 'function') stopMenuBgAnim();
+            }
+            if (which === 'campaign' && typeof scatterCampaignDecor === 'function') {
+                // scatter called from openCampaignMap too
+            }
+
             authScreen.classList.add('hidden');
             mainMenu.classList.add('hidden');
             campaignScreen.classList.add('hidden');
@@ -919,6 +928,8 @@
             stopGameLoop();
             userChip.textContent = '👤 ' + currentUser.username;
             showScreen('menu');
+            if (typeof startMenuBgAnim === "function") startMenuBgAnim();
+            if (typeof setMusicMode === "function") setMusicMode("menu", true);
             connectWS();
             if (typeof startPingLoop === 'function') startPingLoop();
         }
@@ -1056,6 +1067,7 @@
             levelChoiceModal.classList.add('hidden');
             showScreen('campaign');
             refreshCampaignNodes();
+            if (typeof scatterCampaignDecor === 'function') scatterCampaignDecor();
             const flagLv = Math.min(currentUser.maxUnlocked || 1, 3);
             setFlagToLevel(fromVictory ? Math.max(1, flagLv - 1) : flagLv, false);
             if (fromVictory) {
@@ -1227,7 +1239,7 @@
             if (audioBattle) audioBattle.volume = volFor('battle');
         }
 
-        async function playTrack(mode) {
+        async function playTrack(mode, forceRestart) {
             ensureTracks();
             musicMode = mode === 'battle' ? 'battle' : 'menu';
             applyVolumes();
@@ -1240,13 +1252,18 @@
             const other = musicMode === 'battle' ? audioMenu : audioBattle;
             try { other.pause(); } catch (_) {}
             try {
+                if (forceRestart || want.paused) {
+                    want.currentTime = 0;
+                }
                 await want.play();
             } catch (e) {
                 console.warn('[müzik] autoplay bekleniyor — ekrana tıkla', e.message);
             }
         }
 
-        function setMusicMode(mode) { playTrack(mode); }
+        function setMusicMode(mode, forceRestart) {
+            playTrack(mode, forceRestart === true);
+        }
 
         function setMusicVolume(v) {
             musicVol = Math.min(1, Math.max(0, v));
@@ -1521,3 +1538,120 @@
 })();
 
         ensureAdminBackupUI();
+
+// ==================== MENÜ ARKA PLAN SÜSÜ ====================
+let menuBgRaf = null;
+let menuBgUnits = [];
+
+function startMenuBgAnim() {
+    let c = document.getElementById('menuBgCanvas');
+    if (!c) {
+        c = document.createElement('canvas');
+        c.id = 'menuBgCanvas';
+        c.className = 'menu-bg-canvas';
+        const mm = document.getElementById('mainMenu');
+        if (mm) mm.insertBefore(c, mm.firstChild);
+        else return;
+    }
+    stopMenuBgAnim();
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    c.width = Math.floor((c.clientWidth || window.innerWidth) * dpr);
+    c.height = Math.floor((c.clientHeight || window.innerHeight) * dpr);
+    menuBgUnits = [];
+    for (let i = 0; i < 12; i++) {
+        menuBgUnits.push({
+            x: Math.random() * c.width,
+            y: c.height * (0.52 + Math.random() * 0.3),
+            vx: (Math.random() < 0.5 ? -1 : 1) * (0.4 + Math.random() * 0.8) * dpr,
+            leg: Math.random() * 6,
+            type: Math.random() < 0.3 ? 'archer' : 'club',
+            scale: 0.7 + Math.random() * 0.5,
+        });
+    }
+    const ctx = c.getContext('2d');
+    const tick = () => {
+        menuBgRaf = requestAnimationFrame(tick);
+        const w = c.width, h = c.height;
+        if (!w || !h) return;
+        ctx.clearRect(0, 0, w, h);
+        const g = ctx.createLinearGradient(0, 0, 0, h);
+        g.addColorStop(0, '#1a252f');
+        g.addColorStop(0.52, '#2c3e50');
+        g.addColorStop(0.52, '#3d5a40');
+        g.addColorStop(1, '#2d4a30');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, w, h);
+        ctx.strokeStyle = 'rgba(255,255,255,0.07)';
+        ctx.beginPath();
+        ctx.moveTo(0, h * 0.52);
+        ctx.lineTo(w, h * 0.52);
+        ctx.stroke();
+        menuBgUnits.forEach(u => {
+            u.x += u.vx;
+            u.leg += 0.12;
+            if (u.x < -40) u.x = w + 40;
+            if (u.x > w + 40) u.x = -40;
+            ctx.save();
+            ctx.translate(u.x, u.y);
+            ctx.scale(u.scale * (u.vx > 0 ? 1 : -1), u.scale);
+            ctx.strokeStyle = 'rgba(236,240,241,0.75)';
+            ctx.lineWidth = 3;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.arc(0, -42, 8, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(0, -34);
+            ctx.lineTo(0, -8);
+            ctx.stroke();
+            const sw = Math.sin(u.leg) * 10;
+            ctx.beginPath();
+            ctx.moveTo(0, -8);
+            ctx.lineTo(-8 + sw, 12);
+            ctx.moveTo(0, -8);
+            ctx.lineTo(8 - sw, 12);
+            ctx.stroke();
+            ctx.beginPath();
+            if (u.type === 'club') {
+                ctx.moveTo(0, -28);
+                ctx.lineTo(14, -18);
+                ctx.lineTo(18, -40);
+            } else {
+                ctx.moveTo(0, -28);
+                ctx.lineTo(12, -20);
+                ctx.moveTo(12, -32);
+                ctx.quadraticCurveTo(22, -26, 12, -18);
+            }
+            ctx.stroke();
+            ctx.restore();
+        });
+    };
+    tick();
+}
+
+function stopMenuBgAnim() {
+    if (menuBgRaf) {
+        cancelAnimationFrame(menuBgRaf);
+        menuBgRaf = null;
+    }
+}
+
+function scatterCampaignDecor() {
+    const wrap = document.getElementById('campaignWrap');
+    if (!wrap) return;
+    wrap.querySelectorAll('.camp-decor').forEach(el => el.remove());
+    const icons = ['🌲', '🌳', '🪨', '⛺', '🏚️', '🔥', '🌾', '🦴', '⚔️', '🦅', '🌵', '🪵'];
+    const n = 8 + Math.floor(Math.random() * 8);
+    for (let i = 0; i < n; i++) {
+        const el = document.createElement('div');
+        el.className = 'camp-decor';
+        el.textContent = icons[Math.floor(Math.random() * icons.length)];
+        el.style.cssText =
+            'position:absolute;left:' + (4 + Math.random() * 92) + '%;top:' +
+            (6 + Math.random() * 82) + '%;font-size:' + (13 + Math.random() * 18) +
+            'px;opacity:' + (0.32 + Math.random() * 0.48) +
+            ';pointer-events:none;z-index:0;transform:rotate(' +
+            (Math.random() * 28 - 14) + 'deg);user-select:none;';
+        wrap.appendChild(el);
+    }
+}
