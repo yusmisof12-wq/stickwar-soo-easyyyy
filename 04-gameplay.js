@@ -198,6 +198,10 @@ function isCinematicActive() {
     return !!(cinematic && cinematic.active);
 }
 
+function cinematicHoldUnit(u) {
+    return !!(u && u._cinematic && isCinematicActive());
+}
+
 function clampCameraToWorld() {
     const maxCam = Math.max(0, worldWidth - canvas.width);
     cameraX = Math.max(0, Math.min(cameraX, maxCam));
@@ -319,9 +323,11 @@ function startLevel3Cinematic() {
     setGameplayUIVisible(false);
     setPlayerCommand(CMD_ATTACK);
 
+    // Heykelden UZAKTA başla (sinematikte heykel hissi yok)
+    const startX = player.base.x + 420;
     for (let i = 0; i < 3; i++) {
         const c = new Clubman(true, 0);
-        c.x = player.base.x + 50 + i * 36;
+        c.x = startX + i * 36;
         c.y = player.base.y + (i - 1) * 28;
         c.hp = c.maxHp = 150;
         c._cinematic = true;
@@ -329,7 +335,7 @@ function startLevel3Cinematic() {
         c._cinLane = i;
         units.push(c);
     }
-    cameraX = Math.max(0, player.base.x - canvas.width * 0.35);
+    cameraX = Math.max(0, startX - canvas.width * 0.4);
     clampCameraToWorld();
 }
 
@@ -352,6 +358,8 @@ function endLevel3Cinematic() {
         survivor._cinLane = null;
         survivor._spawnWalkIn = 0;
         survivor.ownerIndex = 0;
+        survivor.isPlayer = true;
+        survivor.hp = Math.max(1, (survivor.maxHp || 80) - 10);
         survivor.x = player.base.x + 60;
         survivor.y = player.base.y;
         survivor.target = null;
@@ -366,15 +374,17 @@ function endLevel3Cinematic() {
     cinematic = { active: false, phase: '', timer: 0, bubble: null, bubbleTimer: 0 };
     setGameplayUIVisible(true);
     setPlayerCommand(CMD_DEFEND);
-    
-    // ===== DÜZELTME: Pusu hemen başlasın =====
-    ambushTimer = 20 * 60; // 20 saniyeyi doldur → ilk dalga hemen gelir
-    
+
+    // Pusu hemen başlasın
+    ambushTimer = 20 * 60;
+
     enemy.ambushWaves = null;
     enemy.ambushWaveIndex = 0;
     cameraX = Math.max(0, Math.min(player.base.x - 80, worldWidth - canvas.width));
     clampCameraToWorld();
-    if (typeof showToast === 'function') showToast('Pusu başladı — heykeli savunun!');
+    if (typeof showToast === 'function') {
+        showToast(survivor ? 'Yaralı okçu kurtuldu — heykeli savunun!' : 'Pusu başladı — heykeli savunun!');
+    }
 }
 
 function cinFocusCamera(xs, bias) {
@@ -387,6 +397,7 @@ function cinFocusCamera(xs, bias) {
 
 // ===== ORAKÇI SPAWN (HARİTA DIŞINDAN YÜRÜYEREK) =====
 function spawnAmbusherAt(targetX, targetY, lane) {
+    spawnCinFog(targetX, targetY, 16);
     const s = new Sicklewrath(false);
     // Haritanın sağ kenarının 300 piksel dışından başlasın
     const startX = worldWidth + 300 + Math.random() * 100;
@@ -470,7 +481,7 @@ function updateCinematic() {
                 const laneY = player.base.y + (u._cinLane - 1) * 30;
                 const tx = walkStop + (u._cinLane - 1) * 18;
                 if (u.x < tx - 2) {
-                    u.x += 1.1 * SPEED_MULT;
+                    u.x += 1.05 * SPEED_MULT;
                     u.y += (laneY - u.y) * 0.04;
                     u._isActuallyWalking = true;
                     u.isAttacking = false;
@@ -497,6 +508,11 @@ function updateCinematic() {
             cinematic.bubble = 'BU BİR PUSU!';
             cinematic.bubbleTimer = 170;
         }
+        if (cinematic.timer === 200) {
+            spawnCinFog(walkStop + 180, player.base.y, 22);
+            spawnCinFog(walkStop + 220, player.base.y - 40, 12);
+            spawnCinFog(walkStop + 220, player.base.y + 40, 12);
+        }
         if (cinematic.timer > 340) {
             cinematic.phase = 'ambush';
             cinematic.timer = 0;
@@ -518,7 +534,7 @@ function updateCinematic() {
             ];
             spots.forEach((sp, i) => spawnAmbusherAt(sp.x, sp.y, i));
             cinematic.fightStarted = true;
-            cinematic.bubble = 'Dikenlerin arkasından çıktılar!';
+            cinematic.bubble = 'Sisten çıktılar!';
             cinematic.bubbleTimer = 130;
         }
         if (cinematic.timer > 100) {
@@ -879,7 +895,7 @@ function updateCinematic() {
         if (cinematic.timer === 550) { cinematic.bubble = 'Dayanın, az kaldı!'; cinematic.bubbleTimer = 120; }
         if (cinematic.timer === 750) { cinematic.bubble = 'Son nefes… çekilin!'; cinematic.bubbleTimer = 120; }
 
-        if (cinematic.timer >= 900 || archersNow.length === 0) {
+        if (cinematic.timer >= 600 || archersNow.length === 0) {
             const survivors = units
                 .filter(u => u._cinematic && u._cinRole === 'archer' && u.hp > 0)
                 .sort((a, b) => b.hp - a.hp);
@@ -1416,7 +1432,7 @@ function updateActionButtonsUI() {
     btnClub.disabled = st.gold < 125 || st.combatQueue.length >= MAX_QUEUE ||
         (countPlayerUnits('club') + qAll('club') >= MAX_CLUBMEN_PER_TEAM);
 
-    if (level >= 3) {
+    if (level >= 2) {
         btnArcher.style.display = '';
         btnArcher.disabled = st.gold < 140 || st.combatQueue.length >= MAX_QUEUE ||
             (countPlayerUnits('archer') + qAll('archer') >= MAX_ARCHERS_PER_TEAM);
