@@ -1779,10 +1779,15 @@ function startMenuBgAnim() {
 }
 
 function scatterCampaignDecor() {
-    // Emoji yok — haritada da oyun arka planı
+    // Sefer haritası: kış kasaba → koyu orman → çöl (gameplay birimi YOK)
     const wrap = document.getElementById('campaignWrap');
     if (!wrap) return;
     wrap.querySelectorAll('.camp-decor').forEach(el => el.remove());
+
+    if (window._campBgRaf) {
+        cancelAnimationFrame(window._campBgRaf);
+        window._campBgRaf = null;
+    }
 
     let c = document.getElementById('campaignBgCanvas');
     if (!c) {
@@ -1796,42 +1801,184 @@ function scatterCampaignDecor() {
     const ch = wrap.clientHeight || 520;
     c.width = Math.floor(cw * dpr);
     c.height = Math.floor(ch * dpr);
-
-    if (window._campBgRaf) {
-        cancelAnimationFrame(window._campBgRaf);
-        window._campBgRaf = null;
-    }
-    const actors = [];
-    for (let i = 0; i < 6; i++) {
-        actors.push({
-            x: Math.random() * c.width,
-            y: c.height * 0.72,
-            vx: (i % 2 ? 1 : -1) * (0.4 + Math.random() * 0.5) * dpr,
-            phase: Math.random() * 6,
-            type: i % 3 === 0 ? 'archer' : (i % 3 === 1 ? 'miner' : 'club'),
-            scale: (0.7 + Math.random() * 0.25) * dpr,
-            enemy: i >= 3,
-        });
-    }
     const ctx = c.getContext('2d');
     let t = 0;
-    const tick = () => {
+
+    function drawWinterVillage(ctx, w, h, t) {
+        const sky = ctx.createLinearGradient(0, 0, 0, h * 0.55);
+        sky.addColorStop(0, '#1a2a4a');
+        sky.addColorStop(0.5, '#4a6fa5');
+        sky.addColorStop(1, '#c5d5e8');
+        ctx.fillStyle = sky;
+        ctx.fillRect(0, 0, w * 0.42, h);
+
+        const ground = ctx.createLinearGradient(0, h * 0.55, 0, h);
+        ground.addColorStop(0, '#e8eef5');
+        ground.addColorStop(1, '#b0c4de');
+        ctx.fillStyle = ground;
+        ctx.fillRect(0, h * 0.55, w * 0.42, h * 0.45);
+
+        ctx.fillStyle = 'rgba(255,255,255,0.75)';
+        for (let i = 0; i < 40; i++) {
+            const sx = (i * 97 + t * 0.4) % (w * 0.42);
+            const sy = (i * 53 + t * 0.7) % h;
+            ctx.beginPath();
+            ctx.arc(sx, sy, 1.2 + (i % 3) * 0.5, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        const houses = [
+            [w * 0.06, h * 0.55, 28],
+            [w * 0.14, h * 0.52, 34],
+            [w * 0.24, h * 0.54, 26],
+            [w * 0.32, h * 0.53, 30]
+        ];
+        houses.forEach(function (hinfo, i) {
+            const hx = hinfo[0], hy = hinfo[1], hs = hinfo[2];
+            ctx.fillStyle = '#5d4e37';
+            ctx.fillRect(hx, hy - hs * 0.7, hs, hs * 0.7);
+            ctx.fillStyle = '#8b0000';
+            ctx.beginPath();
+            ctx.moveTo(hx - 4, hy - hs * 0.7);
+            ctx.lineTo(hx + hs / 2, hy - hs * 1.15);
+            ctx.lineTo(hx + hs + 4, hy - hs * 0.7);
+            ctx.closePath();
+            ctx.fill();
+            ctx.fillStyle = 'rgba(255,255,255,0.85)';
+            ctx.beginPath();
+            ctx.moveTo(hx - 4, hy - hs * 0.7);
+            ctx.lineTo(hx + hs / 2, hy - hs * 1.15);
+            ctx.lineTo(hx + hs + 4, hy - hs * 0.7);
+            ctx.lineTo(hx + hs / 2, hy - hs * 0.95);
+            ctx.closePath();
+            ctx.fill();
+            ctx.fillStyle = '#f1c40f';
+            ctx.fillRect(hx + hs * 0.25, hy - hs * 0.45, hs * 0.2, hs * 0.2);
+            ctx.fillStyle = 'rgba(200,200,210,0.35)';
+            const smy = hy - hs * 1.1 - ((t * 0.3 + i * 20) % 40);
+            ctx.beginPath();
+            ctx.ellipse(hx + hs * 0.7, smy, 6, 4, 0, 0, Math.PI * 2);
+            ctx.fill();
+        });
+    }
+
+    function drawDarkForest(ctx, w, h, t) {
+        const x0 = w * 0.32;
+        const ww = w * 0.42;
+        const sky = ctx.createLinearGradient(0, 0, 0, h * 0.5);
+        sky.addColorStop(0, '#0d1a12');
+        sky.addColorStop(0.6, '#1a3324');
+        sky.addColorStop(1, '#2d4a35');
+        ctx.fillStyle = sky;
+        ctx.fillRect(x0, 0, ww, h);
+        ctx.fillStyle = '#1a2f1a';
+        ctx.fillRect(x0, h * 0.62, ww, h * 0.38);
+
+        ctx.fillStyle = 'rgba(80,100,80,0.25)';
+        for (let i = 0; i < 4; i++) {
+            const fx = x0 + ((t * 0.15 + i * 80) % ww);
+            ctx.beginPath();
+            ctx.ellipse(fx, h * 0.58 + i * 8, 70, 18, 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        for (let i = 0; i < 14; i++) {
+            const tx = x0 + 20 + (i * 37 + (i % 3) * 10) % (ww - 40);
+            const th = 70 + (i % 5) * 18;
+            const ty = h * 0.62;
+            ctx.fillStyle = '#2c1810';
+            ctx.fillRect(tx - 5, ty - th * 0.55, 10, th * 0.55);
+            ctx.fillStyle = i % 2 ? '#0f2a18' : '#1a3d28';
+            for (let k = 0; k < 3; k++) {
+                ctx.beginPath();
+                ctx.moveTo(tx, ty - th + k * 18);
+                ctx.lineTo(tx - 22 + k * 3, ty - th * 0.55 + k * 14);
+                ctx.lineTo(tx + 22 - k * 3, ty - th * 0.55 + k * 14);
+                ctx.closePath();
+                ctx.fill();
+            }
+        }
+        ctx.fillStyle = 'rgba(230,230,200,0.7)';
+        ctx.beginPath();
+        ctx.arc(x0 + ww * 0.75, h * 0.15, 18, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#0d1a12';
+        ctx.beginPath();
+        ctx.arc(x0 + ww * 0.75 + 6, h * 0.14, 14, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    function drawDesert(ctx, w, h, t) {
+        const x0 = w * 0.58;
+        const ww = w * 0.42;
+        const sky = ctx.createLinearGradient(0, 0, 0, h * 0.55);
+        sky.addColorStop(0, '#1a1028');
+        sky.addColorStop(0.35, '#c0392b');
+        sky.addColorStop(0.7, '#e67e22');
+        sky.addColorStop(1, '#f5d08a');
+        ctx.fillStyle = sky;
+        ctx.fillRect(x0, 0, ww, h);
+
+        const sunY = h * 0.22 + Math.sin(t * 0.01) * 3;
+        ctx.fillStyle = '#f39c12';
+        ctx.beginPath();
+        ctx.arc(x0 + ww * 0.7, sunY, 28, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(241,196,15,0.25)';
+        ctx.beginPath();
+        ctx.arc(x0 + ww * 0.7, sunY, 48, 0, Math.PI * 2);
+        ctx.fill();
+
+        const sand = ctx.createLinearGradient(0, h * 0.5, 0, h);
+        sand.addColorStop(0, '#e8c468');
+        sand.addColorStop(0.5, '#d4a017');
+        sand.addColorStop(1, '#a67c00');
+        ctx.fillStyle = sand;
+        ctx.fillRect(x0, h * 0.5, ww, h * 0.5);
+
+        ctx.fillStyle = '#c9a227';
+        ctx.beginPath();
+        ctx.moveTo(x0, h);
+        for (let x = 0; x <= ww; x += 20) {
+            const y = h * 0.55 + Math.sin(x * 0.03 + t * 0.008) * 22 + Math.cos(x * 0.05) * 10;
+            ctx.lineTo(x0 + x, y);
+        }
+        ctx.lineTo(x0 + ww, h);
+        ctx.closePath();
+        ctx.fill();
+
+        [0.15, 0.4, 0.75].forEach(function (p, i) {
+            const cx = x0 + ww * p;
+            const cy = h * 0.62 + (i % 2) * 10;
+            ctx.fillStyle = '#1e8449';
+            ctx.fillRect(cx - 6, cy - 40, 12, 40);
+            ctx.fillRect(cx - 18, cy - 28, 12, 8);
+            ctx.fillRect(cx - 18, cy - 28, 6, 18);
+            ctx.fillRect(cx + 6, cy - 22, 12, 8);
+            ctx.fillRect(cx + 12, cy - 22, 6, 14);
+        });
+    }
+
+    function paint() {
         const scr = document.getElementById('campaignScreen');
         if (!scr || scr.classList.contains('hidden')) {
             window._campBgRaf = null;
             return;
         }
-        window._campBgRaf = requestAnimationFrame(tick);
+        window._campBgRaf = requestAnimationFrame(paint);
         t++;
-        paintGameBackground(ctx, c.width, c.height, t);
-        actors.forEach(a => {
-            a.x += a.vx;
-            a.phase += 0.12;
-            if (a.x < -50) a.x = c.width + 50;
-            if (a.x > c.width + 50) a.x = -50;
-            a.y = c.height * 0.72;
-            drawMenuUnit(ctx, a);
-        });
-    };
-    tick();
+        const w = c.width;
+        const h = c.height;
+        ctx.clearRect(0, 0, w, h);
+        drawWinterVillage(ctx, w, h, t);
+        drawDarkForest(ctx, w, h, t);
+        drawDesert(ctx, w, h, t);
+
+        const vig = ctx.createRadialGradient(w / 2, h / 2, h * 0.2, w / 2, h / 2, h * 0.85);
+        vig.addColorStop(0, 'rgba(0,0,0,0)');
+        vig.addColorStop(1, 'rgba(0,0,0,0.22)');
+        ctx.fillStyle = vig;
+        ctx.fillRect(0, 0, w, h);
+    }
+    paint();
 }
