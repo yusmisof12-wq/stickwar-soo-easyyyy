@@ -255,58 +255,58 @@ class Miner {
                 this.bodyLean = 0;
                 this.armRaise = 0;
             } else {
-                this.actionTimer++;
-                const CYCLE = 70;
-                const cycle = this.actionTimer % CYCLE;
-                this.holdingRock = false;
-                const easeInOut = (t) => t * t * (3 - 2 * t);
+            this.actionTimer++;
+            const CYCLE = 70;
+            const cycle = this.actionTimer % CYCLE;
+            this.holdingRock = false;
+            const easeInOut = (t) => t * t * (3 - 2 * t);
 
-                if (cycle < 28) {
-                    const t = easeInOut(cycle / 28);
-                    this.miningPhase = 0;
-                    this.bodyLean = 0.28 + t * 0.08;
-                    this.armRaise = 0.3 + t * 0.7;
-                    this.miningSwing = -0.85 + t * 0.25;
-                } else if (cycle < 48) {
-                    const t = easeInOut((cycle - 28) / 20);
-                    this.miningPhase = 1;
-                    this.bodyLean = 0.36 + t * 0.12;
-                    this.armRaise = 1 - t;
-                    this.miningSwing = -0.6 + t * 2.0;
-                    if (cycle === 40) {
-                        const side = (this.localOffset && this.localOffset.dx > 0) ? -14 : 14;
-                        spawnMiningSparks(this.x + side, this.y - 8);
-                    }
-                } else {
-                    const t = easeInOut((cycle - 48) / 22);
-                    this.miningPhase = 2;
-                    this.bodyLean = 0.48 - t * 0.18;
-                    this.armRaise = 0.15 + t * 0.2;
-                    this.miningSwing = 1.4 - t * 0.5;
-                }
-
+            if (cycle < 28) {
+                const t = easeInOut(cycle / 28);
+                this.miningPhase = 0;
+                this.bodyLean = 0.28 + t * 0.08;
+                this.armRaise = 0.3 + t * 0.7;
+                this.miningSwing = -0.85 + t * 0.25;
+            } else if (cycle < 48) {
+                const t = easeInOut((cycle - 28) / 20);
+                this.miningPhase = 1;
+                this.bodyLean = 0.36 + t * 0.12;
+                this.armRaise = 1 - t;
+                this.miningSwing = -0.6 + t * 2.0;
                 if (cycle === 40) {
-                    this.bagGold = Math.min(6, this.bagGold + 1);
-                    this.hits++;
-                    if (this.isPlayer) {
-                        addFloatingText(this.x + 10, this.y - 40, '+1', '#f1c40f');
-                    }
+                    const side = (this.localOffset && this.localOffset.dx > 0) ? -14 : 14;
+                    spawnMiningSparks(this.x + side, this.y - 8);
                 }
-                if (this.hits >= 6 && cycle >= 55) {
-                    const t = easeInOut((cycle - 55) / 15);
-                    this.bodyLean = 0.3 * (1 - t);
-                    this.armRaise = 0.3 * (1 - t);
-                    this.miningSwing = 0.5 * (1 - t);
-                    if (cycle >= 69) {
-                        this.releaseSlot();
-                        this.state = 'going_base';
-                        this.miningSwing = 0;
-                        this.miningPhase = 0;
-                        this.bodyLean = 0;
-                        this.armRaise = 0;
-                        this.holdingRock = false;
-                    }
+            } else {
+                const t = easeInOut((cycle - 48) / 22);
+                this.miningPhase = 2;
+                this.bodyLean = 0.48 - t * 0.18;
+                this.armRaise = 0.15 + t * 0.2;
+                this.miningSwing = 1.4 - t * 0.5;
+            }
+
+            if (cycle === 40) {
+                this.bagGold = Math.min(6, this.bagGold + 1);
+                this.hits++;
+                if (this.isPlayer) {
+                    addFloatingText(this.x + 10, this.y - 40, '+1', '#f1c40f');
                 }
+            }
+            if (this.hits >= 6 && cycle >= 55) {
+                const t = easeInOut((cycle - 55) / 15);
+                this.bodyLean = 0.3 * (1 - t);
+                this.armRaise = 0.3 * (1 - t);
+                this.miningSwing = 0.5 * (1 - t);
+                if (cycle >= 69) {
+                    this.releaseSlot();
+                    this.state = 'going_base';
+                    this.miningSwing = 0;
+                    this.miningPhase = 0;
+                    this.bodyLean = 0;
+                    this.armRaise = 0;
+                    this.holdingRock = false;
+                }
+            }
             }
         } else if (this.state === 'going_base') {
             let dist = Math.hypot(this.baseX - this.x, this.baseY - this.y);
@@ -475,7 +475,7 @@ class Clubman {
         this.stuckArrows = [];
     }
 
-    update() {
+   update() {
         if (typeof cinematicHoldUnit === 'function' && cinematicHoldUnit(this)) return;
         let cmd = this.isPlayer ? unitOwnerState(this).command : enemy.command;
         let enemies = units.filter(u => u.isPlayer !== this.isPlayer && u.hp > 0 && !u.isInvulnerable);
@@ -524,12 +524,7 @@ class Clubman {
         const hasValidTarget = this.target && this.target !== enemyBase &&
             this.target.hp > 0 && visibleEnemies.includes(this.target);
 
-        if (!hasValidTarget) {
-            this.target = null;
-            this.isAttacking = false;
-            this.attackTimer = 0;
-            this.didHitThisSwing = false;
-        }
+        if (!hasValidTarget) this.target = null;
 
         if (!this.target) {
             if (typeof pickFrontEnemy === 'function') {
@@ -555,21 +550,10 @@ class Clubman {
         } else if (cmd !== CMD_ATTACK && this.target === enemyBase) {
             this.target = null;
             distToTarget = Infinity;
-            this.isAttacking = false;
-            this.attackTimer = 0;
-        }
-
-        if (this.target && this.target.hp <= 0) {
-            this.target = null;
-            this.isAttacking = false;
-            this.attackTimer = 0;
-            this.didHitThisSwing = false;
-            distToTarget = Infinity;
         }
 
         this.isAttacking = false;
         let actualMoved = false;
-
         if (cmd === CMD_RETREAT) {
             if (Math.hypot(this.x - targetFrontlineX, this.y - targetFrontlineY) > 5) {
                 let angle = Math.atan2(targetFrontlineY - this.y, targetFrontlineX - this.x);
@@ -581,7 +565,6 @@ class Clubman {
                 this.y = targetFrontlineY;
             }
             this.attackTimer = 0;
-            this.isAttacking = false;
         } else {
             if (this.target && distToTarget <= this.range) {
                 const foe = this.target;
@@ -608,15 +591,16 @@ class Clubman {
                     }
                 }
             } else if (this.target) {
+                this.combatTurn = undefined;
                 let speedX = (cmd === CMD_ATTACK) ? 2.2 : 1.8;
                 let speedY = (cmd === CMD_ATTACK) ? 1.6 : 1.3;
                 let angle = Math.atan2(this.target.y - this.y, this.target.x - this.x);
                 this.x += Math.cos(angle) * speedX * SPEED_MULT * slowMul;
                 this.y += Math.sin(angle) * speedY * SPEED_MULT * slowMul;
                 this.attackTimer = 0;
-                this.isAttacking = false;
                 actualMoved = true;
             } else {
+                this.combatTurn = undefined;
                 let distToFrontline = Math.hypot(this.x - targetFrontlineX, this.y - targetFrontlineY);
                 if (distToFrontline > 10) {
                     let speedX = (cmd === CMD_ATTACK) ? 2.2 : 1.7;
@@ -630,17 +614,10 @@ class Clubman {
                     this.y = targetFrontlineY;
                 }
                 this.attackTimer = 0;
-                this.isAttacking = false;
             }
         }
 
-        const movedCheck = Math.hypot(this.x - this.prevX, 0) > 0.4;
-        this._isActuallyWalking = actualMoved && movedCheck && !this.isAttacking;
-
-        if ((!this.target || this.target.hp <= 0) && this.isAttacking) {
-            this.isAttacking = false;
-            this.attackTimer = 0;
-        }
+        this._isActuallyWalking = actualMoved && (Math.hypot(this.x - this.prevX, 0) > 0.4) && !this.isAttacking;
     }
 
     draw(ctx) {
@@ -649,7 +626,7 @@ class Clubman {
         const dx = this.x - this.prevX;
         if (Math.abs(dx) > 0.3) {
             isFlipped = dx < 0;
-        } else if (this.isAttacking && this.target && this.target.hp > 0) {
+        } else if (this.isAttacking && this.target) {
             isFlipped = (this.target.x < this.x);
         } else {
             let cmd = this.isPlayer ? unitOwnerState(this).command : enemy.command;
@@ -746,8 +723,8 @@ class Archer {
             let targetX = this.isPlayer ? -150 : worldWidth + 150;
             if (Math.hypot(this.x - targetX, this.y - this.baseY) > 5) {
                 let angle = Math.atan2(this.baseY - this.y, targetX - this.x);
-                this.x += Math.cos(angle) * 1.7 * SPEED_MULT * slowMul;
-                this.y += Math.sin(angle) * 1.3 * SPEED_MULT * slowMul;
+                this.x += Math.cos(angle) * 1.2 * SPEED_MULT * slowMul;   // hız düşürüldü
+                this.y += Math.sin(angle) * 0.9 * SPEED_MULT * slowMul;   // hız düşürüldü
                 this._isActuallyWalking = true;
             } else {
                 this.x = targetX;
@@ -778,37 +755,44 @@ class Archer {
         const onMap = this.x > -50 && this.x < worldWidth + 50;
         if (!onMap) this.target = null;
 
-        const myClubmen = units.filter(u => u.isPlayer === this.isPlayer && u instanceof Clubman && u.hp > 0);
-        let frontClubman = null;
-        if (myClubmen.length > 0) {
-            frontClubman = this.isPlayer
-                ? myClubmen.reduce((a, b) => b.x > a.x ? b : a)
-                : myClubmen.reduce((a, b) => b.x < a.x ? b : a);
-        }
+        // HEDEF VARSA HAREKET ETME (dur ve vur)
+        if (!this.target) {
+            // Hedef yoksa komuta göre pozisyon al
+            const myClubmen = units.filter(u => u.isPlayer === this.isPlayer && u instanceof Clubman && u.hp > 0);
+            let frontClubman = null;
+            if (myClubmen.length > 0) {
+                frontClubman = this.isPlayer
+                    ? myClubmen.reduce((a, b) => b.x > a.x ? b : a)
+                    : myClubmen.reduce((a, b) => b.x < a.x ? b : a);
+            }
 
-        let desiredX;
-        let desiredY = this.baseY;
-        if (cmd === CMD_ATTACK) {
-            desiredX = enemyBase.x + (this.isPlayer ? -260 : 260);
+            let desiredX;
+            let desiredY = this.baseY;
+            if (cmd === CMD_ATTACK) {
+                desiredX = enemyBase.x + (this.isPlayer ? -260 : 260);
+            } else {
+                desiredX = myBase.x + (this.isPlayer ? 220 : -220);
+            }
+            if (frontClubman) {
+                desiredX = this.isPlayer
+                    ? Math.min(desiredX, frontClubman.x - this.safeGap)
+                    : Math.max(desiredX, frontClubman.x + this.safeGap);
+                desiredY = frontClubman.y;
+            }
+
+            let actualMoved = false;
+            const distToDesired = Math.hypot(desiredX - this.x, desiredY - this.y);
+            if (distToDesired > 8) {
+                let angle = Math.atan2(desiredY - this.y, desiredX - this.x);
+                // Okçular için hız biraz azaltıldı
+                this.x += Math.cos(angle) * 1.2 * SPEED_MULT * slowMul;
+                this.y += Math.sin(angle) * 0.9 * SPEED_MULT * slowMul;
+                actualMoved = true;
+            }
+            this._isActuallyWalking = actualMoved;
         } else {
-            desiredX = myBase.x + (this.isPlayer ? 220 : -220);
-        }
-        if (frontClubman) {
-            desiredX = this.isPlayer
-                ? Math.min(desiredX, frontClubman.x - this.safeGap)
-                : Math.max(desiredX, frontClubman.x + this.safeGap);
-            desiredY = frontClubman.y;
-        }
-
-        // KAÇMA KALDIRILDI – okçular hedef çok yaklaşsa bile geri çekilmez, sadece pozisyon alır
-
-        let actualMoved = false;
-        const distToDesired = Math.hypot(desiredX - this.x, desiredY - this.y);
-        if (distToDesired > 8) {
-            let angle = Math.atan2(desiredY - this.y, desiredX - this.x);
-            this.x += Math.cos(angle) * 1.6 * SPEED_MULT * slowMul;
-            this.y += Math.sin(angle) * 1.2 * SPEED_MULT * slowMul;
-            actualMoved = true;
+            // Hedef varken kesinlikle hareket yok
+            this._isActuallyWalking = false;
         }
 
         // ATEŞ ETME
@@ -836,7 +820,6 @@ class Archer {
                 this.drawAmount = 0;
             }
         } else {
-            // Hedef yok veya öldü -> yayı bırak, sıfırla
             if (this.attackTimer > 0) {
                 this.attackTimer = 0;
                 this.drawAmount = Math.max(0, this.drawAmount - 0.15);
@@ -844,8 +827,6 @@ class Archer {
                 this.drawAmount = Math.max(0, this.drawAmount - 0.05);
             }
         }
-
-        this._isActuallyWalking = actualMoved && !this.target;
     }
 
     draw(ctx) {
@@ -909,6 +890,7 @@ class BaseArcherUnit {
                 this.isWalking = false;
             }
         } else if (this.state === 'active') {
+            // Sadece menzilde hedef varken yay çek / ateş animasyonu
             let enemies = units.filter(u => u.isPlayer !== this.isPlayer && u.hp > 0 && !u.isInvulnerable);
             let target = null;
             if (enemies.length > 0) {
@@ -928,17 +910,13 @@ class BaseArcherUnit {
                     this.drawAmount = 0;
                 } else if (this.attackTimer < SHOOT_AT) {
                     this.drawAmount = (this.attackTimer - DRAW_START) / (SHOOT_AT - DRAW_START);
-                    this.drawAmount = Math.min(1, this.drawAmount);
                 } else {
                     this.drawAmount = 0;
                 }
                 if (this.attackTimer === SHOOT_AT) {
                     projectiles.push(new Arrow(this.x, this.y - 30, target, this.isPlayer));
                 }
-                if (this.attackTimer >= CYCLE) {
-                    this.attackTimer = 0;
-                    this.drawAmount = 0;
-                }
+                if (this.attackTimer >= CYCLE) this.attackTimer = 0;
             }
             this.isWalking = false;
         }
