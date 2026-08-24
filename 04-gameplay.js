@@ -1,10 +1,10 @@
 // ==================== 04-gameplay.js ====================
 // Oyun mantığı, sinematik, AI, spawn sistemleri
+// Tüm düzeltmeler içerir: yürüyerek gelme, pusu hemen başlama, donma önleme
 
 function setPlayerCommand(cmd) {
     const oi = localOwnerIndex();
     getOwnerState(oi).command = cmd;
-    // Solo veya host: player.command senkron (AI tehdit hesabı için host tarafı)
     if (oi === 0) player.command = cmd;
     Object.values(cmdBtns).forEach(b => b.classList.remove('active'));
     if (cmdBtns[cmd]) cmdBtns[cmd].classList.add('active');
@@ -29,7 +29,6 @@ cmdBtns[CMD_ATTACK].onclick = () => {
     setPlayerCommand(CMD_ATTACK);
 };
 
-// Spawn süreleri (frame) — madenci ayrı; sopalı+okçu ortak sırada
 const SPAWN_TIME = { miner: 8 * 60, club: 6 * 60, archer: 7 * 60 };
 const UNIT_COST = { miner: 150, club: 125, archer: 140 };
 const MAX_QUEUE = 8;
@@ -59,8 +58,6 @@ function countQueuedFor(ownerIndex, type) {
     return st.combatQueue.filter(t => t === type).length;
 }
 
-// ===== TEST CHEAT =====
-// Konsol:  unlockAll()  |  godMode()  |  godMode(false)
 window.CHEAT_INF = false;
 window.unlockAll = function unlockAll() {
     if (typeof currentUser !== 'undefined' && currentUser) {
@@ -367,8 +364,8 @@ function endLevel3Cinematic() {
     setGameplayUIVisible(true);
     setPlayerCommand(CMD_DEFEND);
     
-    // ===== DÜZELTME: Pusu hemen başlasın =====
-    ambushTimer = 20 * 60; // 20 saniyeyi doldur → ilk dalga hemen gelir
+    // === DÜZELTME: Pusu hemen başlasın (20. saniye dolduruldu) ===
+    ambushTimer = 20 * 60;
     
     enemy.ambushWaves = null;
     enemy.ambushWaveIndex = 0;
@@ -406,7 +403,7 @@ function spawnAmbusherAt(targetX, targetY, lane) {
 // ===== OKÇU SPAWN (DAĞA YAKIN, YÜRÜYEREK) =====
 function spawnCinArcher(targetX, targetY, lane, fromOffset) {
     const a = new Archer(true, 0);
-    const offset = fromOffset || 90;
+    const offset = fromOffset || 80;
     const startX = targetX - offset - Math.random() * 30;
     a.x = Math.max(startX, 20);
     a.y = targetY + (Math.random() - 0.5) * 20;
@@ -433,7 +430,6 @@ function updateCinematic() {
     let foes = units.filter(u => u._cinematic && u._cinRole === 'ambusher' && u.hp > 0);
     let archers = units.filter(u => u._cinematic && u._cinRole === 'archer' && u.hp > 0);
 
-    // Konuşma balonu sayaçları
     units.forEach(u => {
         if (u._speechTimer > 0) {
             u._speechTimer--;
@@ -461,7 +457,7 @@ function updateCinematic() {
     const spikeX = Math.min(enemy.base.x - 320, worldWidth - 400);
     const walkStop = Math.min(spikeX - 60, worldWidth - canvas.width * 0.55);
 
-    // ===== FAZ: YÜRÜYÜŞ =====
+    // FAZ: YÜRÜYÜŞ
     if (cinematic.phase === 'walk') {
         if (scouts.length) {
             cinFocusCamera(scouts.map(u => u.x), 0.4);
@@ -489,7 +485,7 @@ function updateCinematic() {
             }
         }
     }
-    // ===== FAZ: FARK ETTİ =====
+    // FAZ: FARK ETTİ
     else if (cinematic.phase === 'notice') {
         scouts.forEach(u => { u._isActuallyWalking = false; u.isAttacking = false; });
         if (scouts.length) cinFocusCamera(scouts.map(u => u.x), 0.38);
@@ -502,7 +498,7 @@ function updateCinematic() {
             cinematic.timer = 0;
         }
     }
-    // ===== FAZ: PUSU BAŞLANGICI =====
+    // FAZ: PUSU BAŞLANGICI
     else if (cinematic.phase === 'ambush') {
         if (scouts.length) cinFocusCamera(scouts.map(u => u.x), 0.4);
         scouts.forEach(u => { u._isActuallyWalking = false; });
@@ -526,7 +522,7 @@ function updateCinematic() {
             cinematic.timer = 0;
         }
     }
-    // ===== FAZ: SAVAŞ =====
+    // FAZ: SAVAŞ
     else if (cinematic.phase === 'fight') {
         scouts = units.filter(u => u._cinematic && u._cinRole === 'scout' && u.hp > 0);
         foes = units.filter(u => u._cinematic && u._cinRole === 'ambusher' && u.hp > 0);
@@ -700,7 +696,7 @@ function updateCinematic() {
             cinematic.bubbleTimer = 150;
         }
     }
-    // ===== FAZ: KOMUTAN KAÇIYOR =====
+    // FAZ: KOMUTAN KAÇIYOR
     else if (cinematic.phase === 'commanderFlee') {
         const commander = units.find(u => u._cinematic && u._cinRole === 'commander' && u.hp > 0);
         const remaining = units.filter(u => u._cinematic && (u._cinRole === 'scout' || u._cinRole === 'archer') && u.hp > 0);
@@ -776,7 +772,7 @@ function updateCinematic() {
             cinematic.bubbleTimer = 140;
         }
     }
-    // ===== FAZ: OKÇU DÜELLOSU =====
+    // FAZ: OKÇU DÜELLOSU
     else if (cinematic.phase === 'archerDuel') {
         const archersNow = units.filter(u => u._cinematic && u._cinRole === 'archer' && u.hp > 0);
         const foesNow = units.filter(u => u._cinematic && u._cinRole === 'ambusher' && u.hp > 0);
@@ -907,7 +903,7 @@ function updateCinematic() {
             cinematic.timer = 0;
         }
     }
-    // ===== FAZ: KAÇIŞ =====
+    // FAZ: KAÇIŞ
     else if (cinematic.phase === 'escape') {
         const survivor = (cinematic.survivorArcher && cinematic.survivorArcher.hp > 0) ? cinematic.survivorArcher : null;
         const homeStopX = player.base.x + 60;
@@ -943,7 +939,7 @@ function updateCinematic() {
             cinematic.timer = 0;
         }
     }
-    // ===== FAZ: SONRASI =====
+    // FAZ: SONRASI
     else if (cinematic.phase === 'aftermath') {
         const home = player.base.x - 40;
         cameraX += ((home - canvas.width * 0.25) - cameraX) * 0.045;
@@ -1081,7 +1077,6 @@ function updateAI() {
     enemy.aiTimer++;
     const diff = getAiDifficulty();
 
-    // 3. bölüm pusu dalgaları
     if (typeof isAmbushLevel === 'function' && isAmbushLevel()) {
         enemy.command = CMD_ATTACK;
         enemy.aiState = 'attack';
@@ -1111,7 +1106,6 @@ function updateAI() {
         return;
     }
 
-    // Normal AI (1. ve 2. bölüm)
     const passiveGoldInterval = enemy.command === CMD_RETREAT ? 150 : 300;
     if (enemy.retreatCooldown > 0) enemy.retreatCooldown--;
 
@@ -1527,6 +1521,31 @@ function update() {
 
     processSpawnQueue();
     updateActionButtonsUI();
+
+    // ===== 🛡️ GÜVENLİK TEMİZLEYİCİ (DONMA ÖNLEME) =====
+    // Tüm canlı birimlerin saldırı/yürüme flag'lerini kontrol et ve bozuk durumları sıfırla.
+    units.forEach(u => {
+        // 1. Hedef yoksa veya ölüyse saldırıyı kes
+        if (!u.target || u.target.hp <= 0) {
+            if (u.isAttacking !== undefined) u.isAttacking = false;
+            if (u.attackTimer !== undefined) u.attackTimer = 0;
+            if (u.didHitThisSwing !== undefined) u.didHitThisSwing = false;
+            if (u._isActuallyWalking !== undefined) u._isActuallyWalking = false;
+        }
+        
+        // 2. Saldırı animasyonu çok uzun sürdüyse zorla sıfırla (güvenlik kilidi)
+        if (u.attackTimer !== undefined && u.attackTimer > 200) {
+            u.attackTimer = 0;
+            if (u.isAttacking !== undefined) u.isAttacking = false;
+            if (u.didHitThisSwing !== undefined) u.didHitThisSwing = false;
+        }
+        
+        // 3. Stun/slow bitti ama flag kaldıysa temizle
+        if (u.stunTimer !== undefined && u.stunTimer <= 0) {
+            if (u.isAttacking !== undefined) u.isAttacking = false;
+            if (u.attackTimer !== undefined) u.attackTimer = 0;
+        }
+    });
 }
 
 function draw() {
