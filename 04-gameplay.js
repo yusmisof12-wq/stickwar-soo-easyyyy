@@ -1088,11 +1088,11 @@ function updateAI() {
         if (!enemy.ambushWaves) {
             enemy.ambushWaves = [
                 { at: 0, count: 1 },   // hemen başla
-                { at: 25, count: 2 },
                 { at: 50, count: 2 },
                 { at: 80, count: 3 },
-                { at: 110, count: 3 },
-                { at: 140, count: 3 },
+                { at: 100, count: 3 },
+                { at: 110, count: 4 },
+                { at: 140, count: 6 },
             ];
             enemy.ambushWaveIndex = 0;
         }
