@@ -887,11 +887,13 @@
         function showScreen(which) {
             if (which === 'menu') {
                 if (typeof startMenuBgAnim === 'function') startMenuBgAnim();
+            } else if (which === 'campaign') {
+                if (typeof stopMenuBgAnim === 'function') {
+                    // sadece menü RAF'ını durdur, kampanya kendi RAF'ını açar
+                    if (menuBgRaf) { cancelAnimationFrame(menuBgRaf); menuBgRaf = null; }
+                }
             } else {
                 if (typeof stopMenuBgAnim === 'function') stopMenuBgAnim();
-            }
-            if (which === 'campaign' && typeof scatterCampaignDecor === 'function') {
-                // scatter called from openCampaignMap too
             }
 
             authScreen.classList.add('hidden');
@@ -1539,9 +1541,191 @@
 
         ensureAdminBackupUI();
 
-// ==================== MENÜ ARKA PLAN SÜSÜ ====================
+
+// ==================== MENÜ / HARİTA = OYUN GÖRÜNÜMÜ ====================
 let menuBgRaf = null;
-let menuBgUnits = [];
+let menuBgActors = [];
+
+function stopMenuBgAnim() {
+    if (menuBgRaf) {
+        cancelAnimationFrame(menuBgRaf);
+        menuBgRaf = null;
+    }
+    if (window._campBgRaf) {
+        cancelAnimationFrame(window._campBgRaf);
+        window._campBgRaf = null;
+    }
+}
+
+function drawMenuUnit(ctx, a) {
+    const facing = a.vx >= 0 ? 1 : -1;
+    const leg = Math.sin(a.phase) * 9;
+    const bob = Math.abs(Math.sin(a.phase)) * 2;
+    ctx.save();
+    ctx.translate(a.x, a.y + bob);
+    ctx.scale(facing * a.scale, a.scale);
+    ctx.strokeStyle = a.enemy ? '#c0392b' : '#1a1a1a';
+    ctx.fillStyle = a.enemy ? '#c0392b' : '#1a1a1a';
+    ctx.lineWidth = 3.2;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    // kafa
+    ctx.beginPath();
+    ctx.arc(0, -48, 9, 0, Math.PI * 2);
+    ctx.stroke();
+    // gövde
+    ctx.beginPath();
+    ctx.moveTo(0, -39);
+    ctx.lineTo(0, -10);
+    ctx.stroke();
+    // bacaklar
+    ctx.beginPath();
+    ctx.moveTo(0, -10);
+    ctx.lineTo(-7 + leg, 16);
+    ctx.moveTo(0, -10);
+    ctx.lineTo(7 - leg, 16);
+    ctx.stroke();
+    // silah
+    if (a.type === 'archer') {
+        ctx.beginPath();
+        ctx.moveTo(0, -30);
+        ctx.lineTo(12, -22);
+        ctx.moveTo(12, -34);
+        ctx.quadraticCurveTo(24, -26, 12, -18);
+        ctx.stroke();
+    } else if (a.type === 'miner') {
+        ctx.beginPath();
+        ctx.moveTo(0, -30);
+        ctx.lineTo(14, -16);
+        ctx.stroke();
+        ctx.strokeStyle = '#7f8c8d';
+        ctx.lineWidth = 3.5;
+        ctx.beginPath();
+        ctx.moveTo(14, -16);
+        ctx.lineTo(18, -36);
+        ctx.stroke();
+        ctx.fillStyle = '#95a5a6';
+        ctx.fillRect(14, -42, 10, 8);
+    } else {
+        // sopalı
+        ctx.beginPath();
+        ctx.moveTo(0, -30);
+        ctx.lineTo(16, -20);
+        ctx.stroke();
+        ctx.strokeStyle = '#5d4037';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(16, -20);
+        ctx.lineTo(20, -48);
+        ctx.stroke();
+        ctx.fillStyle = '#7f8c8d';
+        ctx.beginPath();
+        ctx.arc(20, -52, 5, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.restore();
+}
+
+function paintGameBackground(ctx, w, h, t) {
+    const groundH = Math.min(170, Math.floor(h * 0.30));
+    const skyH = h - groundH;
+
+    // Gökyüzü (oyun 1. bölüm stili)
+    const sky = ctx.createLinearGradient(0, 0, 0, skyH);
+    sky.addColorStop(0, '#4fa3d1');
+    sky.addColorStop(0.45, '#87ceeb');
+    sky.addColorStop(1, '#c8e6c9');
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, w, skyH);
+
+    // Bulutlar
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    for (let i = 0; i < 6; i++) {
+        const cx = ((t * 0.18 + i * 210) % (w + 120)) - 60;
+        const cy = 30 + (i % 3) * 28;
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, 50, 17, 0, 0, Math.PI * 2);
+        ctx.ellipse(cx + 28, cy + 4, 36, 13, 0, 0, Math.PI * 2);
+        ctx.ellipse(cx - 22, cy + 2, 28, 11, 0, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // Uzak tepeler
+    ctx.fillStyle = '#7dcea0';
+    ctx.beginPath();
+    ctx.moveTo(0, skyH);
+    for (let x = 0; x <= w; x += 32) {
+        const y = skyH - 26 - Math.sin(x * 0.011 + t * 0.002) * 14 - Math.cos(x * 0.02) * 8;
+        ctx.lineTo(x, y);
+    }
+    ctx.lineTo(w, skyH);
+    ctx.closePath();
+    ctx.fill();
+
+    // Zemin
+    const gr = ctx.createLinearGradient(0, skyH, 0, h);
+    gr.addColorStop(0, '#6ab04c');
+    gr.addColorStop(0.4, '#4a8c3a');
+    gr.addColorStop(1, '#3d5c34');
+    ctx.fillStyle = gr;
+    ctx.fillRect(0, skyH, w, groundH);
+
+    // Zemin çizgisi
+    ctx.strokeStyle = 'rgba(0,0,0,0.18)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, skyH);
+    ctx.lineTo(w, skyH);
+    ctx.stroke();
+
+    // Maden taşları
+    for (let i = 0; i < 3; i++) {
+        const mx = w * (0.28 + i * 0.18);
+        const my = skyH + 20;
+        ctx.fillStyle = '#7f8c8d';
+        ctx.beginPath();
+        ctx.ellipse(mx, my, 24, 11, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#95a5a6';
+        ctx.beginPath();
+        ctx.ellipse(mx - 8, my - 7, 11, 8, 0, 0, Math.PI * 2);
+        ctx.fill();
+        // altın parıltı
+        if (i === 1) {
+            ctx.fillStyle = '#f1c40f';
+            ctx.beginPath();
+            ctx.arc(mx + 6, my - 4, 3, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+
+    // Oyuncu heykeli (sol)
+    const bx = w * 0.10;
+    const by = skyH;
+    ctx.fillStyle = '#2c3e50';
+    ctx.fillRect(bx - 16, by - 78, 32, 78);
+    ctx.beginPath();
+    ctx.moveTo(bx, by - 108);
+    ctx.lineTo(bx - 24, by - 78);
+    ctx.lineTo(bx + 24, by - 78);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#f1c40f';
+    ctx.beginPath();
+    ctx.arc(bx, by - 95, 5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Düşman kulesi (sağ)
+    const ex = w * 0.90;
+    ctx.fillStyle = '#922b21';
+    ctx.fillRect(ex - 14, by - 62, 28, 62);
+    ctx.beginPath();
+    ctx.moveTo(ex - 20, by - 62);
+    ctx.lineTo(ex, by - 90);
+    ctx.lineTo(ex + 20, by - 62);
+    ctx.closePath();
+    ctx.fill();
+}
 
 function startMenuBgAnim() {
     let c = document.getElementById('menuBgCanvas');
@@ -1555,103 +1739,99 @@ function startMenuBgAnim() {
     }
     stopMenuBgAnim();
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    c.width = Math.floor((c.clientWidth || window.innerWidth) * dpr);
-    c.height = Math.floor((c.clientHeight || window.innerHeight) * dpr);
-    menuBgUnits = [];
-    for (let i = 0; i < 12; i++) {
-        menuBgUnits.push({
+    const cw = c.clientWidth || window.innerWidth;
+    const ch = c.clientHeight || window.innerHeight;
+    c.width = Math.floor(cw * dpr);
+    c.height = Math.floor(ch * dpr);
+
+    menuBgActors = [];
+    const types = ['club', 'club', 'archer', 'miner', 'club', 'archer', 'club', 'miner'];
+    for (let i = 0; i < 8; i++) {
+        menuBgActors.push({
             x: Math.random() * c.width,
-            y: c.height * (0.52 + Math.random() * 0.3),
-            vx: (Math.random() < 0.5 ? -1 : 1) * (0.4 + Math.random() * 0.8) * dpr,
-            leg: Math.random() * 6,
-            type: Math.random() < 0.3 ? 'archer' : 'club',
-            scale: 0.7 + Math.random() * 0.5,
+            y: c.height * 0.70,
+            vx: (Math.random() < 0.5 ? -1 : 1) * (0.5 + Math.random() * 0.85) * dpr,
+            phase: Math.random() * Math.PI * 2,
+            type: types[i],
+            scale: (0.85 + Math.random() * 0.35) * dpr,
+            enemy: Math.random() < 0.38,
         });
     }
+
+    let t = 0;
     const ctx = c.getContext('2d');
     const tick = () => {
         menuBgRaf = requestAnimationFrame(tick);
+        t++;
         const w = c.width, h = c.height;
         if (!w || !h) return;
-        ctx.clearRect(0, 0, w, h);
-        const g = ctx.createLinearGradient(0, 0, 0, h);
-        g.addColorStop(0, '#1a252f');
-        g.addColorStop(0.52, '#2c3e50');
-        g.addColorStop(0.52, '#3d5a40');
-        g.addColorStop(1, '#2d4a30');
-        ctx.fillStyle = g;
-        ctx.fillRect(0, 0, w, h);
-        ctx.strokeStyle = 'rgba(255,255,255,0.07)';
-        ctx.beginPath();
-        ctx.moveTo(0, h * 0.52);
-        ctx.lineTo(w, h * 0.52);
-        ctx.stroke();
-        menuBgUnits.forEach(u => {
-            u.x += u.vx;
-            u.leg += 0.12;
-            if (u.x < -40) u.x = w + 40;
-            if (u.x > w + 40) u.x = -40;
-            ctx.save();
-            ctx.translate(u.x, u.y);
-            ctx.scale(u.scale * (u.vx > 0 ? 1 : -1), u.scale);
-            ctx.strokeStyle = 'rgba(236,240,241,0.75)';
-            ctx.lineWidth = 3;
-            ctx.lineCap = 'round';
-            ctx.beginPath();
-            ctx.arc(0, -42, 8, 0, Math.PI * 2);
-            ctx.stroke();
-            ctx.beginPath();
-            ctx.moveTo(0, -34);
-            ctx.lineTo(0, -8);
-            ctx.stroke();
-            const sw = Math.sin(u.leg) * 10;
-            ctx.beginPath();
-            ctx.moveTo(0, -8);
-            ctx.lineTo(-8 + sw, 12);
-            ctx.moveTo(0, -8);
-            ctx.lineTo(8 - sw, 12);
-            ctx.stroke();
-            ctx.beginPath();
-            if (u.type === 'club') {
-                ctx.moveTo(0, -28);
-                ctx.lineTo(14, -18);
-                ctx.lineTo(18, -40);
-            } else {
-                ctx.moveTo(0, -28);
-                ctx.lineTo(12, -20);
-                ctx.moveTo(12, -32);
-                ctx.quadraticCurveTo(22, -26, 12, -18);
-            }
-            ctx.stroke();
-            ctx.restore();
+        paintGameBackground(ctx, w, h, t);
+        menuBgActors.forEach(a => {
+            a.x += a.vx;
+            a.phase += 0.14;
+            if (a.x < -60) a.x = w + 60;
+            if (a.x > w + 60) a.x = -60;
+            a.y = h * 0.70;
+            drawMenuUnit(ctx, a);
         });
     };
     tick();
 }
 
-function stopMenuBgAnim() {
-    if (menuBgRaf) {
-        cancelAnimationFrame(menuBgRaf);
-        menuBgRaf = null;
-    }
-}
-
 function scatterCampaignDecor() {
+    // Emoji yok — haritada da oyun arka planı
     const wrap = document.getElementById('campaignWrap');
     if (!wrap) return;
     wrap.querySelectorAll('.camp-decor').forEach(el => el.remove());
-    const icons = ['🌲', '🌳', '🪨', '⛺', '🏚️', '🔥', '🌾', '🦴', '⚔️', '🦅', '🌵', '🪵'];
-    const n = 8 + Math.floor(Math.random() * 8);
-    for (let i = 0; i < n; i++) {
-        const el = document.createElement('div');
-        el.className = 'camp-decor';
-        el.textContent = icons[Math.floor(Math.random() * icons.length)];
-        el.style.cssText =
-            'position:absolute;left:' + (4 + Math.random() * 92) + '%;top:' +
-            (6 + Math.random() * 82) + '%;font-size:' + (13 + Math.random() * 18) +
-            'px;opacity:' + (0.32 + Math.random() * 0.48) +
-            ';pointer-events:none;z-index:0;transform:rotate(' +
-            (Math.random() * 28 - 14) + 'deg);user-select:none;';
-        wrap.appendChild(el);
+
+    let c = document.getElementById('campaignBgCanvas');
+    if (!c) {
+        c = document.createElement('canvas');
+        c.id = 'campaignBgCanvas';
+        c.className = 'campaign-bg-canvas';
+        wrap.insertBefore(c, wrap.firstChild);
     }
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const cw = wrap.clientWidth || 900;
+    const ch = wrap.clientHeight || 520;
+    c.width = Math.floor(cw * dpr);
+    c.height = Math.floor(ch * dpr);
+
+    if (window._campBgRaf) {
+        cancelAnimationFrame(window._campBgRaf);
+        window._campBgRaf = null;
+    }
+    const actors = [];
+    for (let i = 0; i < 6; i++) {
+        actors.push({
+            x: Math.random() * c.width,
+            y: c.height * 0.72,
+            vx: (i % 2 ? 1 : -1) * (0.4 + Math.random() * 0.5) * dpr,
+            phase: Math.random() * 6,
+            type: i % 3 === 0 ? 'archer' : (i % 3 === 1 ? 'miner' : 'club'),
+            scale: (0.7 + Math.random() * 0.25) * dpr,
+            enemy: i >= 3,
+        });
+    }
+    const ctx = c.getContext('2d');
+    let t = 0;
+    const tick = () => {
+        const scr = document.getElementById('campaignScreen');
+        if (!scr || scr.classList.contains('hidden')) {
+            window._campBgRaf = null;
+            return;
+        }
+        window._campBgRaf = requestAnimationFrame(tick);
+        t++;
+        paintGameBackground(ctx, c.width, c.height, t);
+        actors.forEach(a => {
+            a.x += a.vx;
+            a.phase += 0.12;
+            if (a.x < -50) a.x = c.width + 50;
+            if (a.x > c.width + 50) a.x = -50;
+            a.y = c.height * 0.72;
+            drawMenuUnit(ctx, a);
+        });
+    };
+    tick();
 }
