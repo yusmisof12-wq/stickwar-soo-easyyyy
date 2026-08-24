@@ -143,6 +143,20 @@ class Miner {
             return;
         }
         if (this.state === 'outside') this.assignSlot();
+        // Düşman görürse madeni bırak ve kaç
+const nearbyEnemy = units.find(u => 
+    u.isPlayer !== this.isPlayer && 
+    u.hp > 0 && 
+    Math.hypot(u.x - this.x, u.y - this.y) < this.visionRange
+);
+if (nearbyEnemy) {
+    this.releaseSlot();
+    this.state = 'idle';
+    this.combatMode = true;
+    this.wanderTargetX = this.baseX + (this.isPlayer ? -250 : 250);
+    this.wanderTargetY = this.baseY;
+    this.isWandering = true;
+}
         if (this.state === 'retreating' || this.state === 'idle' || this.state === 'assigning_slot') this.assignSlot();
         if (this.state === 'going_mine') {
             let dist = Math.hypot(this.mineX - this.x, this.mineY - this.y);
