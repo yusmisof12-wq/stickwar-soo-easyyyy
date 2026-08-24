@@ -475,7 +475,7 @@ class Clubman {
         this.stuckArrows = [];
     }
 
-    update() {
+  --archer  update() {
         if (typeof cinematicHoldUnit === 'function' && cinematicHoldUnit(this)) return;
         let cmd = this.isPlayer ? unitOwnerState(this).command : enemy.command;
         let enemies = units.filter(u => u.isPlayer !== this.isPlayer && u.hp > 0 && !u.isInvulnerable);
@@ -696,136 +696,125 @@ class Archer {
     }
 
     update() {
-        if (typeof cinematicHoldUnit === 'function' && cinematicHoldUnit(this)) return;
-        let cmd = this.isPlayer ? unitOwnerState(this).command : enemy.command;
-        let enemies = units.filter(u => u.isPlayer !== this.isPlayer && u.hp > 0 && !u.isInvulnerable);
-        let enemyBase = this.isPlayer ? enemy.base : player.base;
-        let myBase = this.isPlayer ? player.base : enemy.base;
-        this.prevX = this.x;
-        this.baseX = this.isPlayer ? player.base.x : enemy.base.x;
-        this.baseY = this.isPlayer ? player.base.y : enemy.base.y;
+  if (typeof cinematicHoldUnit === 'function' && cinematicHoldUnit(this)) return;
+  let cmd = this.isPlayer ? unitOwnerState(this).command : enemy.command;
+  let enemies = units.filter(u => u.isPlayer !== this.isPlayer && u.hp > 0 && !u.isInvulnerable);
+  let enemyBase = this.isPlayer ? enemy.base : player.base;
+  let myBase = this.isPlayer ? player.base : enemy.base;
+  this.prevX = this.x;
+  this.baseX = this.isPlayer ? player.base.x : enemy.base.x;
+  this.baseY = this.isPlayer ? player.base.y : enemy.base.y;
 
-        if (this.stunTimer > 0) {
-            this.stunTimer--;
-            this._isActuallyWalking = false;
-            return;
-        }
-        if (this.slowTimer > 0) this.slowTimer--;
-        const slowMul = this.slowTimer > 0 ? 0.4 : 1;
+  if (this.stunTimer > 0) {
+    this.stunTimer--;
+    this._isActuallyWalking = false;
+    return;
+  }
+  if (this.slowTimer > 0) this.slowTimer--;
+  const slowMul = this.slowTimer > 0 ? 0.4 : 1;
 
-        let grassTop = canvas.height - GROUND_HEIGHT;
-        let minY = grassTop + 15;
-        let maxY = canvas.height - 20;
-        if (this.y < minY) this.y = minY;
-        if (this.y > maxY) this.y = maxY;
+  let grassTop = canvas.height - GROUND_HEIGHT;
+  let minY = grassTop + 15;
+  let maxY = canvas.height - 20;
+  if (this.y < minY) this.y = minY;
+  if (this.y > maxY) this.y = maxY;
 
-        if (cmd === CMD_RETREAT) {
-            let targetX = this.isPlayer ? -150 : worldWidth + 150;
-            if (Math.hypot(this.x - targetX, this.y - this.baseY) > 5) {
-                let angle = Math.atan2(this.baseY - this.y, targetX - this.x);
-                this.x += Math.cos(angle) * 1.7 * SPEED_MULT * slowMul;
-                this.y += Math.sin(angle) * 1.3 * SPEED_MULT * slowMul;
-                this._isActuallyWalking = true;
-            } else {
-                this.x = targetX;
-                this.y = this.baseY;
-                this._isActuallyWalking = false;
-            }
-            this.attackTimer = 0;
-            this.drawAmount = 0;
-            this.target = null;
-            return;
-        }
-
-        const visibleEnemies = enemies.filter(e =>
-            cmd === CMD_ATTACK || (cmd === CMD_DEFEND && Math.abs(e.x - myBase.x) < AI_VISION_RANGE)
-        );
-        let closest = null, minDist = Infinity;
-        for (let e of visibleEnemies) {
-            let d = Math.hypot(e.x - this.x, e.y - this.y);
-            if (d < minDist) { minDist = d; closest = e; }
-        }
-        this.target = (closest && minDist <= this.range) ? closest : null;
-
-        if (!this.target && cmd === CMD_ATTACK) {
-            const distToBase = Math.hypot(enemyBase.x - this.x, enemyBase.y - this.y);
-            if (distToBase <= this.range) this.target = enemyBase;
-        }
-
-        const onMap = this.x > -50 && this.x < worldWidth + 50;
-        if (!onMap) this.target = null;
-
-        const myClubmen = units.filter(u => u.isPlayer === this.isPlayer && u instanceof Clubman && u.hp > 0);
-        let frontClubman = null;
-        if (myClubmen.length > 0) {
-            frontClubman = this.isPlayer
-                ? myClubmen.reduce((a, b) => b.x > a.x ? b : a)
-                : myClubmen.reduce((a, b) => b.x < a.x ? b : a);
-        }
-
-        let desiredX;
-        let desiredY = this.baseY;
-        if (cmd === CMD_ATTACK) {
-            desiredX = enemyBase.x + (this.isPlayer ? -260 : 260);
-        } else {
-            desiredX = myBase.x + (this.isPlayer ? 220 : -220);
-        }
-        if (frontClubman) {
-            desiredX = this.isPlayer
-                ? Math.min(desiredX, frontClubman.x - this.safeGap)
-                : Math.max(desiredX, frontClubman.x + this.safeGap);
-            desiredY = frontClubman.y;
-        }
-        if (this.target) {
-            const distToTarget = Math.hypot(this.target.x - this.x, this.target.y - this.y);
-            if (distToTarget < this.tooClose) {
-                const back = this.tooClose - distToTarget;
-                let adjX = this.isPlayer ? this.x - back : this.x + back;
-                if (frontClubman) {
-                    adjX = this.isPlayer
-                        ? Math.min(adjX, frontClubman.x - this.safeGap)
-                        : Math.max(adjX, frontClubman.x + this.safeGap);
-                }
-                desiredX = adjX;
-            }
-        }
-
-        let actualMoved = false;
-        const distToDesired = Math.hypot(desiredX - this.x, desiredY - this.y);
-        if (distToDesired > 8) {
-            let angle = Math.atan2(desiredY - this.y, desiredX - this.x);
-            this.x += Math.cos(angle) * 1.6 * SPEED_MULT * slowMul;
-            this.y += Math.sin(angle) * 1.2 * SPEED_MULT * slowMul;
-            actualMoved = true;
-        }
-
-        // Hedef canlı ve menzildeyse ateş animasyonu; yoksa animasyon yok
-        const canShoot = this.target && this.target.hp > 0 &&
-            Math.hypot(this.target.x - this.x, this.target.y - this.y) < this.range + 40;
-        if (canShoot) {
-            this.attackTimer++;
-            const CYCLE = this.attackCooldown;
-            const DRAW_START = Math.floor(CYCLE * 0.55);
-            const SHOOT_AT = CYCLE - 6;
-            if (this.attackTimer < DRAW_START) {
-                this.drawAmount = 0;
-            } else if (this.attackTimer < SHOOT_AT) {
-                this.drawAmount = (this.attackTimer - DRAW_START) / (SHOOT_AT - DRAW_START);
-            } else {
-                this.drawAmount = 0;
-            }
-            if (this.attackTimer === SHOOT_AT) {
-                projectiles.push(new Arrow(this.x, this.y - 30, this.target, this.isPlayer));
-            }
-            if (this.attackTimer >= CYCLE) this.attackTimer = 0;
-        } else {
-            this.attackTimer = 0;
-            this.drawAmount = Math.max(0, this.drawAmount - 0.15);
-        }
-
-        this._isActuallyWalking = actualMoved && !this.target;
+  if (cmd === CMD_RETREAT) {
+    let targetX = this.isPlayer ? -150 : worldWidth + 150;
+    if (Math.hypot(this.x - targetX, this.y - this.baseY) > 5) {
+      let angle = Math.atan2(this.baseY - this.y, targetX - this.x);
+      this.x += Math.cos(angle) * 1.7 * SPEED_MULT * slowMul;
+      this.y += Math.sin(angle) * 1.3 * SPEED_MULT * slowMul;
+      this._isActuallyWalking = true;
+    } else {
+      this.x = targetX;
+      this.y = this.baseY;
+      this._isActuallyWalking = false;
     }
+    this.attackTimer = 0;
+    this.drawAmount = 0;
+    this.target = null;
+    return;
+  }
 
+  const visibleEnemies = enemies.filter(e =>
+    cmd === CMD_ATTACK || (cmd === CMD_DEFEND && Math.abs(e.x - myBase.x) < AI_VISION_RANGE)
+  );
+  let closest = null, minDist = Infinity;
+  for (let e of visibleEnemies) {
+    let d = Math.hypot(e.x - this.x, e.y - this.y);
+    if (d < minDist) { minDist = d; closest = e; }
+  }
+  this.target = (closest && minDist <= this.range) ? closest : null;
+
+  if (!this.target && cmd === CMD_ATTACK) {
+    const distToBase = Math.hypot(enemyBase.x - this.x, enemyBase.y - this.y);
+    if (distToBase <= this.range) this.target = enemyBase;
+  }
+
+  const onMap = this.x > -50 && this.x < worldWidth + 50;
+  if (!onMap) this.target = null;
+
+  const myClubmen = units.filter(u => u.isPlayer === this.isPlayer && u instanceof Clubman && u.hp > 0);
+  let frontClubman = null;
+  if (myClubmen.length > 0) {
+    frontClubman = this.isPlayer
+      ? myClubmen.reduce((a, b) => b.x > a.x ? b : a)
+      : myClubmen.reduce((a, b) => b.x < a.x ? b : a);
+  }
+
+  let desiredX;
+  let desiredY = this.baseY;
+  if (cmd === CMD_ATTACK) {
+    desiredX = enemyBase.x + (this.isPlayer ? -260 : 260);
+  } else {
+    desiredX = myBase.x + (this.isPlayer ? 220 : -220);
+  }
+  if (frontClubman) {
+    desiredX = this.isPlayer
+      ? Math.min(desiredX, frontClubman.x - this.safeGap)
+      : Math.max(desiredX, frontClubman.x + this.safeGap);
+    desiredY = frontClubman.y;
+  }
+
+  // --- KALDIRILAN KISIM: hedef çok yakınsa geri çekilme ---
+  // Artık okçular kaçmayacak.
+
+  let actualMoved = false;
+  const distToDesired = Math.hypot(desiredX - this.x, desiredY - this.y);
+  if (distToDesired > 8) {
+    let angle = Math.atan2(desiredY - this.y, desiredX - this.x);
+    this.x += Math.cos(angle) * 1.6 * SPEED_MULT * slowMul;
+    this.y += Math.sin(angle) * 1.2 * SPEED_MULT * slowMul;
+    actualMoved = true;
+  }
+
+  // Hedef canlı ve menzildeyse ateş animasyonu
+  const canShoot = this.target && this.target.hp > 0 &&
+    Math.hypot(this.target.x - this.x, this.target.y - this.y) < this.range + 40;
+  if (canShoot) {
+    this.attackTimer++;
+    const CYCLE = this.attackCooldown;
+    const DRAW_START = Math.floor(CYCLE * 0.55);
+    const SHOOT_AT = CYCLE - 6;
+    if (this.attackTimer < DRAW_START) {
+      this.drawAmount = 0;
+    } else if (this.attackTimer < SHOOT_AT) {
+      this.drawAmount = (this.attackTimer - DRAW_START) / (SHOOT_AT - DRAW_START);
+    } else {
+      this.drawAmount = 0;
+    }
+    if (this.attackTimer === SHOOT_AT) {
+      projectiles.push(new Arrow(this.x, this.y - 30, this.target, this.isPlayer));
+    }
+    if (this.attackTimer >= CYCLE) this.attackTimer = 0;
+  } else {
+    this.attackTimer = 0;
+    this.drawAmount = Math.max(0, this.drawAmount - 0.15);
+  }
+
+  this._isActuallyWalking = actualMoved && !this.target;
+}
     draw(ctx) {
         if (this.x < -50 || this.x > worldWidth + 50) return;
         let isFlipped = !this.isPlayer;
