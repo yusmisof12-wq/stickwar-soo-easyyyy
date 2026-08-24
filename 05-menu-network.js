@@ -1486,4 +1486,38 @@
             unlockAdminBackup();
         });
 
+// ==================== OTOMATİK PERİYODİK İLERLEME KAYDI ====================
+(function setupAutoBackup() {
+    // Her 5 dakikada bir (300.000 ms) ilerlemeyi kaydet
+    setInterval(() => {
+        if (currentUser) {
+            saveCurrentUser();
+            // İsterseniz konsola log yazabilirsiniz:
+            // console.log('[otomatik yedek] İlerleme kaydedildi.');
+        }
+    }, 300000); // 5 dakika
+
+    // Sayfa kapatıldığında veya yenilendiğinde de kaydet
+    window.addEventListener('beforeunload', () => {
+        if (currentUser) {
+            saveCurrentUser();
+        }
+    });
+
+    // Oyun içinde sefer kazanıldığında zaten onLevelVictory çağrılıyor
+    // ve orada saveCurrentUser() mevcut. Kontrol edelim:
+    // onLevelVictory fonksiyonunun sonunda saveCurrentUser(); var mı?
+    // Eğer yoksa aşağıdaki gibi bir yama ekleyebiliriz:
+    const originalOnLevelVictory = window.onLevelVictory;
+    window.onLevelVictory = function(completedLevel) {
+        if (typeof originalOnLevelVictory === 'function') {
+            originalOnLevelVictory(completedLevel);
+        }
+        // Sefer kazanıldığında ekstra kayıt
+        if (currentUser) {
+            saveCurrentUser();
+        }
+    };
+})();
+
         ensureAdminBackupUI();
