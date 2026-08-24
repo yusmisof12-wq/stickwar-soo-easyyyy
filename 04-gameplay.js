@@ -1416,7 +1416,7 @@ function updateActionButtonsUI() {
     btnClub.disabled = st.gold < 125 || st.combatQueue.length >= MAX_QUEUE ||
         (countPlayerUnits('club') + qAll('club') >= MAX_CLUBMEN_PER_TEAM);
 
-    if (level >= 2) {
+    if (level >= 3) {
         btnArcher.style.display = '';
         btnArcher.disabled = st.gold < 140 || st.combatQueue.length >= MAX_QUEUE ||
             (countPlayerUnits('archer') + qAll('archer') >= MAX_ARCHERS_PER_TEAM);
