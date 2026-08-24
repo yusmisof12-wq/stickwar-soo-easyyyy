@@ -10,7 +10,7 @@ class Miner {
         const offset = minerSpawnOffsets[index];
         this.x = this.baseX + (isPlayer ? offset.dx : -offset.dx);
         this.y = this.baseY + offset.dy;
-        this.hp = 100;F
+        this.hp = 100;
         this.maxHp = 100;
         this.state = 'assigning_slot';
         this.targetSlot = null;
