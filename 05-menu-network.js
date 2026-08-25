@@ -1728,56 +1728,11 @@ function paintGameBackground(ctx, w, h, t) {
 }
 
 function startMenuBgAnim() {
-    let c = document.getElementById('menuBgCanvas');
-    if (!c) {
-        c = document.createElement('canvas');
-        c.id = 'menuBgCanvas';
-        c.className = 'menu-bg-canvas';
-        const mm = document.getElementById('mainMenu');
-        if (mm) mm.insertBefore(c, mm.firstChild);
-        else return;
-    }
-    stopMenuBgAnim();
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const cw = c.clientWidth || window.innerWidth;
-    const ch = c.clientHeight || window.innerHeight;
-    c.width = Math.floor(cw * dpr);
-    c.height = Math.floor(ch * dpr);
-
-    menuBgActors = [];
-    const types = ['club', 'club', 'archer', 'miner', 'club', 'archer', 'club', 'miner'];
-    for (let i = 0; i < 8; i++) {
-        menuBgActors.push({
-            x: Math.random() * c.width,
-            y: c.height * 0.70,
-            vx: (Math.random() < 0.5 ? -1 : 1) * (0.5 + Math.random() * 0.85) * dpr,
-            phase: Math.random() * Math.PI * 2,
-            type: types[i],
-            scale: (0.85 + Math.random() * 0.35) * dpr,
-            enemy: Math.random() < 0.38,
-        });
-    }
-
-    let t = 0;
-    const ctx = c.getContext('2d');
-    const tick = () => {
-        menuBgRaf = requestAnimationFrame(tick);
-        t++;
-        const w = c.width, h = c.height;
-        if (!w || !h) return;
-        paintGameBackground(ctx, w, h, t);
-        menuBgActors.forEach(a => {
-            a.x += a.vx;
-            a.phase += 0.14;
-            if (a.x < -60) a.x = w + 60;
-            if (a.x > w + 60) a.x = -60;
-            a.y = h * 0.70;
-            drawMenuUnit(ctx, a);
-        });
-    };
-    tick();
+    // Ana menüde gameplay arka planı KAPALI
+    if (typeof stopMenuBgAnim === 'function') stopMenuBgAnim();
+    const c = document.getElementById('menuBgCanvas');
+    if (c) c.style.display = 'none';
 }
-
 function scatterCampaignDecor() {
     // Sefer haritası: kış kasaba → koyu orman → çöl (gameplay birimi YOK)
     const wrap = document.getElementById('campaignWrap');
